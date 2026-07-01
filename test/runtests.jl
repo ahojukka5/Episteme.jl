@@ -1,0 +1,156 @@
+using Test
+using OodiCore
+
+struct DummyObject end
+
+@testset "OodiCore.jl" begin
+
+    @testset "package loads" begin
+        @test isdefined(Main, :OodiCore)
+    end
+
+    @testset "generic functions exist" begin
+        @test isdefined(OodiCore, :report)
+        @test isdefined(OodiCore, :validate)
+        @test isdefined(OodiCore, :readiness)
+    end
+
+    @testset "diagnostic constructors" begin
+        i = info(:ok, "Everything is fine")
+        @test i isa OodiCore.DiagnosticMessage
+        @test i.severity == :info
+        @test i.code == :ok
+        @test i.message == "Everything is fine"
+
+        w = warning(:fragile, "This may be fragile"; hint = "check tolerances")
+        @test w.severity == :warning
+        @test w.context.hint == "check tolerances"
+
+        e = error_diagnostic(:failed, "Something failed")
+        @test e.severity == :error
+
+        @test_throws ErrorException OodiCore._diagnostic(:bogus, :x, "nope")
+    end
+
+    @testset "PipelineTarget" begin
+        t = PipelineTarget(:meshing)
+        @test t.name == :meshing
+        @test t.options == (;)
+
+        t2 = PipelineTarget(:gmg; levels = 3)
+        @test t2.options.levels == 3
+    end
+
+    @testset "ArtifactRef" begin
+        a = ArtifactRef(:png; path = "preview.png", description = "preview image")
+        @test a.kind == :png
+        @test a.path == "preview.png"
+        @test a.uri === nothing
+    end
+
+    @testset "ValidationReport" begin
+        r = ValidationReport(:mesh, false, [error_diagnostic(:missing_boundary_tag, "Required boundary tag :fixed_support was not found.")], (;))
+        @test isvalid(r) == false
+        @test r.subject == :mesh
+        @test length(r.diagnostics) == 1
+    end
+
+    @testset "ReadinessReport" begin
+        target = PipelineTarget(:gmg)
+        r = ReadinessReport(:mesh_hierarchy, target, false, [error_diagnostic(:missing_transfers, "Parent-node transfer data is unavailable.")], (;))
+        @test isready(r) == false
+        @test r.target === target
+    end
+
+    @testset "ObjectReport" begin
+        r = ObjectReport(:mesh, "3D Tet4 mesh with 12420 elements and 2841 nodes.", (; nelements = 12420), DiagnosticMessage[], ArtifactRef[])
+        @test r.subject == :mesh
+        @test r.summary != ""
+    end
+
+    @testset "to_namedtuple" begin
+        d = info(:ok, "fine")
+        nt = to_namedtuple(d)
+        @test nt.severity == :info
+        @test nt.code == :ok
+
+        t = PipelineTarget(:meshing)
+        @test to_namedtuple(t).name == :meshing
+
+        a = ArtifactRef(:vtk; path = "mesh.vtk")
+        @test to_namedtuple(a).kind == :vtk
+
+        vr = ValidationReport(:mesh, true, DiagnosticMessage[], (;))
+        @test to_namedtuple(vr).valid == true
+
+        rr = ReadinessReport(:mesh, t, true, DiagnosticMessage[], (;))
+        ntr = to_namedtuple(rr)
+        @test ntr.ready == true
+        @test ntr.target.name == :meshing
+
+        orpt = ObjectReport(:mesh, "summary", (;), DiagnosticMessage[], ArtifactRef[])
+        @test to_namedtuple(orpt).summary == "summary"
+    end
+
+    @testset "show methods produce readable output" begin
+        vr = ValidationReport(:mesh, false, [error_diagnostic(:missing_boundary_tag, "Required boundary tag :fixed_support was not found.")], (;))
+        s = sprint(show, vr)
+        @test occursin("ValidationReport", s)
+        @test occursin("missing_boundary_tag", s)
+
+        target = PipelineTarget(:gmg)
+        rr = ReadinessReport(:mesh_hierarchy, target, false, [error_diagnostic(:missing_transfers, "Parent-node transfer data is unavailable.")], (;))
+        s2 = sprint(show, rr)
+        @test occursin("ReadinessReport", s2)
+        @test occursin("missing_transfers", s2)
+
+        orpt = ObjectReport(:mesh, "3D Tet4 mesh with 12420 elements and 2841 nodes.", (;), [warning(:low_quality_elements, "14 elements have quality below threshold.")], ArtifactRef[])
+        s3 = sprint(show, orpt)
+        @test occursin("ObjectReport", s3)
+        @test occursin("low_quality_elements", s3)
+
+        d = error_diagnostic(:failed, "Something failed")
+        s4 = sprint(show, MIME"text/plain"(), d)
+        @test occursin("failed", s4)
+    end
+
+    @testset "downstream-style extension" begin
+        report(::DummyObject) = ObjectReport(
+            :dummy,
+            "dummy object",
+            (;),
+            DiagnosticMessage[],
+            ArtifactRef[],
+        )
+
+        validate(::DummyObject) = ValidationReport(
+            :dummy,
+            true,
+            DiagnosticMessage[],
+            (;),
+        )
+
+        readiness(::DummyObject, target::PipelineTarget) = ReadinessReport(
+            :dummy,
+            target,
+            true,
+            DiagnosticMessage[],
+            (;),
+        )
+
+        obj = DummyObject()
+
+        rep = report(obj)
+        @test rep isa ObjectReport
+        @test rep.subject == :dummy
+
+        val = validate(obj)
+        @test val isa ValidationReport
+        @test isvalid(val)
+
+        rdy = readiness(obj, PipelineTarget(:meshing))
+        @test rdy isa ReadinessReport
+        @test isready(rdy)
+    end
+
+end
