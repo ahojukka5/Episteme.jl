@@ -121,7 +121,38 @@ which has canonical form:
 
 The node kind is shared and the implementation language is an attribute. This
 keeps scripting usable by Monge, Delone, Oodi, and future packages without
-hard-coding Julia into the semantic vocabulary.
+hard-coding Julia into the semantic vocabulary. `language` defaults to `:julia`
+for ergonomic use from the Julia ecosystem, but the representation itself is
+not Julia-specific.
+
+### Source text is authoritative; parsed AST is execution state
+
+Even for `language = :julia`, the semantic model stores source as text rather
+than a Julia `Expr`. This is intentional.
+
+A Julia `Expr` is an execution/parser representation, not a portable source
+format. Programmatically constructed expressions can contain arbitrary runtime
+Julia objects, and parsing into an `Expr` also discards exact source formatting
+and comments. Persisting such an AST would therefore weaken the properties we
+want from the semantic model: deterministic serialization, readable diffs,
+transport across processes, and language independence.
+
+The intended Julia execution path is instead:
+
+```text
+source::String in semantic tree
+        -> explicit trusted Julia runner
+        -> parse source (for example with Meta.parseall / JuliaSyntax)
+        -> Expr / lowered execution state
+        -> execute with declared inputs, outputs, and effects
+```
+
+A runner may cache the parsed AST, validate Julia syntax before execution, or
+apply additional policy checks. That parsed representation is runtime state and
+is not part of the persisted semantic tree. If a convenient Julia authoring
+helper that accepts an `Expr` is added later, it should still lower to canonical
+source or another explicitly portable representation before entering the tree;
+it must not make arbitrary Julia objects part of the serialized model.
 
 OodiCore never executes script source. A script is a trusted-code boundary, not
 a sandbox. A later execution layer must opt in explicitly, bind declared
