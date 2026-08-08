@@ -7,6 +7,9 @@ export DiagnosticMessage, ValidationReport, ReadinessReport, ObjectReport
 export PipelineTarget, ArtifactRef
 export info, warning, error_diagnostic
 export isready, to_namedtuple
+export SemanticNode, NodeRef, add_child!, attribute, set_attribute!, sexpr
+
+include("SemanticTree.jl")
 
 # ---------------------------------------------------------------------------
 # Shared generic functions
@@ -329,14 +332,6 @@ end
 
 # ---------------------------------------------------------------------------
 # Serialization: to_namedtuple
-#
-# Convention: field names are kept as Symbols (Julia-native, and JSON
-# libraries such as JSON3/JSON.jl serialize Symbol keys as strings
-# automatically). Symbol-valued fields (severity, code, subject, kind,
-# target name, ...) are likewise kept as Symbols rather than eagerly
-# converted to String, since callers on the Julia side generally want them
-# back as Symbols; a JSON-encoding step at the boundary is expected to turn
-# them into strings.
 # ---------------------------------------------------------------------------
 
 """
@@ -344,10 +339,6 @@ end
 
 Convert an `OodiCore` report/diagnostic/target type into a plain
 `NamedTuple`, suitable for further JSON encoding or logging.
-
-Symbols (e.g. `severity`, `code`, `subject`, `kind`) are kept as Symbols
-rather than converted to `String`; convert them at the JSON-encoding
-boundary if needed.
 """
 function to_namedtuple end
 
