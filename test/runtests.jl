@@ -208,4 +208,5 @@ struct DummyObject end
         @test_throws ArgumentError sexpr(unsupported)
     end
 
+    include("declarative.jl")
 end
