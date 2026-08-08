@@ -1,3 +1,5 @@
+OodiCore.check_validation_rule(::Val{:even}, value, parameters) = iseven(value)
+
 @testset "shared declarative schemas" begin
     positive_real = (
         ValidationRule(:finite),
@@ -108,8 +110,6 @@
 end
 
 @testset "downstream validation rule extension" begin
-    OodiCore.check_validation_rule(::Val{:even}, value, parameters) = iseven(value)
-
     schema = NodeSchema(
         :demo,
         AttributeSchema(:count, :integer; rules = (ValidationRule(:even),)),
