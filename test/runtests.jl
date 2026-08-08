@@ -153,4 +153,59 @@ struct DummyObject end
         @test isready(rdy)
     end
 
+    @testset "generic semantic tree" begin
+        plate = SemanticNode(
+            Symbol("monge/rectangle"),
+            :plate;
+            width = 10.0,
+            height = 5.0,
+        )
+        block = SemanticNode(
+            Symbol("monge/extrude"),
+            :block;
+            profile = NodeRef(:plate),
+            distance = 3.0,
+        )
+        model = SemanticNode(:geometry, :demo)
+
+        @test add_child!(model, plate) === model
+        @test push!(model, block) === model
+        @test model.children == [plate, block]
+
+        @test attribute(plate, :width) == 10.0
+        @test attribute(plate, :missing, :default) == :default
+        @test_throws KeyError attribute(plate, :missing)
+
+        @test set_attribute!(plate, :width, 20.0) === plate
+        @test attribute(plate, :width) == 20.0
+
+        equivalent_plate = SemanticNode(
+            Symbol("monge/rectangle"),
+            :plate;
+            height = 5.0,
+            width = 20.0,
+        )
+        @test plate == equivalent_plate
+        @test NodeRef("plate") == NodeRef(:plate)
+
+        expected = """(geometry demo
+  (monge/rectangle plate
+    (height 5.0)
+    (width 20.0)
+  )
+  (monge/extrude block
+    (distance 3.0)
+    (profile (ref plate))
+  )
+)"""
+        @test sexpr(model) == expected
+        @test sprint(show, MIME"text/plain"(), model) == expected
+
+        point = SemanticNode(:point, :origin; coordinates = (0.0, 0.0, 0.0))
+        @test occursin("(coordinates (list 0.0 0.0 0.0))", sexpr(point))
+
+        unsupported = SemanticNode(:bad, :node; value = Dict(:x => 1))
+        @test_throws ArgumentError sexpr(unsupported)
+    end
+
 end
