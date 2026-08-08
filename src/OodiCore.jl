@@ -8,6 +8,8 @@ export PipelineTarget, ArtifactRef
 export info, warning, error_diagnostic
 export isready, to_namedtuple
 export SemanticNode, NodeRef, add_child!, attribute, set_attribute!, sexpr
+export ValidationRule, AttributeSchema, NodeSchema
+export script_node, validated_node, check_validation_rule
 
 include("SemanticTree.jl")
 
@@ -433,5 +435,7 @@ function Base.show(io::IO, r::ObjectReport)
         _show_diagnostic(io, d)
     end
 end
+
+include("Declarative.jl")
 
 end # module OodiCore
