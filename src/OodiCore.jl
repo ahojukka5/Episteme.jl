@@ -11,7 +11,7 @@ export SemanticNode, NodeRef, add_child!, attribute, set_attribute!, sexpr
 export ValidationRule, AttributeSchema, NodeSchema
 export script_node, validated_node, check_validation_rule
 
-include("SemanticTree.jl")
+include("semantic_tree.jl")
 
 # ---------------------------------------------------------------------------
 # Shared generic functions
@@ -436,6 +436,6 @@ function Base.show(io::IO, r::ObjectReport)
     end
 end
 
-include("Declarative.jl")
+include("declarative.jl")
 
 end # module OodiCore
