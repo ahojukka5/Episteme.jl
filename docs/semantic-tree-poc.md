@@ -5,8 +5,8 @@ to `OodiCore.jl`.
 
 The design rule is simple:
 
-> OodiCore owns the representation; downstream packages own the vocabulary and
-> semantics.
+> Julia types carry structure. Downstream packages carry semantics and
+> validation. OodiCore owns the shared tree and references.
 
 `OodiCore` does not know what a CAD rectangle, mesh, function space, weak form,
 solver, or visualization is. Packages such as `Monge.jl`, `Delone.jl`,
@@ -37,34 +37,31 @@ push!(model, plate)
 push!(model, block)
 
 set_attribute!(plate, :width, 20.0)
-println(sexpr(model))
 ```
 
-Canonical output:
+If Julia can hold a value, a `SemanticNode` attribute can hold it. Packages
+communicate by sharing and traversing these objects. Attribute keys are stored
+in a stable order; child order is preserved because it may be semantically
+meaningful to the downstream package.
 
-```lisp
-(geometry demo
-  (monge/rectangle plate
-    (height 5.0)
-    (width 20.0)
-  )
-  (monge/extrude block
-    (distance 3.0)
-    (profile (ref plate))
-  )
-)
-```
+Differentiability is not a semantic type annotation. The same parameter node
+may hold `1.4` or a dual-like `Real` without changing the meaning of the node.
 
-Attributes are sorted by key for deterministic output. Child order is
-preserved because it may be semantically meaningful to the downstream
-package.
+Display uses ordinary Julia `show`. Leaf values print with their own `show`
+methods. OodiCore does not define a serialization or interchange format for
+arbitrary runtime objects. Persistence can later use Julia `Serialization`,
+JSON3, JLD2, or similar, with extensions owned by the package that owns a
+custom type.
+
+OodiCore does not depend on an AD library and does not store reverse-mode
+tapes, pullbacks, or backend contexts as semantic model data.
 
 ## Deliberately out of scope
 
 This first PoC does **not** add:
 
-- an S-expression parser,
 - schemas or domain validation,
+- a serialization or interchange protocol,
 - reference resolution,
 - dependency-DAG construction,
 - evaluation/lowering protocols,

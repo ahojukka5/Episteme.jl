@@ -136,6 +136,9 @@ Concrete types:
 - `ObjectReport` — a general-purpose default report type for simple objects.
 - `ArtifactRef` — a lightweight reference to an external artifact (file,
   image, log, ...) without embedding its data.
+- `SemanticNode` / `NodeRef` — the shared semantic tree and references. If
+  Julia can hold a value, the tree can hold it. Display uses ordinary Julia
+  `show`.
 
 Serialization:
 
