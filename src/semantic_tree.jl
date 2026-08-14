@@ -35,9 +35,9 @@ A small, domain-neutral node for building semantic model trees.
 children. CAD, meshing, discretization, solver, and visualization packages own
 those semantics themselves.
 
-The supported portable attribute values for S-expression output are
-`nothing`, `Bool`, integers, floating-point numbers, strings, symbols,
-[`NodeRef`](@ref), tuples, and vectors composed recursively from those values.
+If Julia can hold a value, a [`SemanticNode`](@ref) attribute can hold it.
+The in-memory tree is the authoritative model. Downstream packages own type,
+shape, and value validation. Display uses ordinary Julia `show`.
 """
 struct SemanticNode
     kind::Symbol
@@ -84,7 +84,7 @@ Base.:(==)(a::SemanticNode, b::SemanticNode) =
 
 Append `child` to `parent.children` and return `parent`.
 
-Child order is semantic and is preserved by canonical S-expression output.
+Child order is semantic and is preserved.
 """
 function add_child!(parent::SemanticNode, child::SemanticNode)
     push!(parent.children, child)
@@ -129,88 +129,36 @@ function set_attribute!(node::SemanticNode, key::Symbol, value)
     return node
 end
 
-const _SIMPLE_SEMANTIC_SYMBOL = r"^[A-Za-z_][A-Za-z0-9_./:+*?!<>=-]*$"
-
-function _write_semantic_symbol(io::IO, symbol::Symbol)
-    text = String(symbol)
-    if occursin(_SIMPLE_SEMANTIC_SYMBOL, text)
-        print(io, text)
-    else
-        escaped = replace(replace(text, "\\" => "\\\\"), "|" => "\\|")
-        print(io, "|", escaped, "|")
-    end
+function Base.show(io::IO, ref::NodeRef)
+    print(io, "NodeRef(")
+    show(io, ref.target)
+    print(io, ")")
 end
 
-function _write_semantic_value(io::IO, value)
-    if value === nothing
-        print(io, "nil")
-    elseif value isa Bool
-        print(io, value ? "true" : "false")
-    elseif value isa Integer || value isa AbstractFloat
-        print(io, value)
-    elseif value isa AbstractString
-        show(io, String(value))
-    elseif value isa Symbol
-        _write_semantic_symbol(io, value)
-    elseif value isa NodeRef
-        print(io, "(ref ")
-        _write_semantic_symbol(io, value.target)
-        print(io, ")")
-    elseif value isa Tuple || value isa AbstractVector
-        print(io, "(list")
-        for item in value
-            print(io, " ")
-            _write_semantic_value(io, item)
-        end
-        print(io, ")")
-    else
-        throw(ArgumentError(
-            "Unsupported semantic-tree value of type $(typeof(value)); " *
-            "use portable scalar/list values or NodeRef",
-        ))
-    end
-end
-
-function _write_semantic_node(io::IO, node::SemanticNode, indent::Int)
-    print(io, "(")
-    _write_semantic_symbol(io, node.kind)
+function Base.show(io::IO, node::SemanticNode)
+    print(io, "SemanticNode(")
+    show(io, node.kind)
     if node.name !== nothing
-        print(io, " ")
-        _write_semantic_symbol(io, node.name)
-    end
-
-    for (key, value) in node.attributes
-        print(io, "\n", repeat(" ", indent + 2), "(")
-        _write_semantic_symbol(io, key)
-        print(io, " ")
-        _write_semantic_value(io, value)
-        print(io, ")")
-    end
-
-    for child in node.children
-        print(io, "\n", repeat(" ", indent + 2))
-        _write_semantic_node(io, child, indent + 2)
-    end
-
-    if !isempty(node.attributes) || !isempty(node.children)
-        print(io, "\n", repeat(" ", indent))
+        print(io, ", ")
+        show(io, node.name)
     end
     print(io, ")")
 end
 
-"""
-    sexpr(node) -> String
-
-Return the canonical S-expression representation of `node` and its subtree.
-
-Attributes are sorted by key and children retain insertion order, so the same
-semantic tree always produces the same textual representation. This first PoC
-implements printing only; parsing is intentionally left for a later step.
-"""
-function sexpr(node::SemanticNode)
-    io = IOBuffer()
-    _write_semantic_node(io, node, 0)
-    return String(take!(io))
+function Base.show(io::IO, ::MIME"text/plain", node::SemanticNode)
+    indent = get(io, :semantic_indent, 0)
+    pad = repeat(" ", indent)
+    print(io, pad)
+    show(io, node)
+    inner = IOContext(io, :compact => true, :limit => true, :semantic_indent => indent + 2)
+    for (key, value) in node.attributes
+        print(io, "\n", pad, "  ")
+        print(io, key, " = ")
+        show(inner, value)
+    end
+    for child in node.children
+        println(io)
+        show(inner, MIME"text/plain"(), child)
+    end
+    return
 end
-
-Base.show(io::IO, ::MIME"text/plain", node::SemanticNode) = print(io, sexpr(node))
