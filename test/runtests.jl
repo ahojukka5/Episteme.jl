@@ -188,25 +188,17 @@ struct DummyObject end
         @test plate == equivalent_plate
         @test NodeRef("plate") == NodeRef(:plate)
 
-        expected = """(geometry demo
-  (monge/rectangle plate
-    (height 5.0)
-    (width 20.0)
-  )
-  (monge/extrude block
-    (distance 3.0)
-    (profile (ref plate))
-  )
-)"""
-        @test sexpr(model) == expected
-        @test sprint(show, MIME"text/plain"(), model) == expected
-
         point = SemanticNode(:point, :origin; coordinates = (0.0, 0.0, 0.0))
-        @test occursin("(coordinates (list 0.0 0.0 0.0))", sexpr(point))
+        @test attribute(point, :coordinates) == (0.0, 0.0, 0.0)
 
-        unsupported = SemanticNode(:bad, :node; value = Dict(:x => 1))
-        @test_throws ArgumentError sexpr(unsupported)
+        shown = sprint(show, MIME"text/plain"(), model)
+        @test occursin("SemanticNode(:geometry, :demo)", shown)
+        @test occursin("width = 20.0", shown)
+        @test occursin("NodeRef(:plate)", shown)
+        @test !isdefined(OodiCore, :sexpr)
     end
+
+    include("semantic_values.jl")
 
     include("declarative.jl")
 end

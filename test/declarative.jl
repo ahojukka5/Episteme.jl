@@ -129,16 +129,11 @@ end
         effects = (:network,),
     )
 
-    expected = """(oodi/script catalog_dimensions
-  (effects (list network))
-  (inputs (list (ref catalog_id)))
-  (language julia)
-  (outputs (list width height))
-  (source \"fetch_dimensions(context)\")
-)"""
-    @test sexpr(script) == expected
     @test attribute(script, :language) == :julia
     @test attribute(script, :effects) == [:network]
+    @test attribute(script, :inputs) == [NodeRef(:catalog_id)]
+    @test attribute(script, :outputs) == [:width, :height]
+    @test attribute(script, :source) == "fetch_dimensions(context)"
 
     @test_throws ArgumentError script_node(:empty; source = "   ")
     @test_throws ArgumentError script_node(:bad_input; source = "1", inputs = (:not_a_ref,))
