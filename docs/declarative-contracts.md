@@ -108,22 +108,12 @@ script = script_node(
 )
 ```
 
-which has canonical form:
-
-```lisp
-(oodi/script catalog_dimensions
-  (effects (list network))
-  (inputs (list (ref catalog_id)))
-  (language julia)
-  (outputs (list width height))
-  (source "fetch_dimensions(context)"))
-```
-
-The node kind is shared and the implementation language is an attribute. This
-keeps scripting usable by Monge, Delone, Oodi, and future packages without
-hard-coding Julia into the semantic vocabulary. `language` defaults to `:julia`
-for ergonomic use from the Julia ecosystem, but the representation itself is
-not Julia-specific.
+The result is a `SemanticNode` of kind `Symbol("oodi/script")` with those
+attributes. The node kind is shared and the implementation language is an
+attribute. This keeps scripting usable by Monge, Delone, Oodi, and future
+packages without hard-coding Julia into the semantic vocabulary. `language`
+defaults to `:julia` for ergonomic use from the Julia ecosystem, but the
+representation itself is not Julia-specific.
 
 ### Source text is authoritative; parsed AST is execution state
 
