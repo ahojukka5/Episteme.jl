@@ -73,6 +73,42 @@ box.z == volume(box) / (box.x * box.y)
 connect multiple semantic quantities and belong to the package that owns those
 semantics. OodiCore does not implement or solve such constraints.
 
+## Three levels of validity
+
+Keep these layers distinct:
+
+1. **Attribute-local rules** (`ValidationRule` on an `AttributeSchema`) inspect
+   one value: type, finiteness, bounds, enums, non-emptiness.
+2. **Node-local cross-field rules** (`NodeValidationRule` on a `NodeSchema`)
+   inspect relationships among attributes of **one** `SemanticNode`, for
+   example `minh <= maxh` or `min_shots <= default_shots <= max_shots`.
+3. **Whole-model / domain constraints** relate different nodes, derived
+   quantities, topologies, or physical equations. Those stay in the owning
+   package. OodiCore is not a constraint solver.
+
+Node-local rules are data, just like attribute rules. They are not closures.
+
+```julia
+shots_schema = NodeSchema(
+    Symbol("stinespring/measurement-config"),
+    AttributeSchema(:min_shots, :integer; rules = (ValidationRule(:ge; value = 1),)),
+    AttributeSchema(:default_shots, :integer; rules = (ValidationRule(:ge; value = 1),)),
+    AttributeSchema(:max_shots, :integer; rules = (ValidationRule(:ge; value = 1),));
+    rules = (
+        NodeValidationRule(:ordered; fields = (:min_shots, :default_shots, :max_shots)),
+    ),
+)
+```
+
+`validate(node, schema)` runs structural checks, then attribute type/value
+rules, then node-local rules. If a participating attribute is missing,
+ill-typed, or still a `NodeRef`, the node-local rule is skipped so the
+primary diagnostic is not followed by a MethodError or a duplicate
+cross-field failure.
+
+`to_namedtuple(schema)` exposes both `attributes` and `rules` so agents can
+inspect the complete local contract.
+
 ## Standard validation rules
 
 OodiCore currently provides symbolic rule kinds:
@@ -88,6 +124,11 @@ OodiCore currently provides symbolic rule kinds:
 Downstream packages can introduce additional serializable rule kinds by
 extending `check_validation_rule(Val(:rule_name), value, parameters)`. The rule
 remains inspectable data even when its evaluator is package-specific.
+
+OodiCore also provides the node-local kind `:ordered`, which checks that named
+attributes are non-decreasing. Downstream packages can introduce further
+node-local kinds by extending
+`check_node_validation_rule(Val(:rule_name), node, parameters)`.
 
 ## Scripting is a core escape hatch
 

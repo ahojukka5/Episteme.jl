@@ -139,6 +139,10 @@ Concrete types:
 - `SemanticNode` / `NodeRef` — the shared semantic tree and references. If
   Julia can hold a value, the tree can hold it. Display uses ordinary Julia
   `show`.
+- `ValidationRule` / `AttributeSchema` / `NodeSchema` / `NodeValidationRule`
+  — introspectable local schemas. Attribute rules inspect one value;
+  node-local rules inspect relationships inside one node. See
+  [`docs/declarative-contracts.md`](docs/declarative-contracts.md).
 
 Serialization:
 
