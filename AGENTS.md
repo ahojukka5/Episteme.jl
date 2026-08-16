@@ -25,7 +25,7 @@ every product:
 - reports and diagnostics (`DiagnosticMessage`, `ValidationReport`, etc.),
 - the generic semantic tree (`SemanticNode`, `NodeRef`),
 - local declarative node schemas (`NodeSchema`, `AttributeSchema`,
-  `ValidationRule`),
+  `ValidationRule`, `NodeValidationRule`),
 - an opaque cross-product scripting representation (`script_node`).
 
 These facilities must remain domain-neutral. OodiCore may know that a local
@@ -89,7 +89,7 @@ file-format backends, or rendering backends belong here.
 
 Local schema validation is in scope only when the rule is structurally generic:
 required fields, portable value kinds, finiteness, ranges, non-empty values,
-enums, and similarly local invariants.
+enums, node-local cross-field orderings, and similarly local invariants.
 
 Cross-object or domain equations are not local schema validation. For example:
 
@@ -163,6 +163,17 @@ check_validation_rule(::Val{:my_rule}, value, parameters) = ...
 
 The rule must still be represented as `ValidationRule(:my_rule; ...)`, not an
 opaque closure embedded in a schema.
+
+Node-local cross-field rules use the same pattern:
+
+```julia
+import OodiCore: check_node_validation_rule
+check_node_validation_rule(::Val{:my_node_rule}, node, parameters) = ...
+```
+
+Represent those as `NodeValidationRule(:my_node_rule; fields = (:a, :b), ...)`.
+Name participating attributes in `fields` (or `left`/`right`) so missing or
+ill-typed values skip the rule instead of producing secondary exceptions.
 
 ## 11. Out of scope for now
 

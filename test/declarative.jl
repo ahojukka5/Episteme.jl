@@ -107,6 +107,7 @@ OodiCore.check_validation_rule(::Val{:even}, value, parameters) = iseven(value)
     @test schema_data.attributes[1].allow_ref
     @test schema_data.attributes[1].rules[1].kind == :finite
     @test schema_data.attributes[1].rules[2].parameters.value == 0.0
+    @test isempty(schema_data.rules)
 end
 
 @testset "downstream validation rule extension" begin
@@ -117,6 +118,81 @@ end
 
     @test isvalid(validate(SemanticNode(:demo; count = 4), schema))
     @test !isvalid(validate(SemanticNode(:demo; count = 3), schema))
+end
+
+OodiCore.check_node_validation_rule(::Val{:even_sum}, node, parameters) =
+    iseven(attribute(node, :left) + attribute(node, :right))
+
+@testset "node-local cross-field rules" begin
+    shots_schema = NodeSchema(
+        :shots,
+        AttributeSchema(:min_shots, :integer; allow_ref = true, rules = (ValidationRule(:ge; value = 1),)),
+        AttributeSchema(:default_shots, :integer; allow_ref = true, rules = (ValidationRule(:ge; value = 1),)),
+        AttributeSchema(:max_shots, :integer; allow_ref = true, rules = (ValidationRule(:ge; value = 1),));
+        rules = (
+            NodeValidationRule(:ordered; fields = (:min_shots, :default_shots, :max_shots)),
+        ),
+    )
+
+    valid = SemanticNode(:shots; min_shots = 1, default_shots = 32, max_shots = 128)
+    @test isvalid(validate(valid, shots_schema))
+    @test validated_node(
+        shots_schema, :ok; min_shots = 8, default_shots = 32, max_shots = 64
+    ) isa SemanticNode
+
+    unordered = SemanticNode(:shots; min_shots = 64, default_shots = 8, max_shots = 32)
+    failed = validate(unordered, shots_schema)
+    @test !isvalid(failed)
+    @test any(d -> d.code == :node_validation_rule_failed, failed.diagnostics)
+    @test any(d -> occursin("min_shots <= default_shots <= max_shots", d.message), failed.diagnostics)
+    @test_throws ArgumentError validated_node(
+        shots_schema; min_shots = 64, default_shots = 8, max_shots = 32)
+
+    missing = SemanticNode(:shots; min_shots = 1, max_shots = 32)
+    missing_result = validate(missing, shots_schema)
+    @test !isvalid(missing_result)
+    @test any(d -> d.code == :missing_attribute, missing_result.diagnostics)
+    @test !any(d -> d.code == :node_validation_rule_failed, missing_result.diagnostics)
+    @test !any(d -> d.code == :node_validation_rule_error, missing_result.diagnostics)
+
+    wrong_type = SemanticNode(:shots; min_shots = "one", default_shots = 32, max_shots = 64)
+    typed = validate(wrong_type, shots_schema)
+    @test any(d -> d.code == :attribute_type, typed.diagnostics)
+    @test !any(d -> d.code == :node_validation_rule_failed, typed.diagnostics)
+    @test !any(d -> d.code == :node_validation_rule_error, typed.diagnostics)
+
+    symbolic = SemanticNode(
+        :shots;
+        min_shots = 1,
+        default_shots = NodeRef(:budget),
+        max_shots = 64,
+    )
+    @test isvalid(validate(symbolic, shots_schema))
+
+    schema_data = to_namedtuple(shots_schema)
+    @test length(schema_data.rules) == 1
+    @test schema_data.rules[1].kind == :ordered
+    @test schema_data.rules[1].parameters.fields == (:min_shots, :default_shots, :max_shots)
+
+    pair_schema = NodeSchema(
+        :pair,
+        AttributeSchema(:left, :integer),
+        AttributeSchema(:right, :integer);
+        rules = (NodeValidationRule(:even_sum; fields = (:left, :right)),),
+    )
+    @test isvalid(validate(SemanticNode(:pair; left = 1, right = 3), pair_schema))
+    odd = validate(SemanticNode(:pair; left = 1, right = 2), pair_schema)
+    @test !isvalid(odd)
+    @test any(d -> d.code == :node_validation_rule_failed && d.context.rule == :even_sum, odd.diagnostics)
+
+    unknown = NodeSchema(
+        :pair,
+        AttributeSchema(:left, :integer),
+        AttributeSchema(:right, :integer);
+        rules = (NodeValidationRule(:not_a_rule; fields = (:left, :right)),),
+    )
+    unknown_result = validate(SemanticNode(:pair; left = 1, right = 2), unknown)
+    @test any(d -> d.code == :unknown_node_validation_rule, unknown_result.diagnostics)
 end
 
 @testset "shared script node" begin

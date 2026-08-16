@@ -12,7 +12,7 @@ export PipelineTarget, ArtifactRef
 export info, warning, error_diagnostic
 export isready, to_namedtuple
 export SemanticNode, NodeRef, add_child!, attribute, set_attribute!
-export ValidationRule, AttributeSchema, NodeSchema
-export script_node, validated_node, check_validation_rule
+export ValidationRule, AttributeSchema, NodeSchema, NodeValidationRule
+export script_node, validated_node, check_validation_rule, check_node_validation_rule
 
 end # module OodiCore

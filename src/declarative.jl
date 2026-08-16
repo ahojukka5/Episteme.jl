@@ -123,34 +123,78 @@ function AttributeSchema(
 end
 
 """
-    NodeSchema(kind, attributes...; allow_extra=false)
+    NodeValidationRule(kind; message="", kwargs...)
+
+A portable, introspectable rule over multiple attributes of one
+[`SemanticNode`](@ref).
+
+Like [`ValidationRule`](@ref), this is data (`kind` + `parameters`), not a
+closure. It validates relationships inside a single node, for example
+`min <= default <= max`. Relations between different nodes remain
+downstream domain/constraint semantics.
+
+OodiCore provides the standard kind `:ordered`, which checks that named
+attributes are non-decreasing. Downstream packages may extend
+[`check_node_validation_rule`](@ref) for additional symbolic rule kinds.
+
+When `parameters` includes `fields`, those attributes must be present,
+concrete, and type-correct before the rule runs. Missing, ill-typed, or
+unresolved [`NodeRef`](@ref) values skip the rule so attribute diagnostics
+are not followed by cascading node-rule failures.
+"""
+struct NodeValidationRule
+    kind::Symbol
+    parameters::NamedTuple
+    message::String
+end
+
+function NodeValidationRule(kind::Symbol; message::AbstractString = "", kwargs...)
+    return NodeValidationRule(kind, (; kwargs...), String(message))
+end
+
+"""
+    NodeSchema(kind, attributes...; allow_extra=false, rules=())
 
 Describe the local structural/value schema of one semantic node kind.
 
 A `NodeSchema` is deliberately narrower than a domain constraint system. It
 answers questions such as "is this field present?", "is it a finite positive
-real?", or "is this enum value allowed?". Relations between multiple model
-objects or quantities belong to downstream constraint vocabularies instead.
+real?", "is this enum value allowed?", or "are these attributes of one node
+ordered?". Relations between multiple model objects or quantities belong to
+downstream constraint vocabularies instead.
 """
 struct NodeSchema
     kind::Symbol
     attributes::Vector{AttributeSchema}
     allow_extra::Bool
+    rules::Vector{NodeValidationRule}
 
     function NodeSchema(
         kind::Symbol,
         attributes::Vector{AttributeSchema},
         allow_extra::Bool,
+        rules::Vector{NodeValidationRule} = NodeValidationRule[],
     )
         names = getfield.(attributes, :name)
         length(unique(names)) == length(names) ||
             throw(ArgumentError("NodeSchema attributes must have unique names"))
-        return new(kind, copy(attributes), allow_extra)
+        return new(kind, copy(attributes), allow_extra, copy(rules))
     end
 end
 
-function NodeSchema(kind::Symbol, attributes::AttributeSchema...; allow_extra::Bool = false)
-    return NodeSchema(kind, collect(attributes), allow_extra)
+function NodeSchema(
+    kind::Symbol,
+    attributes::AttributeSchema...;
+    allow_extra::Bool = false,
+    rules = (),
+)
+    rule_values = NodeValidationRule[]
+    for rule in rules
+        rule isa NodeValidationRule ||
+            throw(ArgumentError("node schema rules must be NodeValidationRule values"))
+        push!(rule_values, rule)
+    end
+    return NodeSchema(kind, collect(attributes), allow_extra, rule_values)
 end
 
 """
@@ -208,18 +252,97 @@ function _check_rule(rule::ValidationRule, value)
 end
 
 """
+    check_node_validation_rule(Val(kind), node, parameters) -> Bool
+
+Evaluate a symbolic node-local rule against one [`SemanticNode`](@ref).
+
+Downstream packages can extend this generic for domain-specific rule kinds
+while keeping the rule itself serializable and introspectable.
+"""
+function check_node_validation_rule end
+
+function check_node_validation_rule(::Val{:ordered}, node::SemanticNode, parameters)
+    fields = parameters.fields
+    isempty(fields) && throw(ArgumentError("ordered node rule requires parameters.fields"))
+    prev = attribute(node, first(fields))
+    for name in Iterators.drop(fields, 1)
+        value = attribute(node, name)
+        value >= prev || return false
+        prev = value
+    end
+    return true
+end
+
+function _check_node_rule(rule::NodeValidationRule, node::SemanticNode)
+    try
+        return check_node_validation_rule(Val(rule.kind), node, rule.parameters)
+    catch err
+        if err isa MethodError && err.f === check_node_validation_rule
+            throw(ArgumentError("unknown node validation rule :$(rule.kind)"))
+        end
+        rethrow()
+    end
+end
+
+function _node_rule_fields(rule::NodeValidationRule)
+    parameters = rule.parameters
+    if haskey(parameters, :fields)
+        return Symbol[Symbol(name) for name in parameters.fields]
+    end
+    names = Symbol[]
+    for key in (:left, :right, :min, :max)
+        haskey(parameters, key) || continue
+        parameters[key] isa Symbol && push!(names, parameters[key])
+    end
+    return names
+end
+
+function _default_node_rule_message(rule::NodeValidationRule)
+    kind = rule.kind
+    if kind === :ordered && haskey(rule.parameters, :fields)
+        return "attributes $(join(rule.parameters.fields, " <= ")) must be ordered"
+    end
+    return "node failed validation rule :$kind"
+end
+
+function _node_rule_ready(
+    node::SemanticNode,
+    fields,
+    typed_ready::Set{Symbol},
+    failed_type::Set{Symbol},
+    deferred::Set{Symbol},
+)
+    isempty(fields) && return true
+    for name in fields
+        name in failed_type && return false
+        name in deferred && return false
+        name in typed_ready && continue
+        index = findfirst(pair -> first(pair) == name, node.attributes)
+        index === nothing && return false
+        last(node.attributes[index]) isa NodeRef && return false
+    end
+    return true
+end
+
+"""
     validate(node::SemanticNode, schema::NodeSchema) -> ValidationReport
 
 Validate one semantic node against a local, domain-neutral schema.
 
-This checks node kind, required/extra attributes, portable value kinds, and
-value-local rules. If an attribute permits symbolic references and currently
-contains a `NodeRef`, its concrete type/rules are deferred until resolution.
+This checks node kind, required/extra attributes, portable value kinds,
+value-local rules, and then node-local cross-field rules. If an attribute
+permits symbolic references and currently contains a `NodeRef`, its concrete
+type/rules and any node-local rules that name it are deferred until
+resolution.
 """
 function validate(node::SemanticNode, schema::NodeSchema)
     diagnostics = DiagnosticMessage[]
+    typed_ready = Set{Symbol}()
+    failed_type = Set{Symbol}()
+    deferred = Set{Symbol}()
+    kind_ok = node.kind == schema.kind
 
-    if node.kind != schema.kind
+    if !kind_ok
         push!(diagnostics, error_diagnostic(
             :schema_kind_mismatch,
             "expected node kind $(schema.kind), got $(node.kind)";
@@ -245,12 +368,13 @@ function validate(node::SemanticNode, schema::NodeSchema)
 
         value = attribute(node, field.name)
         if value isa NodeRef && field.allow_ref
+            push!(deferred, field.name)
             continue
         end
 
-        local kind_ok::Bool
+        local type_ok::Bool
         try
-            kind_ok = _matches_value_kind(value, field.value_kind)
+            type_ok = _matches_value_kind(value, field.value_kind)
         catch err
             if err isa ArgumentError
                 push!(diagnostics, error_diagnostic(
@@ -259,12 +383,13 @@ function validate(node::SemanticNode, schema::NodeSchema)
                     attribute = field.name,
                     value_kind = field.value_kind,
                 ))
+                push!(failed_type, field.name)
                 continue
             end
             rethrow()
         end
 
-        if !kind_ok
+        if !type_ok
             push!(diagnostics, error_diagnostic(
                 :attribute_type,
                 "attribute :$(field.name) must be :$(field.value_kind), got $(typeof(value))";
@@ -272,8 +397,11 @@ function validate(node::SemanticNode, schema::NodeSchema)
                 expected = field.value_kind,
                 actual = Symbol(string(typeof(value))),
             ))
+            push!(failed_type, field.name)
             continue
         end
+
+        push!(typed_ready, field.name)
 
         for rule in field.rules
             passed = try
@@ -314,12 +442,65 @@ function validate(node::SemanticNode, schema::NodeSchema)
         end
     end
 
+    if kind_ok
+        _validate_node_rules!(
+            diagnostics, node, schema, typed_ready, failed_type, deferred)
+    end
+
     return ValidationReport(
         schema.kind,
         isempty(diagnostics),
         diagnostics,
         (; schema = schema.kind),
     )
+end
+
+function _validate_node_rules!(
+    diagnostics,
+    node::SemanticNode,
+    schema::NodeSchema,
+    typed_ready,
+    failed_type,
+    deferred,
+)
+    for rule in schema.rules
+        fields = _node_rule_fields(rule)
+        _node_rule_ready(node, fields, typed_ready, failed_type, deferred) || continue
+        passed = try
+            _check_node_rule(rule, node)
+        catch err
+            err isa InterruptException && rethrow()
+            if err isa KeyError
+                continue
+            elseif err isa ArgumentError
+                push!(diagnostics, error_diagnostic(
+                    :unknown_node_validation_rule,
+                    sprint(showerror, err);
+                    rule = rule.kind,
+                    parameters = rule.parameters,
+                ))
+                continue
+            else
+                push!(diagnostics, error_diagnostic(
+                    :node_validation_rule_error,
+                    sprint(showerror, err);
+                    rule = rule.kind,
+                    parameters = rule.parameters,
+                ))
+                continue
+            end
+        end
+        passed && continue
+        message = isempty(rule.message) ? _default_node_rule_message(rule) : rule.message
+        push!(diagnostics, error_diagnostic(
+            :node_validation_rule_failed,
+            message;
+            rule = rule.kind,
+            parameters = rule.parameters,
+            fields = Tuple(fields),
+        ))
+    end
+    return diagnostics
 end
 
 """
@@ -358,8 +539,15 @@ to_namedtuple(field::AttributeSchema) = (
     rules = to_namedtuple.(field.rules),
 )
 
+to_namedtuple(rule::NodeValidationRule) = (
+    kind = rule.kind,
+    parameters = rule.parameters,
+    message = rule.message,
+)
+
 to_namedtuple(schema::NodeSchema) = (
     kind = schema.kind,
     attributes = to_namedtuple.(schema.attributes),
     allow_extra = schema.allow_extra,
+    rules = to_namedtuple.(schema.rules),
 )
