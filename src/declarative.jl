@@ -194,7 +194,7 @@ function NodeSchema(
             throw(ArgumentError("node schema rules must be NodeValidationRule values"))
         push!(rule_values, rule)
     end
-    return NodeSchema(kind, collect(attributes), allow_extra, rule_values)
+    return NodeSchema(kind, AttributeSchema[attributes...], allow_extra, rule_values)
 end
 
 """

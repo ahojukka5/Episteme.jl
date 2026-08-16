@@ -108,6 +108,10 @@ OodiCore.check_validation_rule(::Val{:even}, value, parameters) = iseven(value)
     @test schema_data.attributes[1].rules[1].kind == :finite
     @test schema_data.attributes[1].rules[2].parameters.value == 0.0
     @test isempty(schema_data.rules)
+    empty_schema = NodeSchema(:empty)
+    @test isempty(empty_schema.attributes)
+    @test isempty(empty_schema.rules)
+    @test isvalid(validate(SemanticNode(:empty), empty_schema))
 end
 
 @testset "downstream validation rule extension" begin
