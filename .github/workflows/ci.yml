@@ -39,8 +39,5 @@ jobs:
         with:
           version: ${{ matrix.julia-version }}
 
-      - name: Cache Julia artifacts
-        uses: julia-actions/cache@v2
-
       - name: Run package tests
         uses: julia-actions/julia-runtest@v1
