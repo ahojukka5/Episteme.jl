@@ -9,7 +9,7 @@ export AbstractOodiReport, AbstractValidationReport, AbstractReadinessReport
 export AbstractDiagnostic, AbstractPipelineTarget
 export DiagnosticMessage, ValidationReport, ReadinessReport, ObjectReport
 export PipelineTarget, ArtifactRef
-export info, warning, error_diagnostic
+export info_diagnostic, warning_diagnostic, error_diagnostic
 export isready, to_namedtuple
 export SemanticNode, NodeRef, add_child!, attribute, set_attribute!
 export ValidationRule, AttributeSchema, NodeSchema, NodeValidationRule

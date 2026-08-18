@@ -102,8 +102,9 @@ A single structured diagnostic message.
 - `message::String`: a human-readable explanation.
 - `context::NamedTuple`: small structured metadata relevant to the message.
 
-Use the [`info`](@ref), [`warning`](@ref), and [`error_diagnostic`](@ref)
-convenience constructors instead of calling this constructor directly.
+Use the [`info_diagnostic`](@ref), [`warning_diagnostic`](@ref), and
+[`error_diagnostic`](@ref) convenience constructors instead of calling this
+constructor directly.
 """
 struct DiagnosticMessage <: AbstractDiagnostic
     severity::Symbol
@@ -121,20 +122,28 @@ function _diagnostic(severity::Symbol, code::Symbol, message::AbstractString; kw
 end
 
 """
-    info(code::Symbol, message::AbstractString; kwargs...)
+    info_diagnostic(code::Symbol, message::AbstractString; kwargs...)
 
 Construct a [`DiagnosticMessage`](@ref) with severity `:info`.
 Keyword arguments are collected into the diagnostic's `context`.
+
+Named `info_diagnostic` (not `info`) to avoid colliding with common
+`info` names brought into scope by `using`.
 """
-info(code::Symbol, message::AbstractString; kwargs...) = _diagnostic(:info, code, message; kwargs...)
+info_diagnostic(code::Symbol, message::AbstractString; kwargs...) =
+    _diagnostic(:info, code, message; kwargs...)
 
 """
-    warning(code::Symbol, message::AbstractString; kwargs...)
+    warning_diagnostic(code::Symbol, message::AbstractString; kwargs...)
 
 Construct a [`DiagnosticMessage`](@ref) with severity `:warning`.
 Keyword arguments are collected into the diagnostic's `context`.
+
+Named `warning_diagnostic` (not `warning`) to avoid colliding with common
+`warning` names brought into scope by `using`.
 """
-warning(code::Symbol, message::AbstractString; kwargs...) = _diagnostic(:warning, code, message; kwargs...)
+warning_diagnostic(code::Symbol, message::AbstractString; kwargs...) =
+    _diagnostic(:warning, code, message; kwargs...)
 
 """
     error_diagnostic(code::Symbol, message::AbstractString; kwargs...)
