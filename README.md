@@ -134,7 +134,8 @@ Abstract types:
 Concrete types:
 
 - `DiagnosticMessage` — one structured diagnostic (`severity`, `code`,
-  `message`, `context`). Build with `info`, `warning`, `error_diagnostic`.
+  `message`, `context`). Build with `info_diagnostic`, `warning_diagnostic`,
+  `error_diagnostic`.
 - `ValidationReport` — result of `validate`. Query with `Base.isvalid`.
 - `PipelineTarget` — a named pipeline stage descriptor, e.g.
   `PipelineTarget(:meshing)`, `PipelineTarget(:gmg; levels = 3)`.

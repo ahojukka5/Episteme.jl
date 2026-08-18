@@ -16,18 +16,23 @@ struct DummyObject end
     end
 
     @testset "diagnostic constructors" begin
-        i = info(:ok, "Everything is fine")
+        i = info_diagnostic(:ok, "Everything is fine")
         @test i isa OodiCore.DiagnosticMessage
         @test i.severity == :info
         @test i.code == :ok
         @test i.message == "Everything is fine"
 
-        w = warning(:fragile, "This may be fragile"; hint = "check tolerances")
+        w = warning_diagnostic(:fragile, "This may be fragile"; hint = "check tolerances")
         @test w.severity == :warning
         @test w.context.hint == "check tolerances"
 
         e = error_diagnostic(:failed, "Something failed")
         @test e.severity == :error
+
+        @test !isdefined(@__MODULE__, :info)
+        @test !isdefined(@__MODULE__, :warning)
+        @test isdefined(@__MODULE__, :info_diagnostic)
+        @test isdefined(@__MODULE__, :warning_diagnostic)
 
         @test_throws ErrorException OodiCore._diagnostic(:bogus, :x, "nope")
     end
@@ -69,7 +74,7 @@ struct DummyObject end
     end
 
     @testset "to_namedtuple" begin
-        d = info(:ok, "fine")
+        d = info_diagnostic(:ok, "fine")
         nt = to_namedtuple(d)
         @test nt.severity == :info
         @test nt.code == :ok
@@ -104,7 +109,7 @@ struct DummyObject end
         @test occursin("ReadinessReport", s2)
         @test occursin("missing_transfers", s2)
 
-        orpt = ObjectReport(:mesh, "3D Tet4 mesh with 12420 elements and 2841 nodes.", (;), [warning(:low_quality_elements, "14 elements have quality below threshold.")], ArtifactRef[])
+        orpt = ObjectReport(:mesh, "3D Tet4 mesh with 12420 elements and 2841 nodes.", (;), [warning_diagnostic(:low_quality_elements, "14 elements have quality below threshold.")], ArtifactRef[])
         s3 = sprint(show, orpt)
         @test occursin("ObjectReport", s3)
         @test occursin("low_quality_elements", s3)
