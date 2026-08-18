@@ -29,7 +29,10 @@ readiness(x, target)    # Can it move to the requested next pipeline stage?
 
 `OodiCore.jl` owns that shared interface. It defines `report`, `validate`,
 and `readiness` as empty generic functions, plus a handful of lightweight
-report/diagnostic/target/artifact types used to implement them.
+report/diagnostic/target/artifact types used to implement them. It also owns
+the shared semantic tree (`SemanticNode`, `NodeRef`) and local declarative
+schemas. See [`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md) and
+[`docs/declarative-contracts.md`](docs/declarative-contracts.md).
 
 ## Why shared generic functions avoid name conflicts
 
@@ -117,6 +120,9 @@ packages):
 - `validate(x)`
 - `readiness(x, target)`
 
+OodiCore also implements `validate(node::SemanticNode, schema::NodeSchema)`
+for local schema checks.
+
 Abstract types:
 
 - `AbstractOodiReport`
@@ -138,18 +144,39 @@ Concrete types:
   image, log, ...) without embedding its data.
 - `SemanticNode` / `NodeRef` — the shared semantic tree and references. If
   Julia can hold a value, the tree can hold it. Display uses ordinary Julia
-  `show`.
+  `show`. See [`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md).
 - `ValidationRule` / `AttributeSchema` / `NodeSchema` / `NodeValidationRule`
   — introspectable local schemas. Attribute rules inspect one value;
   node-local rules inspect relationships inside one node. See
   [`docs/declarative-contracts.md`](docs/declarative-contracts.md).
 
+Tree operations:
+
+- `add_child!(parent, child)` — append a child and preserve child order.
+  `push!` is an alias.
+- `attribute(node, key)` / `attribute(node, key, default)` — read an
+  attribute.
+- `set_attribute!(node, key, value)` — set or add an attribute.
+
+Declarative helpers:
+
+- `script_node(name; language = :julia, source, inputs, outputs, effects)`
+  — opaque scripting node. OodiCore never executes the source.
+- `validated_node(schema, name; ...)` — fail-fast construction against a
+  schema.
+- `check_validation_rule` / `check_node_validation_rule` — extension points
+  for additional symbolic rule kinds.
+
 Serialization:
 
-- `to_namedtuple(x)` — converts any of the above into a plain `NamedTuple`
-  suitable for JSON encoding or logging. Symbol-valued fields (`severity`,
-  `code`, `subject`, `kind`, target `name`, ...) are kept as `Symbol`s; a
-  JSON-encoding step at the boundary is expected to turn them into strings.
+- `to_namedtuple(x)` — converts reports, diagnostics, targets, artifacts,
+  and schemas (`ValidationRule`, `AttributeSchema`, `NodeSchema`,
+  `NodeValidationRule`) into a plain `NamedTuple` suitable for JSON
+  encoding or logging. It does **not** convert `SemanticNode` or `NodeRef`;
+  arbitrary runtime values in the tree have no OodiCore serialization
+  protocol. Symbol-valued fields (`severity`, `code`, `subject`, `kind`,
+  target `name`, ...) are kept as `Symbol`s; a JSON-encoding step at the
+  boundary is expected to turn them into strings.
 
 ## What should and should not go into OodiCore
 
@@ -161,9 +188,12 @@ add:
 - simple diagnostic/message types,
 - simple readiness target types,
 - artifact/provenance reference types,
+- the generic semantic tree and references,
+- local declarative schemas and validation rules,
 - small helper constructors,
 - readable `show` methods,
-- serialization-friendly structures.
+- serialization-friendly structures for reports, diagnostics, targets,
+  artifacts, and schemas.
 
 It must **not** contain:
 
@@ -183,10 +213,12 @@ here.
 
 ## Installation
 
-`OodiCore.jl` is not yet registered. Add it as a path or git dependency from
-the Oodi ecosystem monorepo/organization, e.g.:
+`OodiCore.jl` is not yet registered. Add it as a path or git dependency
+from its own repository, e.g.:
 
 ```julia
+pkg> add https://github.com/ahojukka5/OodiCore.jl
+# or
 pkg> dev /path/to/OodiCore.jl
 ```
 

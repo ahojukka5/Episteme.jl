@@ -1,7 +1,7 @@
-# Semantic tree PoC
+# Semantic tree
 
-This PoC adds a deliberately small, domain-neutral semantic tree representation
-to `OodiCore.jl`.
+OodiCore provides a domain-neutral semantic tree that every Oodi package can
+share. The in-memory Julia object tree is the authoritative model.
 
 The design rule is simple:
 
@@ -13,7 +13,7 @@ solver, or visualization is. Packages such as `Monge.jl`, `Delone.jl`,
 `Oodi.jl`, and `Marey` may use the same generic tree structures to describe
 their own domain objects without depending on each other.
 
-## Minimal API
+## Tree API
 
 ```julia
 using OodiCore
@@ -44,30 +44,51 @@ communicate by sharing and traversing these objects. Attribute keys are stored
 in a stable order; child order is preserved because it may be semantically
 meaningful to the downstream package.
 
+Use `add_child!` (or `push!`), `attribute`, and `set_attribute!` to edit the
+tree. `OodiCore` does not resolve `NodeRef` values; the package that owns the
+node vocabulary decides what a reference means.
+
 Differentiability is not a semantic type annotation. The same parameter node
 may hold `1.4` or a dual-like `Real` without changing the meaning of the node.
 
 Display uses ordinary Julia `show`. Leaf values print with their own `show`
 methods. OodiCore does not define a serialization or interchange format for
-arbitrary runtime objects. Persistence can later use Julia `Serialization`,
-JSON3, JLD2, or similar, with extensions owned by the package that owns a
-custom type.
+arbitrary runtime objects, and `to_namedtuple` has no method for
+`SemanticNode` or `NodeRef`. Persistence can later use Julia
+`Serialization`, JSON3, JLD2, or similar, with extensions owned by the
+package that owns a custom type.
 
 OodiCore does not depend on an AD library and does not store reverse-mode
 tapes, pullbacks, or backend contexts as semantic model data.
 
-## Deliberately out of scope
+## Local schemas
 
-This first PoC does **not** add:
+Local schemas and node-local cross-field rules are part of the current
+contract. See [`declarative-contracts.md`](declarative-contracts.md).
 
-- schemas or domain validation,
-- a serialization or interchange protocol,
+A schema can say that one node is well-formed in isolation: required fields,
+portable value kinds, finiteness, ranges, enums, and node-local orderings
+such as `min <= default <= max`. Domain constraints that relate several
+objects, derived quantities, or physical equations stay in the owning
+package.
+
+Use `validate(node, schema)` for a structured `ValidationReport`, or
+`validated_node(...)` for fail-fast construction. `script_node` is the shared
+scripting escape hatch; OodiCore stores the contract and never executes
+source.
+
+## Still out of scope
+
+OodiCore still does **not** own:
+
+- a serialization or interchange protocol for arbitrary runtime objects,
 - reference resolution,
 - dependency-DAG construction,
 - evaluation/lowering protocols,
 - CAD, meshing, FEM, solver, or visualization concepts,
-- MCP integration.
+- MCP integration,
+- domain constraint solving.
 
-Those should only be added when the Monge PoC demonstrates a concrete need.
-The next intended experiment is for `Monge.jl` to construct a tiny geometry
-model with these primitives and evaluate it using Monge's own semantics.
+Those remain the responsibility of the owning downstream package or a later
+orchestration layer. Downstream packages such as `Monge.jl` construct models
+with these primitives and evaluate them using their own semantics.
