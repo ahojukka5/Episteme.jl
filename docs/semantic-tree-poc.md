@@ -54,9 +54,11 @@ may hold `1.4` or a dual-like `Real` without changing the meaning of the node.
 Display uses ordinary Julia `show`. Leaf values print with their own `show`
 methods. OodiCore does not define a serialization or interchange format for
 arbitrary runtime objects, and `to_namedtuple` has no method for
-`SemanticNode` or `NodeRef`. Persistence can later use Julia
-`Serialization`, JSON3, JLD2, or similar, with extensions owned by the
-package that owns a custom type.
+`SemanticNode` or `NodeRef`. Portable declarative documents (issue #34) are
+a strict subset of this tree and may be persisted through the shared
+archive vocabulary. Physical `.ah5` encoding lives in `AH5.jl`, not here.
+See [`archive-ownership.md`](archive-ownership.md). Domain packages still
+own codecs for their custom portable value types.
 
 OodiCore does not depend on an AD library and does not store reverse-mode
 tapes, pullbacks, or backend contexts as semantic model data.
@@ -82,6 +84,7 @@ source.
 OodiCore still does **not** own:
 
 - a serialization or interchange protocol for arbitrary runtime objects,
+- HDF5/XDMF/AH5 readers or writers,
 - reference resolution,
 - dependency-DAG construction,
 - evaluation/lowering protocols,

@@ -40,7 +40,11 @@ box_schema = NodeSchema(
 
 The rules are data, not function closures. This is deliberate: schemas can be
 serialized with `to_namedtuple`, shown to an agent, or exposed through an MCP
-schema without maintaining a second description of the same API.
+schema without maintaining a second description of the same API. The same
+portable schema data is what a later AH5 archive should embed so an old file
+remains inspectable without the original domain package. Physical embedding
+and the `.ah5` schema registry live in `AH5.jl`; see
+[`archive-ownership.md`](archive-ownership.md).
 
 `allow_ref=true` means that a symbolic `NodeRef` may temporarily stand in for
 the eventual concrete value. Local value rules are then deferred until the
