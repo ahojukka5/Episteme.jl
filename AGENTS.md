@@ -26,11 +26,18 @@ every product:
 - the generic semantic tree (`SemanticNode`, `NodeRef`),
 - local declarative node schemas (`NodeSchema`, `AttributeSchema`,
   `ValidationRule`, `NodeValidationRule`),
-- an opaque cross-product scripting representation (`script_node`).
+- an opaque cross-product scripting representation (`script_node`),
+- the dependency-free scientific-archive vocabulary (object/revision
+  identities, references, namespace and schema-version identifiers, portable
+  document envelopes, and inspectable provenance/integrity record types).
 
 These facilities must remain domain-neutral. OodiCore may know that a local
 field is a finite positive real, but it must not know what a CAD box, mesh size,
 finite-element space, or solver tolerance means.
+
+Physical AH5/HDF5/XDMF I/O does **not** live here. That implementation belongs
+in the dedicated `AH5.jl` package. See
+[`docs/archive-ownership.md`](docs/archive-ownership.md).
 
 ## 3. Rule for downstream packages
 
@@ -85,7 +92,8 @@ Dependencies must flow one way, into OodiCore's consumers.
 ## 5. Do not add domain logic
 
 No CAD logic, meshing logic, FEM/discretization logic, solver logic,
-file-format backends, or rendering backends belong here.
+file-format backends, or rendering backends belong here. HDF5, XDMF, MPI
+parallel I/O, and `.ah5` writers belong in `AH5.jl`, not in this package.
 
 Local schema validation is in scope only when the rule is structurally generic:
 required fields, portable value kinds, finiteness, ranges, non-empty values,
@@ -177,8 +185,8 @@ ill-typed values skip the rule instead of producing secondary exceptions.
 
 ## 11. Out of scope for now
 
-The following remain deliberately outside OodiCore unless a later architectural
-decision expands the contract:
+The following introspection generics remain deliberately outside OodiCore
+unless a later architectural decision expands the contract:
 
 ```julia
 summary(x)
@@ -190,14 +198,21 @@ artifacts(x)
 repair!
 ```
 
+Archive *record types* (identities, references, schema versions, software
+environment and execution-context fingerprints, content-hash rules) are in
+scope as data. They are not an implementation of `provenance(x)` or
+`artifacts(x)`, and they must not open files.
+
 Also out of scope:
 
 - domain constraint solvers,
 - expression evaluation semantics,
 - dependency-DAG/reference resolution,
 - automatic or implicit script execution,
-- security sandboxing for arbitrary user code.
+- security sandboxing for arbitrary user code,
+- HDF5/XDMF/AH5 readers, writers, inspectors, and migration runners.
 
 If a task seems to require one of these, keep the representation/protocol in
 OodiCore only when it is truly cross-product; keep the semantics in the owning
-downstream package or orchestration layer.
+downstream package or orchestration layer. Physical archive I/O stays in
+`AH5.jl`. See [`docs/archive-ownership.md`](docs/archive-ownership.md).

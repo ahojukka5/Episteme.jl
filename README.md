@@ -30,9 +30,13 @@ readiness(x, target)    # Can it move to the requested next pipeline stage?
 `OodiCore.jl` owns that shared interface. It defines `report`, `validate`,
 and `readiness` as empty generic functions, plus a handful of lightweight
 report/diagnostic/target/artifact types used to implement them. It also owns
-the shared semantic tree (`SemanticNode`, `NodeRef`) and local declarative
-schemas. See [`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md) and
-[`docs/declarative-contracts.md`](docs/declarative-contracts.md).
+the shared semantic tree (`SemanticNode`, `NodeRef`), local declarative
+schemas, and the dependency-free scientific-archive vocabulary (identities,
+references, schema versions, portable document envelopes). Physical
+AH5/HDF5/XDMF I/O lives in a dedicated `AH5.jl` package so provider-free
+cores never load HDF5. See [`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md),
+[`docs/declarative-contracts.md`](docs/declarative-contracts.md), and
+[`docs/archive-ownership.md`](docs/archive-ownership.md).
 
 ## Why shared generic functions avoid name conflicts
 
@@ -194,7 +198,9 @@ add:
 - small helper constructors,
 - readable `show` methods,
 - serialization-friendly structures for reports, diagnostics, targets,
-  artifacts, and schemas.
+  artifacts, and schemas,
+- scientific-archive identity, reference, namespace, schema-version, and
+  provenance *record types* (no file I/O).
 
 It must **not** contain:
 
@@ -202,11 +208,16 @@ It must **not** contain:
 - meshing logic,
 - FEM/discretization logic,
 - solver logic,
-- file-format backends,
+- file-format backends, including HDF5, XDMF, and `.ah5` writers,
 - plotting/rendering backends,
 - Netgen/OpenCascade wrappers,
 - `Oodi.jl` operator or problem definitions,
 - dependencies on any of the above.
+
+Shared archive I/O belongs in `AH5.jl`. Domain packages register payload
+codecs through weak-dependency extensions and must not start package-local
+HDF5 archive frameworks. See
+[`docs/archive-ownership.md`](docs/archive-ownership.md).
 
 If a proposed addition needs a heavy dependency, or logic specific to one
 domain (CAD, meshing, solving), it belongs in that domain's own package, not
