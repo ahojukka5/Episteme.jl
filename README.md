@@ -33,13 +33,16 @@ report/diagnostic/target/artifact types used to implement them. It also owns
 the shared semantic tree (`SemanticNode`, `NodeRef`), local declarative
 schemas, and the dependency-free scientific-archive vocabulary (identities,
 references, schema versions, portable document envelopes). Physical
-AH5/HDF5/XDMF I/O lives in a dedicated `AH5.jl` package so provider-free
-cores never load HDF5. See [`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md),
-[`docs/declarative-contracts.md`](docs/declarative-contracts.md),
-[`docs/archive-ownership.md`](docs/archive-ownership.md),
-[`docs/archive-envelope.md`](docs/archive-envelope.md), and the
-Episteme architecture study
-[`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md).
+AH5/HDF5/XDMF I/O is out of this package today (`docs/archive-ownership.md`,
+issue #25). The long-term Episteme architecture study
+([#48](https://github.com/ahojukka5/OodiCore.jl/issues/48),
+[`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md))
+prefers renaming this repository to `Episteme.jl` and treating AH5 as
+that backbone’s storage/profile, not a third package. Do not start that
+rename until the note is accepted. See also
+[`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md),
+[`docs/declarative-contracts.md`](docs/declarative-contracts.md), and
+[`docs/archive-envelope.md`](docs/archive-envelope.md).
 
 ## Why shared generic functions avoid name conflicts
 
@@ -225,11 +228,12 @@ It must **not** contain:
 - `Oodi.jl` operator or problem definitions,
 - dependencies on any of the above.
 
-Shared archive I/O belongs in `AH5.jl`. Domain packages register payload
-codecs through weak-dependency extensions and must not start package-local
-HDF5 archive frameworks. See
-[`docs/archive-ownership.md`](docs/archive-ownership.md).
-A JLD2 persistence spike (issue #47) lives in
+Shared archive I/O must not grow here until the #48 architecture note is
+accepted. Today that I/O is assigned to a future `AH5.jl`
+([`docs/archive-ownership.md`](docs/archive-ownership.md)); the Episteme
+study prefers it as an Episteme storage/profile instead. Domain packages
+must not start package-local HDF5 archive frameworks. A JLD2 persistence
+spike (issue #47) lives in
 [`research/jld2-ah5-spike/`](research/jld2-ah5-spike/).
 
 If a proposed addition needs a heavy dependency, or logic specific to one

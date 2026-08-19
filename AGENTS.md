@@ -35,8 +35,13 @@ These facilities must remain domain-neutral. OodiCore may know that a local
 field is a finite positive real, but it must not know what a CAD box, mesh size,
 finite-element space, or solver tolerance means.
 
-Physical AH5/HDF5/XDMF I/O does **not** live here. That implementation belongs
-in the dedicated `AH5.jl` package. See
+Physical AH5/HDF5/XDMF I/O does **not** live here today. Issue #25 assigned
+it to a dedicated `AH5.jl` package; the Episteme architecture study
+([#48](https://github.com/ahojukka5/OodiCore.jl/issues/48),
+[`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md))
+prefers that I/O as an Episteme storage/profile instead of a third
+package. Do not start the rename or move file-format backends here until
+that note is accepted. See
 [`docs/archive-ownership.md`](docs/archive-ownership.md).
 
 ## 3. Rule for downstream packages
