@@ -38,8 +38,9 @@ issue #25). The long-term Episteme architecture study
 ([#48](https://github.com/ahojukka5/OodiCore.jl/issues/48),
 [`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md))
 prefers renaming this repository to `Episteme.jl` and treating AH5 as
-that backbone’s storage/profile, not a third package. Do not start that
-rename until the note is accepted. See also
+that backbone’s JLD2-backed archive/profile (JLD2 hard dep in v1;
+HDF5.jl later), not a third package. Do not start that rename until the
+note is accepted. See also
 [`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md),
 [`docs/declarative-contracts.md`](docs/declarative-contracts.md), and
 [`docs/archive-envelope.md`](docs/archive-envelope.md).
@@ -231,9 +232,10 @@ It must **not** contain:
 Shared archive I/O must not grow here until the #48 architecture note is
 accepted. Today that I/O is assigned to a future `AH5.jl`
 ([`docs/archive-ownership.md`](docs/archive-ownership.md)); the Episteme
-study prefers it as an Episteme storage/profile instead. Domain packages
-must not start package-local HDF5 archive frameworks. A JLD2 persistence
-spike (issue #47) lives in
+study prefers a JLD2-backed AH5 profile *inside* renamed Episteme (JLD2
+hard dep in v1; HDF5.jl later). Domain packages must not start
+package-local HDF5 archive frameworks. A JLD2 persistence spike (issue
+#47) lives in
 [`research/jld2-ah5-spike/`](research/jld2-ah5-spike/).
 
 If a proposed addition needs a heavy dependency, or logic specific to one

@@ -12,8 +12,9 @@ accepted.
 > vocabulary + standalone `AH5.jl`) is still the *current* contract.
 > Issue [#48](https://github.com/ahojukka5/OodiCore.jl/issues/48)
 > prefers a different *end state*: this repository becomes
-> `Episteme.jl`, and AH5 is that backbone’s storage/profile rather than
-> a third package. See
+> `Episteme.jl`; AH5 is that backbone’s JLD2-backed archive/profile
+> (JLD2 hard dep in v1; HDF5.jl later as `EpistemeHDF5Ext`), not a
+> third package. See
 > [`research/episteme-architecture.md`](research/episteme-architecture.md).
 > Do not start that rename or move I/O here until the note is accepted.
 
@@ -425,7 +426,8 @@ Issue [#48](https://github.com/ahojukka5/OodiCore.jl/issues/48) is the
 long-term Episteme architecture study. That note **reopens** the
 standalone `AH5.jl` package boundary decided here: it prefers end state
 **(A)** — rename/re-scope this repository to `Episteme.jl` and treat AH5
-as Episteme’s storage/profile subsystem — over **(B)** OodiCore +
+as Episteme’s JLD2-backed archive/profile (JLD2 is a v1 hard dependency;
+HDF5.jl waits for a later `EpistemeHDF5Ext`) — over **(B)** OodiCore +
 Episteme + AH5 as three packages. Logical-vs-physical remains a
 subsystem split (envelope types vs `.ah5` encoding). See
 [`docs/research/episteme-architecture.md`](research/episteme-architecture.md).

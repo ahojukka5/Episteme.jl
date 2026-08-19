@@ -39,9 +39,9 @@ Physical AH5/HDF5/XDMF I/O does **not** live here today. Issue #25 assigned
 it to a dedicated `AH5.jl` package; the Episteme architecture study
 ([#48](https://github.com/ahojukka5/OodiCore.jl/issues/48),
 [`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md))
-prefers that I/O as an Episteme storage/profile instead of a third
-package. Do not start the rename or move file-format backends here until
-that note is accepted. See
+prefers that I/O as Episteme’s JLD2-backed archive/profile (JLD2 hard
+dep in v1; HDF5.jl later) instead of a third package. Do not start the
+rename or move file-format backends here until that note is accepted. See
 [`docs/archive-ownership.md`](docs/archive-ownership.md).
 
 ## 3. Rule for downstream packages
