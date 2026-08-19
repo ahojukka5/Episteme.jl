@@ -2,10 +2,10 @@
 
 This is the ownership and dependency decision for issue
 [#25](https://github.com/ahojukka5/OodiCore.jl/issues/25) under epic
-[#24](https://github.com/ahojukka5/OodiCore.jl/issues/24). It does not
-implement the archive envelope or an HDF5 writer. Those remain
-[#26](https://github.com/ahojukka5/OodiCore.jl/issues/26) and later
-AH5.jl work.
+[#24](https://github.com/ahojukka5/OodiCore.jl/issues/24). The logical
+envelope from [#26](https://github.com/ahojukka5/OodiCore.jl/issues/26)
+is documented in [`archive-envelope.md`](archive-envelope.md). Physical
+`.ah5` I/O remains AH5.jl work.
 
 ## Decision
 
