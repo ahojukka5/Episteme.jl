@@ -5,7 +5,17 @@ This is the ownership and dependency decision for issue
 [#24](https://github.com/ahojukka5/OodiCore.jl/issues/24). The logical
 envelope from [#26](https://github.com/ahojukka5/OodiCore.jl/issues/26)
 is documented in [`archive-envelope.md`](archive-envelope.md). Physical
-`.ah5` I/O remains AH5.jl work.
+`.ah5` I/O remains out of this package until the Episteme study is
+accepted.
+
+> **#48 reopen.** The working split on this page (OodiCore logical
+> vocabulary + standalone `AH5.jl`) is still the *current* contract.
+> Issue [#48](https://github.com/ahojukka5/OodiCore.jl/issues/48)
+> prefers a different *end state*: this repository becomes
+> `Episteme.jl`, and AH5 is that backbone’s storage/profile rather than
+> a third package. See
+> [`research/episteme-architecture.md`](research/episteme-architecture.md).
+> Do not start that rename or move I/O here until the note is accepted.
 
 ## Decision
 
@@ -412,8 +422,13 @@ to OodiCore. Findings and the adopt-with-constraints recommendation are
 in [`research/jld2-ah5-spike/FINDINGS.md`](../research/jld2-ah5-spike/FINDINGS.md).
 
 Issue [#48](https://github.com/ahojukka5/OodiCore.jl/issues/48) is the
-long-term Episteme architecture study. Decision: **REVISE** (keep
-OodiCore; add `Episteme.jl` for composition and the orchestration
-protocol; leave physical I/O in AH5.jl). See
+long-term Episteme architecture study. That note **reopens** the
+standalone `AH5.jl` package boundary decided here: it prefers end state
+**(A)** — rename/re-scope this repository to `Episteme.jl` and treat AH5
+as Episteme’s storage/profile subsystem — over **(B)** OodiCore +
+Episteme + AH5 as three packages. Logical-vs-physical remains a
+subsystem split (envelope types vs `.ah5` encoding). See
 [`docs/research/episteme-architecture.md`](research/episteme-architecture.md).
-Do not start the Episteme refactor until that note is accepted.
+Do not start the Episteme rename or move I/O into this package until
+that note is accepted. Until then, this #25 split is the working
+contract.
