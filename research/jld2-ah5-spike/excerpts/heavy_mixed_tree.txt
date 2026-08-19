@@ -1,0 +1,103 @@
+GROUP /_types
+DATATYPE /_types/00000001
+DATATYPE /_types/00000002
+DATATYPE /_types/00000003
+DATATYPE /_types/00000004
+DATATYPE /_types/00000005
+DATATYPE /_types/00000006
+DATATYPE /_types/00000007
+DATATYPE /_types/00000008
+DATATYPE /_types/00000009
+DATATYPE /_types/00000010
+DATATYPE /_types/00000011
+DATATYPE /_types/00000012
+GROUP /data
+DATASET /data/conn dims=(4, 10000) dtype=HDF5.Datatype: H5T_STD_I64LE
+DATASET /data/coords dims=(3, 20000) dtype=HDF5.Datatype: H5T_IEEE_F64LE
+DATASET /data/dense dims=(200000,) dtype=HDF5.Datatype: H5T_IEEE_F64LE
+GROUP /objects
+DATASET /objects/field dims=() dtype=HDF5.Datatype: /_types/00000008 H5T_COMPOUND {
+      H5T_COMPOUND {
+            H5T_STRING {
+               STRSIZE H5T_VARIABLE;
+               STRPAD H5T_STR_NULLPAD;
+               CSET H5T_CSET_UTF8;
+               CTYPE H5T_C_S1;
+            } "value" : 0;
+         } "object_id" : 0;
+      H5T_COMPOUND {
+            H5T_STRING {
+               STRSIZE H5T_VARIABLE;
+               STRPAD H5T_STR_NULLPAD;
+               CSET H5T_CSET_UTF8;
+               CTYPE H5T_C_S1;
+            } "value" : 0;
+         } "revision_id" : 8;
+       H5T_REFERENCE { H5T_STD_REF_OBJECT } "content_id" : 16;
+       H5T_REFERENCE { H5T_STD_REF_OBJECT } "run_id" : 24;
+      H5T_COMPOUND {
+            H5T_STRING {
+               STRSIZE H5T_VARIABLE;
+               STRPAD H5T_STR_NULLPAD;
+               CSET H5T_CSET_UTF8;
+               CTYPE H5T_C_S1;
+            } "id" : 0;
+            H5T_STRING {
+               STRSIZE H5T_VARIABLE;
+               STRPAD H5T_STR_NULLPAD;
+               CSET H5T_CSET_UTF8;
+               CTYPE H5T_C_S1;
+            } "package_uuid" : 8;
+            H5T_STRING {
+               STRSIZE H5T_VARIABLE;
+               STRPAD H5T_STR_NULLPAD;
+               CSET H5T_CSET_UTF8;
+               CTYPE H5T_C_S1;
+            } "display_name" : 16;
+         } "namespace" : 32;
+      H5T_STRING {
+         STRSIZE H5T_VARIABLE;
+         STRPAD H5T_STR_NULLPAD;
+         CSET H5T_CSET_UTF8;
+         CTYPE H5T_C_S1;
+      } "kind" : 56;
+      H5T_COMPOUND {
+            H5T_STRING {
+               STRSIZE H5T_VARIABLE;
+               STRPAD H5T_STR_NULLPAD;
+               CSET H5T_CSET_UTF8;
+               CTYPE H5T_C_S1;
+            } "namespace_id" : 0;
+            H5T_STRING {
+               STRSIZE H5T_VARIABLE;
+               STRPAD H5T_STR_NULLPAD;
+               CSET H5T_CSET_UTF8;
+               CTYPE H5T_C_S1;
+            } "schema_id" : 8;
+            H5T_STRING {
+               STRSIZE H5T_VARIABLE;
+               STRPAD H5T_STR_NULLPAD;
+               CSET H5T_CSET_UTF8;
+               CTYPE H5T_C_S1;
+            } "version" : 16;
+         } "schema" : 64;
+      H5T_COMPOUND {
+             H5T_REFERENCE { H5T_STD_REF_OBJECT } "software_environment" : 0;
+             H5T_REFERENCE { H5T_STD_REF_OBJECT } "execution_context" : 8;
+         } "provenance" : 88;
+       H5T_REFERENCE { H5T_STD_REF_OBJECT } "references" : 104;
+   }
+DATASET /objects/field_data_ref dims=() dtype=HDF5.Datatype: /_types/00000010 H5T_COMPOUND {
+      H5T_STRING {
+         STRSIZE H5T_VARIABLE;
+         STRPAD H5T_STR_NULLPAD;
+         CSET H5T_CSET_UTF8;
+         CTYPE H5T_C_S1;
+      } "object_id" : 0;
+      H5T_STRING {
+         STRSIZE H5T_VARIABLE;
+         STRPAD H5T_STR_NULLPAD;
+         CSET H5T_CSET_UTF8;
+         CTYPE H5T_C_S1;
+      } "dataset" : 8;
+   }

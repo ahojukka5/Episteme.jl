@@ -1,0 +1,14 @@
+GROUP /_types
+DATATYPE /_types/00000001
+DATATYPE /_types/00000002
+DATATYPE /_types/00000003
+DATASET /box dims=() dtype=HDF5.Datatype: /_types/00000002 H5T_COMPOUND {
+      H5T_IEEE_F64LE "width" : 0;
+      H5T_IEEE_F64LE "depth" : 8;
+      H5T_IEEE_F64LE "height" : 16;
+   }
+DATASET /sector dims=() dtype=HDF5.Datatype: /_types/00000003 H5T_COMPOUND {
+      H5T_STD_I64LE "sites" : 0;
+      H5T_STD_I64LE "particles" : 8;
+      H5T_STD_I64LE "Sz" : 16;
+   }

@@ -1,0 +1,11 @@
+GROUP /data
+DATASET /data/step_1 dims=(8,) dtype=HDF5.Datatype: H5T_IEEE_F64LE
+DATASET /data/step_2 dims=(8,) dtype=HDF5.Datatype: H5T_IEEE_F64LE
+DATASET /data/step_3 dims=(8,) dtype=HDF5.Datatype: H5T_IEEE_F64LE
+DATASET /data/step_4 dims=(8,) dtype=HDF5.Datatype: H5T_IEEE_F64LE
+GROUP /rev
+DATASET /rev/0 dims=() dtype=HDF5.Datatype: H5T_STD_I64LE
+DATASET /rev/1 dims=() dtype=HDF5.Datatype: H5T_STD_I64LE
+DATASET /rev/2 dims=() dtype=HDF5.Datatype: H5T_STD_I64LE
+DATASET /rev/3 dims=() dtype=HDF5.Datatype: H5T_STD_I64LE
+DATASET /rev/4 dims=() dtype=HDF5.Datatype: H5T_STD_I64LE

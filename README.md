@@ -227,6 +227,8 @@ Shared archive I/O belongs in `AH5.jl`. Domain packages register payload
 codecs through weak-dependency extensions and must not start package-local
 HDF5 archive frameworks. See
 [`docs/archive-ownership.md`](docs/archive-ownership.md).
+A JLD2 persistence spike (issue #47) lives in
+[`research/jld2-ah5-spike/`](research/jld2-ah5-spike/).
 
 If a proposed addition needs a heavy dependency, or logic specific to one
 domain (CAD, meshing, solving), it belongs in that domain's own package, not

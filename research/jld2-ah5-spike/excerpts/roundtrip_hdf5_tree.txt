@@ -1,0 +1,151 @@
+GROUP /_types
+DATATYPE /_types/00000001
+DATATYPE /_types/00000002
+DATATYPE /_types/00000003
+DATATYPE /_types/00000004
+DATATYPE /_types/00000005
+DATATYPE /_types/00000006
+DATATYPE /_types/00000007
+DATATYPE /_types/00000008
+DATATYPE /_types/00000009
+DATATYPE /_types/00000010
+DATATYPE /_types/00000011
+DATATYPE /_types/00000012
+DATATYPE /_types/00000013
+DATATYPE /_types/00000014
+DATATYPE /_types/00000015
+DATATYPE /_types/00000016
+DATATYPE /_types/00000017
+DATATYPE /_types/00000018
+DATATYPE /_types/00000019
+DATATYPE /_types/00000020
+DATATYPE /_types/00000021
+DATATYPE /_types/00000022
+DATATYPE /_types/00000023
+DATATYPE /_types/00000024
+DATATYPE /_types/00000025
+DATATYPE /_types/00000026
+DATATYPE /_types/00000027
+DATATYPE /_types/00000028
+DATATYPE /_types/00000029
+DATATYPE /_types/00000030
+DATATYPE /_types/00000031
+DATATYPE /_types/00000032
+DATATYPE /_types/00000033
+DATATYPE /_types/00000034
+DATATYPE /_types/00000035
+DATATYPE /_types/00000036
+DATASET /array dims=(3,) dtype=HDF5.Datatype: H5T_STD_I64LE
+DATASET /counter dims=() dtype=HDF5.Datatype: /_types/00000028 H5T_COMPOUND {
+      H5T_STD_I64LE "n" : 0;
+   }
+DATASET /cycle dims=() dtype=HDF5.Datatype: /_types/00000034 H5T_COMPOUND {
+      H5T_STRING {
+         STRSIZE H5T_VARIABLE;
+         STRPAD H5T_STR_NULLPAD;
+         CSET H5T_CSET_UTF8;
+         CTYPE H5T_C_S1;
+      } "name" : 0;
+       H5T_REFERENCE { H5T_STD_REF_OBJECT } "other" : 8;
+   }
+DATASET /dict dims=() dtype=HDF5.Datatype: /_types/00000032 H5T_COMPOUND {
+       H5T_REFERENCE { H5T_STD_REF_OBJECT } "kvvec" : 0;
+   }
+DATASET /enum dims=() dtype=HDF5.Datatype: /_types/00000012 H5T_OPAQUE {
+      OPQ_SIZE 4;
+      OPQ_TAG "";
+   }
+DATASET /graph dims=() dtype=HDF5.Datatype: /_types/00000014 H5T_COMPOUND {
+       H5T_REFERENCE { H5T_STD_REF_OBJECT } "objects" : 0;
+       H5T_REFERENCE { H5T_STD_REF_OBJECT } "heads" : 8;
+   }
+DATASET /lieb_sector dims=() dtype=HDF5.Datatype: /_types/00000026 H5T_COMPOUND {
+      H5T_STD_I64LE "sites" : 0;
+      H5T_STD_I64LE "particles" : 8;
+      H5T_STD_I64LE "Sz" : 16;
+   }
+DATASET /mesh dims=() dtype=HDF5.Datatype: /_types/00000027 H5T_COMPOUND {
+       H5T_REFERENCE { H5T_STD_REF_OBJECT } "coords" : 0;
+       H5T_REFERENCE { H5T_STD_REF_OBJECT } "connectivity" : 8;
+   }
+DATASET /monge_box dims=() dtype=HDF5.Datatype: /_types/00000010 H5T_COMPOUND {
+      H5T_IEEE_F64LE "width" : 0;
+      H5T_IEEE_F64LE "depth" : 8;
+      H5T_IEEE_F64LE "height" : 16;
+   }
+DATASET /namedtuple dims=() dtype=HDF5.Datatype: /_types/00000029 H5T_COMPOUND {
+      H5T_STD_I64LE "a" : 0;
+      H5T_STRING {
+         STRSIZE H5T_VARIABLE;
+         STRPAD H5T_STR_NULLPAD;
+         CSET H5T_CSET_UTF8;
+         CTYPE H5T_C_S1;
+      } "b" : 8;
+   }
+DATASET /nothing dims=() dtype=HDF5.Datatype: /_types/00000011 H5T_OPAQUE {
+      OPQ_SIZE 1;
+      OPQ_TAG "";
+   }
+DATASET /ptr dims=() dtype=HDF5.Datatype: /_types/00000036 H5T_OPAQUE {
+      OPQ_SIZE 1;
+      OPQ_TAG "";
+   }
+DATASET /schema dims=() dtype=HDF5.Datatype: /_types/00000018 H5T_COMPOUND {
+      H5T_STRING {
+         STRSIZE H5T_VARIABLE;
+         STRPAD H5T_STR_NULLPAD;
+         CSET H5T_CSET_UTF8;
+         CTYPE H5T_C_S1;
+      } "namespace_id" : 0;
+      H5T_STRING {
+         STRSIZE H5T_VARIABLE;
+         STRPAD H5T_STR_NULLPAD;
+         CSET H5T_CSET_UTF8;
+         CTYPE H5T_C_S1;
+      } "schema_id" : 8;
+      H5T_STRING {
+         STRSIZE H5T_VARIABLE;
+         STRPAD H5T_STR_NULLPAD;
+         CSET H5T_CSET_UTF8;
+         CTYPE H5T_C_S1;
+      } "version" : 16;
+   }
+DATASET /semantic dims=() dtype=HDF5.Datatype: /_types/00000003 H5T_COMPOUND {
+      H5T_STRING {
+         STRSIZE H5T_VARIABLE;
+         STRPAD H5T_STR_NULLPAD;
+         CSET H5T_CSET_UTF8;
+         CTYPE H5T_C_S1;
+      } "kind" : 0;
+       H5T_REFERENCE { H5T_STD_REF_OBJECT } "name" : 8;
+       H5T_REFERENCE { H5T_STD_REF_OBJECT } "attributes" : 16;
+       H5T_REFERENCE { H5T_STD_REF_OBJECT } "children" : 24;
+   }
+DATASET /shared_a dims=() dtype=HDF5.Datatype: /_types/00000010 H5T_COMPOUND {
+      H5T_IEEE_F64LE "width" : 0;
+      H5T_IEEE_F64LE "depth" : 8;
+      H5T_IEEE_F64LE "height" : 16;
+   }
+DATASET /shared_b dims=() dtype=HDF5.Datatype: /_types/00000010 H5T_COMPOUND {
+      H5T_IEEE_F64LE "width" : 0;
+      H5T_IEEE_F64LE "depth" : 8;
+      H5T_IEEE_F64LE "height" : 16;
+   }
+DATASET /sparse dims=() dtype=HDF5.Datatype: /_types/00000035 H5T_COMPOUND {
+      H5T_STD_I64LE "m" : 0;
+      H5T_STD_I64LE "n" : 8;
+       H5T_REFERENCE { H5T_STD_REF_OBJECT } "colptr" : 16;
+       H5T_REFERENCE { H5T_STD_REF_OBJECT } "rowval" : 24;
+       H5T_REFERENCE { H5T_STD_REF_OBJECT } "nzval" : 32;
+   }
+DATASET /tuple dims=() dtype=HDF5.Datatype: /_types/00000031 H5T_COMPOUND {
+      H5T_STD_I64LE "1" : 0;
+      H5T_IEEE_F64LE "2" : 8;
+      H5T_STRING {
+         STRSIZE H5T_VARIABLE;
+         STRPAD H5T_STR_NULLPAD;
+         CSET H5T_CSET_UTF8;
+         CTYPE H5T_C_S1;
+      } "3" : 16;
+   }
+DATASET /union dims=() dtype=HDF5.Datatype: H5T_IEEE_F64LE
