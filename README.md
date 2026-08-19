@@ -35,8 +35,9 @@ schemas, and the dependency-free scientific-archive vocabulary (identities,
 references, schema versions, portable document envelopes). Physical
 AH5/HDF5/XDMF I/O lives in a dedicated `AH5.jl` package so provider-free
 cores never load HDF5. See [`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md),
-[`docs/declarative-contracts.md`](docs/declarative-contracts.md), and
-[`docs/archive-ownership.md`](docs/archive-ownership.md).
+[`docs/declarative-contracts.md`](docs/declarative-contracts.md),
+[`docs/archive-ownership.md`](docs/archive-ownership.md), and
+[`docs/archive-envelope.md`](docs/archive-envelope.md).
 
 ## Why shared generic functions avoid name conflicts
 
@@ -125,7 +126,8 @@ packages):
 - `readiness(x, target)`
 
 OodiCore also implements `validate(node::SemanticNode, schema::NodeSchema)`
-for local schema checks.
+for local schema checks, and `validate` / `report` for the archive
+envelope types.
 
 Abstract types:
 
@@ -154,6 +156,11 @@ Concrete types:
   — introspectable local schemas. Attribute rules inspect one value;
   node-local rules inspect relationships inside one node. See
   [`docs/declarative-contracts.md`](docs/declarative-contracts.md).
+- `ObjectId` / `RevisionId` / `ContentId` / `WorkflowHeadId` — distinct
+  archive identities. Equal strings do not make them the same kind of id.
+- `ArchiveObject` / `ArchiveReference` / `SchemaRef` / `ArchiveGraph` —
+  the shared logical archive envelope. Package payload fields stay in
+  `extras`. No HDF5. See [`docs/archive-envelope.md`](docs/archive-envelope.md).
 
 Tree operations:
 
@@ -175,13 +182,14 @@ Declarative helpers:
 Serialization:
 
 - `to_namedtuple(x)` — converts reports, diagnostics, targets, artifacts,
-  and schemas (`ValidationRule`, `AttributeSchema`, `NodeSchema`,
-  `NodeValidationRule`) into a plain `NamedTuple` suitable for JSON
-  encoding or logging. It does **not** convert `SemanticNode` or `NodeRef`;
-  arbitrary runtime values in the tree have no OodiCore serialization
-  protocol. Symbol-valued fields (`severity`, `code`, `subject`, `kind`,
-  target `name`, ...) are kept as `Symbol`s; a JSON-encoding step at the
-  boundary is expected to turn them into strings.
+  schemas (`ValidationRule`, `AttributeSchema`, `NodeSchema`,
+  `NodeValidationRule`), and archive envelope records into a plain
+  `NamedTuple` suitable for JSON encoding or logging. It does **not**
+  convert `SemanticNode` or `NodeRef`; arbitrary runtime values in the
+  tree have no OodiCore serialization protocol. Symbol-valued fields
+  (`severity`, `code`, `subject`, `kind`, target `name`, ...) are kept as
+  `Symbol`s; a JSON-encoding step at the boundary is expected to turn
+  them into strings.
 
 ## What should and should not go into OodiCore
 
