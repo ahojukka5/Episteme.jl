@@ -12,4 +12,10 @@ Outputs:
 
 - `out/` generated files (gitignored)
 - `excerpts/` compact HDF5 trees and the run log
+- `excerpts/forensic_clean_process.md` from a second Julia process
+  that loads only JLD2/HDF5
 - `FINDINGS.md` architecture note and recommendation
+
+`experiment_status` in the run log distinguishes completed vs
+passed/qualified. Interop is qualified as `jld2_created_files_only`;
+parallel as `serial_analogue_only`.

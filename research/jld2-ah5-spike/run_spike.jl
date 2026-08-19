@@ -26,6 +26,30 @@ const FINDINGS = Dict{String,Any}()
 
 logstep(msg) = println("==> ", msg)
 
+function _status(; completed::Bool, passed, qualified::AbstractString = "", notes::AbstractString = "")
+    return Dict{String,Any}(
+        "completed" => completed,
+        "passed" => passed,
+        "qualified" => qualified,
+        "notes" => notes,
+    )
+end
+
+function _with_stderr(thunk)
+    path, io = mktemp()
+    try
+        result = redirect_stderr(io) do
+            thunk()
+        end
+        flush(io)
+        seekstart(io)
+        return result, read(io, String)
+    finally
+        close(io)
+        rm(path; force = true)
+    end
+end
+
 function _write_text(path, text)
     mkpath(dirname(path))
     open(path, "w") do io
@@ -155,19 +179,22 @@ function experiment_roundtrip()
     checks["union"] = loaded["union"] == 1.5
     checks["array"] = loaded["array"] == [1, 2, 3]
     checks["sparse"] = loaded["sparse"] == sparse_m
-    shared_ok = try
+    checks["shared_values_equal"] = try
         loaded["shared_a"] == loaded["shared_b"] == box
     catch
         false
     end
-    checks["shared_values_equal"] = shared_ok
-    cycle_ok = try
-        c = loaded["cycle"]
-        c.other.other === c || (c.other.other.name == c.name)
+    checks["shared_identity"] = try
+        loaded["shared_a"] === loaded["shared_b"]
     catch
         false
     end
-    checks["cycle_roundtrip"] = cycle_ok
+    checks["cycle_identity"] = try
+        c = loaded["cycle"]
+        c.other.other === c
+    catch
+        false
+    end
     ptr_ok = try
         loaded["ptr"] isa Ptr
     catch
@@ -180,7 +207,14 @@ function experiment_roundtrip()
     FINDINGS["jld2_root_names"] = jldopen(path, "r") do f
         collect(keys(f))
     end
-    return all(values(checks))
+    value_keys = setdiff(keys(checks), Set(["shared_identity", "cycle_identity"]))
+    value_ok = all(checks[k] for k in value_keys)
+    return _status(;
+        completed = true,
+        passed = value_ok,
+        qualified = value_ok ? "value_roundtrip" : "value_roundtrip_failed",
+        notes = "shared_identity=$(checks["shared_identity"]); cycle_identity=$(checks["cycle_identity"])",
+    )
 end
 
 # ---------------------------------------------------------------------------
@@ -200,7 +234,12 @@ function experiment_inspect()
     FINDINGS["jld2_reserved"] = filter(n -> startswith(n, "_"), names)
     FINDINGS["inspectable_with_hdf5jl"] = true
     FINDINGS["h5dump_available"] = _h5dump_bin() !== nothing
-    return true
+    return _status(;
+        completed = true,
+        passed = !isempty(tree),
+        qualified = "hdf5jl_tree",
+        notes = _h5dump_bin() === nothing ? "h5dump missing" : "h5dump present but may fail if MPI-linked",
+    )
 end
 
 # ---------------------------------------------------------------------------
@@ -255,18 +294,68 @@ function experiment_interop()
         create_group(f, "data")
         f["data/mesh_coords"] = rand(3, 8)
     end
-    _record(results, "hdf5_then_jld2_write", () -> jldopen(p2, "r+") do f
-        f["packages/lieb/sector"] = HubbardSector(4, 2, 0)
-        f["schemas/lieb/hubbard-sector"] = SchemaRef(:lieb, "hubbard-sector", "1.0.0")
-        true
-    end)
-    _record(results, "hdf5_then_jld2_jld2_reads", () -> jldopen(p2, "r") do f
-        f["packages/lieb/sector"] == HubbardSector(4, 2, 0)
-    end)
+    _, write_warn = _with_stderr() do
+        _record(results, "hdf5_then_jld2_write", () -> jldopen(p2, "r+") do f
+            f["packages/lieb/sector"] = HubbardSector(4, 2, 0)
+            f["schemas/lieb/hubbard-sector"] = SchemaRef(:lieb, "hubbard-sector", "1.0.0")
+            true
+        end)
+    end
+    results["hdf5_then_jld2_write_stderr"] = write_warn
+    _, read_warn = _with_stderr() do
+        _record(results, "hdf5_then_jld2_jld2_reads", () -> jldopen(p2, "r") do f
+            f["packages/lieb/sector"] == HubbardSector(4, 2, 0)
+        end)
+    end
+    results["hdf5_then_jld2_read_stderr"] = read_warn
     _record(results, "hdf5_then_jld2_hdf5_reads", () -> h5open(p2, "r") do f
         size(read(f["data/mesh_coords"])) == (3, 8)
     end)
+    _record(results, "hdf5_then_jld2_jld2_keys", () -> jldopen(p2, "r") do f
+        collect(keys(f))
+    end)
     isfile(p2) && _write_text(joinpath(EXCERPTS, "interop_hdf5_then_jld2_tree.txt"), hdf5_tree(p2))
+
+    # 3.2a top-level JLD2 value into an HDF5.jl-created file
+    p2a = joinpath(OUT, "interop_hdf5_then_jld2_toplevel.ah5")
+    isfile(p2a) && rm(p2a)
+    h5open(p2a, "w") do f
+        f["seed"] = 1
+    end
+    _, p2a_warn = _with_stderr() do
+        _record(results, "hdf5_then_jld2_toplevel_write", () -> jldopen(p2a, "r+") do f
+            f["top"] = 42
+            true
+        end)
+    end
+    results["hdf5_then_jld2_toplevel_stderr"] = p2a_warn
+    _record(results, "hdf5_then_jld2_toplevel_read", () -> jldopen(p2a, "r") do f
+        f["top"] == 42
+    end)
+    _record(results, "hdf5_then_jld2_toplevel_keys", () -> jldopen(p2a, "r") do f
+        collect(keys(f))
+    end)
+
+    # 3.2b write into a group HDF5.jl pre-created
+    p2b = joinpath(OUT, "interop_hdf5_then_jld2_pregroup.ah5")
+    isfile(p2b) && rm(p2b)
+    h5open(p2b, "w") do f
+        create_group(f, "packages")
+        f["packages/seed"] = 0
+    end
+    _, p2b_warn = _with_stderr() do
+        _record(results, "hdf5_then_jld2_pregroup_write", () -> jldopen(p2b, "r+") do f
+            f["packages/sector"] = HubbardSector(4, 2, 0)
+            true
+        end)
+    end
+    results["hdf5_then_jld2_pregroup_stderr"] = p2b_warn
+    _record(results, "hdf5_then_jld2_pregroup_read", () -> jldopen(p2b, "r") do f
+        f["packages/sector"] == HubbardSector(4, 2, 0)
+    end)
+    _record(results, "hdf5_then_jld2_pregroup_keys", () -> jldopen(p2b, "r") do f
+        collect(keys(f))
+    end)
 
     # 3.3 Repeated alternating serial writes
     p3 = joinpath(OUT, "interop_alternating.ah5")
@@ -354,7 +443,21 @@ function experiment_interop()
     results["overwrite_after"] = after
 
     FINDINGS["interop"] = results
-    return true
+    jld2_first_ok = results["jld2_then_hdf5_jld2_reads"] === true &&
+        results["jld2_then_hdf5_hdf5_reads"] === true &&
+        results["alternating_ok"] === true &&
+        results["chunked_jld2_index"] === true &&
+        results["chunked_hdf5_data"] === true
+    hdf5_first_ok = results["hdf5_then_jld2_jld2_reads"] === true &&
+        get(results, "hdf5_then_jld2_toplevel_read", false) === true &&
+        get(results, "hdf5_then_jld2_pregroup_read", false) === true
+    return _status(;
+        completed = true,
+        passed = jld2_first_ok && hdf5_first_ok,
+        qualified = jld2_first_ok && !hdf5_first_ok ? "jld2_created_files_only" :
+            (jld2_first_ok ? "both_directions" : "failed"),
+        notes = "hdf5-first nested=$(results["hdf5_then_jld2_jld2_reads"]) toplevel=$(get(results, "hdf5_then_jld2_toplevel_read", nothing)) pregroup=$(get(results, "hdf5_then_jld2_pregroup_read", nothing))",
+    )
 end
 
 # ---------------------------------------------------------------------------
@@ -425,7 +528,11 @@ function experiment_heavy()
     results["heavy_not_duplicated"] = results["mixed_bytes"] < results["jld2_bytes"] * 1.5
     FINDINGS["heavy"] = results
     _write_text(joinpath(EXCERPTS, "heavy_mixed_tree.txt"), hdf5_tree(p_mix))
-    return true
+    return _status(;
+        completed = true,
+        passed = results["heavy_not_duplicated"] === true,
+        qualified = "mixed_jld2_metadata_hdf5_arrays",
+    )
 end
 
 # ---------------------------------------------------------------------------
@@ -463,7 +570,12 @@ function experiment_parallel()
         f["objects/problem"] == HubbardSector(8, 6, 0)
     end
     FINDINGS["parallel_serial_analogue_ok"] = ok
-    return ok
+    return _status(;
+        completed = true,
+        passed = false,
+        qualified = "serial_analogue_only; mpi_collective_write_not_run",
+        notes = "HDF5.has_parallel()=$(parallel); analogue_ok=$(ok)",
+    )
 end
 
 # ---------------------------------------------------------------------------
@@ -505,7 +617,11 @@ function experiment_evolution()
     FINDINGS["evolution_note"] =
         "JLD2 Upgrade reconstructs a NamedTuple of old fields then rconvert. " *
         "That is a Julia representation migration, not an Episteme schema migration."
-    return FINDINGS["evolution_ok"]
+    return _status(;
+        completed = true,
+        passed = FINDINGS["evolution_ok"],
+        qualified = "julia_type_upgrade_not_episteme_schema",
+    )
 end
 
 # ---------------------------------------------------------------------------
@@ -516,48 +632,36 @@ function experiment_forensic()
     logstep("7. Missing-type / forensic read")
     path = joinpath(OUT, "forensic.ah5")
     jldsave(path; box = Box(1.0, 2.0, 3.0), sector = HubbardSector(4, 2, 0))
-
-    unknown = jldopen(path, "r") do f
-        # Force unknown by mapping to a missing path via custom typemap
-        # First record the stored type path.
-        (collect(keys(f)), f["box"], f["sector"])
-    end
-
-    plain = try
-        load(path; plain = true)
-    catch err
-        sprint(showerror, err)
-    end
-
-    remapped = jldopen(
-        path,
-        "r";
-        typemap = function (file, typepath, params)
-            if endswith(typepath, ".Box") || endswith(typepath, ".HubbardSector")
-                return JLD2.Upgrade(NamedTuple)
-            end
-            return JLD2.default_typemap(file, typepath, params)
-        end,
-    ) do f
-        try
-            (f["box"], f["sector"])
-        catch err
-            sprint(showerror, err)
-        end
-    end
-
-    FINDINGS["forensic_plain"] = string(typeof(plain))
-    FINDINGS["forensic_plain_sample"] = sprint(show, MIME("text/plain"), plain)
-    FINDINGS["forensic_remap"] = sprint(show, remapped)
-    FINDINGS["forensic_keys"] = unknown[1]
-    FINDINGS["forensic_note"] =
-        "JLD2 can load UnknownType / reconstructed types when the defining " *
-        "module is absent. That is forensic Julia reconstruction, not an " *
-        "Episteme semantic schema. Generic inspect should still read " *
-        "HDF5 group names and numeric datasets without JLD2."
     tree = hdf5_tree(path)
     _write_text(joinpath(EXCERPTS, "forensic_hdf5_tree.txt"), tree)
-    return true
+
+    child = joinpath(ROOT, "forensic_load.jl")
+    excerpt = joinpath(EXCERPTS, "forensic_clean_process.md")
+    cmd = `$(Base.julia_cmd()) --project=$(ROOT) $(child) $(path) $(excerpt)`
+    logbuf = IOBuffer()
+    proc_ok = false
+    try
+        run(pipeline(cmd, stdout = logbuf, stderr = logbuf))
+        proc_ok = true
+    catch err
+        println(logbuf, sprint(showerror, err))
+    end
+    child_output = String(take!(logbuf))
+    _write_text(joinpath(EXCERPTS, "forensic_clean_process_log.txt"), child_output)
+    report = isfile(excerpt) ? read(excerpt, String) : ""
+    FINDINGS["forensic_clean_process_ok"] = proc_ok
+    FINDINGS["forensic_clean_process_log"] = child_output
+    FINDINGS["forensic_clean_process_report"] = report
+    FINDINGS["forensic_note"] =
+        "The clean-process reader loads only JLD2 and HDF5. That is the " *
+        "three-year-old-archive case: original modules are absent. " *
+        "JLD2 reconstruction without the type is forensic, not an Episteme schema."
+    return _status(;
+        completed = proc_ok,
+        passed = proc_ok && occursin("HDF5.jl generic inspect", report),
+        qualified = "clean_process_without_types_jl",
+        notes = first(split(report, '\n', limit = 8)),
+    )
 end
 
 # ---------------------------------------------------------------------------
@@ -572,7 +676,7 @@ function experiment_portability_notes()
         "domain_payloads" => "Julia-native by default; portable subset only when interchange/replay without the package is required",
         "issue_34" => "portable declarative document remains a capability, not the default persistence path",
     )
-    return true
+    return _status(; completed = true, passed = nothing, qualified = "notes_only")
 end
 
 function write_results_markdown()
