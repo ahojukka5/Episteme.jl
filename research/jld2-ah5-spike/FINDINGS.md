@@ -26,8 +26,9 @@ Round-tripped through JLD2 into an `.ah5` file:
 | `SchemaRef`, `ArchiveObject` fields, `WorkflowHead` | lossless |
 | `ArchiveGraph` | lossless by `to_namedtuple` (see equality note) |
 | Parametric `Mesh{Float64}`, mutable `Counter`, sparse matrix | lossless |
-| Tuples, arrays, unions, shared equal values, pointer | lossless / accepted |
-| Two-node cycle (`CycleNode`) | reconstructed |
+| Tuples, arrays, unions, pointer | lossless / accepted |
+| Shared object (`shared_a === shared_b`) | **identity preserved** |
+| Two-node cycle (`cycle.other.other === cycle`) | **identity preserved** |
 
 **Equality note.** `ArchiveObject` / `ArchiveGraph` contain `Vector`
 fields, so Julia's default `==` is object identity. A JLD2 reload is a
@@ -80,15 +81,23 @@ concurrent mixed writers.
 | Sequence | Result |
 | --- | --- |
 | JLD2 create → HDF5.jl `r+` append `/data/field` → JLD2 reread | **pass** |
-| HDF5.jl create → JLD2 `r+` write nested `packages/...` → JLD2 reread | **fail** (`KeyError: packages`; warning: file likely not written by JLD2) |
+| HDF5.jl create → JLD2 `r+` nested `packages/...` | write callback returns true; reread `KeyError: packages`. Keys remain `["episteme", "data"]` |
+| HDF5.jl create → JLD2 `r+` **top-level** `top = 42` | same: write true, reread `KeyError: top`. Keys remain `["seed"]` |
+| HDF5.jl pre-create group `packages` → JLD2 `r+` `packages/sector` | write true, reread `KeyError: sector`. Keys remain `["packages"]` |
 | JLD2 create → four alternating HDF5.jl / JLD2 serial cycles | **pass** |
 | JLD2 create → HDF5.jl chunked/compressed/extendible `/data/events` → JLD2 reread index | **pass** |
 | HDF5.jl delete/overwrite of a JLD2 dataset | overwrite succeeded; JLD2 still opened the file. Treat as a hazard, not a feature |
 
-**Constraint.** JLD2 must create the file (its header). HDF5.jl may then
-append ordinary datasets under a reserved group such as `/data`. Creating
-the file with HDF5.jl and expecting JLD2 to own nested Julia objects
-afterward is not reliable.
+Every HDF5.jl-first open prints JLD2's warning:
+
+```text
+Warning: File likely not written by JLD2. Skipping header verification.
+```
+
+That is a header/base-address check, not a nested-path quirk. JLD2 `r+`
+on a foreign-created file does not persist even a top-level scalar.
+**JLD2 must create the AH5 file.** HDF5.jl may then append ordinary
+datasets under `/data`.
 
 HDF5.jl must not modify `/_types` or rewrite JLD2 compound objects.
 
@@ -109,8 +118,10 @@ records, HDF5.jl for bulk arrays.
 ## 5. Parallel HDF5
 
 `HDF5.has_parallel()` is true on this JLL build. This spike did **not**
-run `mpiexec`. A serial analogue (JLD2 metadata, then HDF5.jl chunked
-vector, then JLD2 reread) passed.
+run `mpiexec`, so parallel I/O is **not qualified**. A serial analogue
+(JLD2 metadata, then HDF5.jl chunked vector, then JLD2 reread) passed.
+`experiment_status.parallel.passed` is `false` with
+`qualified = serial_analogue_only; mpi_collective_write_not_run`.
 
 Credible HPC protocol, to qualify on LUMI:
 
@@ -145,10 +156,19 @@ metadata.
 
 ## 7. Missing-package / forensic read
 
-With `plain=true`, JLD2 returned `NamedTuple`s of the stored fields
-(`width`, `depth`, `height` / `sites`, `particles`, `Sz`) without the
-defining modules. HDF5.jl still lists `/_types` and the compound
-datasets when the package is absent.
+The fixture is written in the spike process, then a **second Julia
+process** loads it with only JLD2 and HDF5 (`forensic_load.jl`). It does
+not include `types.jl` or OodiCore.
+
+| Mode | Result |
+| --- | --- |
+| `load` | `JLD2.ReconstructedStatic{:Box,…}` / `ReconstructedStatic{:HubbardSector,…}` with the stored field values |
+| `load(; plain = true)` | `@NamedTuple{width,depth,height}` / `{sites,particles,Sz}` |
+| HDF5.jl inspect | `/_types`, compound datasets, field names and numeric dtypes visible |
+
+That is the three-year-old-archive case: original modules are absent.
+`ReconstructedStatic` / `plain` NamedTuples are forensic Julia
+reconstruction, not an Episteme semantic schema.
 
 Episteme diagnostics to layer on top:
 
@@ -211,3 +231,8 @@ contracts independent of JLD2 type metadata.
 
 Do not migrate the archive architecture until AH5.jl exists and the
 file-creation constraint (JLD2 first) is encoded in its writer.
+
+Machine-generated `experiment_status` distinguishes **completed** from
+**passed** / **qualified**. Interop is completed but `passed=false`
+(`jld2_created_files_only`). Parallel is completed but `passed=false`
+(`serial_analogue_only; mpi_collective_write_not_run`).

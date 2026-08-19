@@ -24,46 +24,38 @@ true
 
 ```
 Dict{String, Any} with 8 entries:
-  "parallel" => true
-  "evolution" => true
-  "roundtrip" => true
-  "heavy" => true
-  "portability" => true
-  "inspect" => true
-  "forensic" => true
-  "interop" => true
+  "parallel" => Dict{String, Any}("qualified"=>"serial_analogue_only; mpi_collective_write_not_run", "passed"=>false, "notes"=>"HDF5.has_parallel()=true; analogue_ok=true", "completed"=>true)
+  "evolution" => Dict{String, Any}("qualified"=>"julia_type_upgrade_not_episteme_schema", "passed"=>true, "notes"=>"", "completed"=>true)
+  "roundtrip" => Dict{String, Any}("qualified"=>"value_roundtrip", "passed"=>true, "notes"=>"shared_identity=true; cycle_identity=true", "completed"=>true)
+  "heavy" => Dict{String, Any}("qualified"=>"mixed_jld2_metadata_hdf5_arrays", "passed"=>true, "notes"=>"", "completed"=>true)
+  "portability" => Dict{String, Any}("qualified"=>"notes_only", "passed"=>nothing, "notes"=>"", "completed"=>true)
+  "inspect" => Dict{String, Any}("qualified"=>"hdf5jl_tree", "passed"=>true, "notes"=>"h5dump present but may fail if MPI-linked", "completed"=>true)
+  "forensic" => Dict{String, Any}("qualified"=>"clean_process_without_types_jl", "passed"=>true, "notes"=>"# Clean-process forensic load", "completed"=>true)
+  "interop" => Dict{String, Any}("qualified"=>"jld2_created_files_only", "passed"=>false, "notes"=>"hdf5-first nested=false toplevel=false pregroup=false", "completed"=>true)
 ```
 
-## forensic_keys
+## forensic_clean_process_log
 
 ```
-2-element Vector{String}:
- "box"
- "sector"
+"\e[33m\e[1m┌ \e[22m\e[39m\e[33m\e[1mWarning: \e[22m\e[39mtype Main.MongeSpike.Box does not exist in workspace; reconstructing\n\e[33m\e[1m└ \e[22m\e[39m\e[90m@ JLD2 /flash/project_462001245/juaho/.julia/packages/JLD2/ADycq/src/data/reconstructing_datatypes.jl:588\e[39m\n\e[33m\e[1m┌ \e[22m\e[39m\e[33m\e[1mWarning: \e[22m\e[39mtype Main.LiebSpike.HubbardSector does not exist in workspace; reconstructing\n\e[33m\e[1m└ \e[22m\e[39m\e[90m@ JLD2 /flash/project_462001245/juaho/.julia/packages/JLD2/ADycq/src/data/reconstructing_datatypes.jl:588\e[39m\n"
+```
+
+## forensic_clean_process_ok
+
+```
+true
+```
+
+## forensic_clean_process_report
+
+```
+"# Clean-process forensic load\n\nProcess loaded only JLD2 and HDF5. No `types.jl`, no OodiCore.\n\n## Normal `load`\n\nok: true\n\n```\nDict{String, Any} with 2 entries:\n  \"box\" => Reconstruct@Box((1.0, 2.0, 3.0))\n  \"sector\" => Reconstruct@HubbardSector((4, 2, 0))\n```\n\n- `box` typeof = `JLD2.ReconstructedStatic{:Box, (:width, :depth, :height), Tuple{Float64, Float64, Float64}}`\n- `sector` typeof = `JLD2.ReconstructedStatic{:HubbardSector, (:sites, :particles, :Sz), Tuple{Int64, Int64, Int64}}`\n\n## `load(; plain = true)`\n\nok: true\n\n```\nDict{String, Any} with 2 entries:\n  \"box\" => (width = 1.0, depth = 2.0, height = 3.0)\n  \"sector\" => (sites = 4, particles = 2, Sz = 0)\n```\n\n- `box` typeof = `@NamedTuple{width::Float64, depth::Float64, height::Float64}`\n- `sector` typeof = `@NamedTuple{sites::Int64, particles::Int64, Sz::Int64}`\n\n## HDF5.jl generic inspect\n\nroot names: [\"_types\", \"box\", \"sector\"]\n\n- `_types` HDF5.Group\n  children=[\"00000001\", \"00000002\", \"00000003\"]\n- `box` HDF5.Dataset\n  dims=() dtype=HDF5.Datatype: /_types/00000002 H5T_COMPOUND {\n      H5T_IEEE_F64LE \"width\" : 0;\n      H5T_IEEE_F64LE \"depth\" : 8;\n      H5T_IEEE_F64LE \"height\" : 16;\n   }\n- `sector` HDF5.Dataset\n  dims=() dtype=HDF5.Datatype: /_types/00000003 H5T_COMPOUND {\n      H5T_STD_I64LE \"sites\" : 0;\n      H5T_STD_I64LE \"particles\" : 8;\n      H5T_STD_I64LE \"Sz\" : 16;\n   }\nhdf5_ok: true\n"
 ```
 
 ## forensic_note
 
 ```
-"JLD2 can load UnknownType / reconstructed types when the defining module is absent. That is forensic Julia reconstruction, not an Episteme semantic schema. Generic inspect should still read HDF5 group names and numeric datasets without JLD2."
-```
-
-## forensic_plain
-
-```
-"Dict{String, Any}"
-```
-
-## forensic_plain_sample
-
-```
-"Dict{String, Any} with 2 entries:\n  \"box\" => (width = 1.0, depth = 2.0, height = 3.0)\n  \"sector\" => (sites = 4, particles = 2, Sz = 0)"
-```
-
-## forensic_remap
-
-```
-"((width = 1.0, depth = 2.0, height = 3.0), (sites = 4, particles = 2, Sz = 0))"
+"The clean-process reader loads only JLD2 and HDF5. That is the three-year-old-archive case: original modules are absent. JLD2 reconstruction without the type is forensic, not an Episteme schema."
 ```
 
 ## h5dump_available
@@ -114,13 +106,13 @@ true
 
 ```
 Dict{String, Any} with 8 entries:
-  "jld2_bytes" => 2554288
-  "mixed_meta_write_s" => 0.132315
-  "jld2_read_s" => 0.0188245
-  "mixed_hdf5_write_s" => 0.29019
-  "mixed_bytes" => 2370041
-  "jld2_write_s" => 0.0676387
-  "mixed_reread_s" => 0.202205
+  "jld2_bytes" => 2553840
+  "mixed_meta_write_s" => 0.100853
+  "jld2_read_s" => 0.0280781
+  "mixed_hdf5_write_s" => 0.329925
+  "mixed_bytes" => 2369975
+  "jld2_write_s" => 0.102792
+  "mixed_reread_s" => 0.160213
   "heavy_not_duplicated" => true
 ```
 
@@ -133,9 +125,16 @@ true
 ## interop
 
 ```
-Dict{String, Any} with 15 entries:
+Dict{String, Any} with 28 entries:
+  "hdf5_then_jld2_pregroup_write" => true
+  "hdf5_then_jld2_pregroup_read" => false
+  "hdf5_then_jld2_toplevel_keys" => ["seed"]
+  "hdf5_then_jld2_jld2_keys" => ["episteme", "data"]
+  "hdf5_then_jld2_pregroup_stderr" => "┌ Warning: File likely not written by JLD2. Skipping header verification.\n└ @ JLD2 /flash/project_462001245/juaho/.julia/packages/JLD2/ADycq/src/file_header.jl:21\n"
+  "hdf5_then_jld2_write_stderr" => "┌ Warning: File likely not written by JLD2. Skipping header verification.\n└ @ JLD2 /flash/project_462001245/juaho/.julia/packages/JLD2/ADycq/src/file_header.jl:21\n"
   "jld2_then_hdf5_hdf5_reads" => true
   "hdf5_then_jld2_write" => true
+  "hdf5_then_jld2_pregroup_read_error" => "KeyError: key \"sector\" not found"
   "jld2_then_hdf5_jld2_keys" => ["episteme", "packages", "objects", "data"]
   "hdf5_then_jld2_jld2_reads" => false
   "overwrite_error" => ""
@@ -144,10 +143,16 @@ Dict{String, Any} with 15 entries:
   "chunked_jld2_index" => true
   "overwrite_after" => (true, true)
   "jld2_then_hdf5_jld2_reads" => true
+  "hdf5_then_jld2_toplevel_read_error" => "KeyError: key \"top\" not found"
   "hdf5_then_jld2_jld2_reads_error" => "KeyError: key \"packages\" not found"
+  "hdf5_then_jld2_read_stderr" => "┌ Warning: File likely not written by JLD2. Skipping header verification.\n└ @ JLD2 /flash/project_462001245/juaho/.julia/packages/JLD2/ADycq/src/file_header.jl:21\n"
   "alternating_error" => ""
+  "hdf5_then_jld2_toplevel_write" => true
+  "hdf5_then_jld2_pregroup_keys" => ["packages"]
+  "hdf5_then_jld2_toplevel_read" => false
   "alternating_ok" => true
   "chunked_hdf5_write" => true
+  "hdf5_then_jld2_toplevel_stderr" => "┌ Warning: File likely not written by JLD2. Skipping header verification.\n└ @ JLD2 /flash/project_462001245/juaho/.julia/packages/JLD2/ADycq/src/file_header.jl:21\n"
   "hdf5_then_jld2_hdf5_reads" => true
 ```
 
@@ -218,19 +223,20 @@ Dict{String, String} with 4 entries:
 ## roundtrip_checks
 
 ```
-Dict{String, Bool} with 20 entries:
+Dict{String, Bool} with 21 entries:
   "tuple" => 1
   "enum" => 1
   "nothing" => 1
+  "cycle_identity" => 1
   "sparse" => 1
   "noderef" => 1
   "semantic_kind" => 1
   "shared_values_equal" => 1
   "schema_ref" => 1
   "mutable_counter" => 1
+  "shared_identity" => 1
   "lieb_sector" => 1
   "namedtuple" => 1
-  "cycle_roundtrip" => 1
   "union" => 1
   "dual_in_tree" => 1
   "monge_box" => 1
