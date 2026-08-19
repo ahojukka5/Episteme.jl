@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # Generic semantic tree
 #
-# OodiCore owns only the representation. Downstream packages own the
+# Episteme owns only the representation. Downstream packages own the
 # vocabulary and semantics of the nodes they put in the tree.
 # ---------------------------------------------------------------------------
 
@@ -11,7 +11,7 @@
 A lightweight symbolic reference from one [`SemanticNode`](@ref) to a named
 node or object in the same semantic model.
 
-`OodiCore` does not resolve or interpret references. The package that owns the
+`Episteme` does not resolve or interpret references. The package that owns the
 relevant node vocabulary decides what a reference means and how it is used.
 """
 struct NodeRef
@@ -31,7 +31,7 @@ A small, domain-neutral node for building semantic model trees.
 - `attributes::Vector{Pair{Symbol,Any}}`: named leaf values in canonical key order.
 - `children::Vector{SemanticNode}`: ordered child nodes.
 
-`OodiCore` deliberately attaches no meaning to `kind`, `name`, attributes, or
+`Episteme` deliberately attaches no meaning to `kind`, `name`, attributes, or
 children. CAD, meshing, discretization, solver, and visualization packages own
 those semantics themselves.
 

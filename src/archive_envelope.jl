@@ -87,7 +87,7 @@ end
     SoftwareEnvironmentId(value)
 
 Reference to an immutable software-environment object owned by issue #37.
-OodiCore does not store the manifest here.
+Episteme does not store the manifest here.
 """
 struct SoftwareEnvironmentId <: AbstractArchiveId
     value::String
@@ -100,7 +100,7 @@ end
     ExecutionContextId(value)
 
 Reference to a sanitized execution-context fingerprint owned by issue #43.
-OodiCore does not capture hardware or RNG state here.
+Episteme does not capture hardware or RNG state here.
 """
 struct ExecutionContextId <: AbstractArchiveId
     value::String
@@ -304,7 +304,7 @@ const LOGICAL_SCALAR_KINDS = (
 Portable scalar convention shared by more than one domain.
 
 `kind` is one of [`LOGICAL_SCALAR_KINDS`](@ref). `units` and `frame` are
-opaque strings so OodiCore does not depend on a units or geometry package.
+opaque strings so Episteme does not depend on a units or geometry package.
 `enum_values` is required when `kind === :enum`.
 """
 struct LogicalType

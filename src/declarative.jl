@@ -2,19 +2,19 @@
 # Shared declarative-model primitives
 #
 # These facilities are intentionally domain-neutral. Downstream packages own
-# their vocabularies and constraints; OodiCore only provides portable local
+# their vocabularies and constraints; Episteme only provides portable local
 # schemas, validation rules, and an opaque scripting representation.
 # ---------------------------------------------------------------------------
 
-const _SCRIPT_NODE_KIND = Symbol("oodi/script")
+const _SCRIPT_NODE_KIND = Symbol("episteme/script")
 
 """
     script_node(name; language=:julia, source, inputs=(), outputs=(), effects=())
 
-Create an opaque scripting node that can appear in any Oodi ecosystem semantic
+Create an opaque scripting node that can appear in any Episteme semantic
 model.
 
-The node stores source code and an explicit execution contract, but OodiCore
+The node stores source code and an explicit execution contract, but Episteme
 never executes the source. A future trusted execution layer must opt in
 explicitly and decide which declared effects are allowed.
 
@@ -73,7 +73,7 @@ A portable, introspectable local validation rule.
 configuration. Rules intentionally contain no function closures so schemas can
 be shown to agents, serialized, and exposed through tool protocols.
 
-OodiCore provides the standard rule kinds `:finite`, `:gt`, `:ge`, `:lt`,
+Episteme provides the standard rule kinds `:finite`, `:gt`, `:ge`, `:lt`,
 `:le`, `:nonempty`, and `:one_of`. Downstream packages may extend
 [`check_validation_rule`](@ref) for additional symbolic rule kinds.
 """
@@ -133,7 +133,7 @@ closure. It validates relationships inside a single node, for example
 `min <= default <= max`. Relations between different nodes remain
 downstream domain/constraint semantics.
 
-OodiCore provides the standard kind `:ordered`, which checks that named
+Episteme provides the standard kind `:ordered`, which checks that named
 attributes are non-decreasing. Downstream packages may extend
 [`check_node_validation_rule`](@ref) for additional symbolic rule kinds.
 

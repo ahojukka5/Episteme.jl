@@ -1,4 +1,4 @@
-# Test-only custom `Real`. OodiCore must not special-case this type.
+# Test-only custom `Real`. Episteme must not special-case this type.
 struct DualLike{T<:Real} <: Real
     value::T
     tangent::T
@@ -43,7 +43,7 @@ end
     @test occursin("MaterialModel", shown)
     @test occursin("Dict", shown)
     @test !occursin("ForwardDiff", shown)
-    @test !isdefined(OodiCore, :Differentiable)
-    @test !isdefined(OodiCore, :sexpr)
+    @test !isdefined(Episteme, :Differentiable)
+    @test !isdefined(Episteme, :sexpr)
     @test :differentiable ∉ first.(node.attributes)
 end

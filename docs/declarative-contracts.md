@@ -1,12 +1,12 @@
 # Shared declarative contracts
 
-OodiCore provides two domain-neutral facilities intended for every declarative
-package in the Oodi ecosystem: local node schemas and an opaque scripting
+Episteme provides two domain-neutral facilities intended for every declarative
+package across Episteme's consumers: local node schemas and an opaque scripting
 escape hatch.
 
 Domain packages still own their vocabularies and semantics. Monge decides what
 `monge/box` means, Delone decides what its mesh controls mean, and Oodi decides
-what its discretization and solver nodes mean. OodiCore only provides common
+what its discretization and solver nodes mean. Episteme only provides common
 representation and validation contracts.
 
 ## Local schemas are not domain constraints
@@ -43,7 +43,7 @@ serialized with `to_namedtuple`, shown to an agent, or exposed through an MCP
 schema without maintaining a second description of the same API. The same
 portable schema data is what a later AH5 archive should embed so an old file
 remains inspectable without the original domain package. Physical embedding
-and the `.ah5` schema registry live in `AH5.jl`; see
+and the `.ah5` schema registry live in Episteme's later AH5 profile; see
 [`archive-ownership.md`](archive-ownership.md).
 
 `allow_ref=true` means that a symbolic `NodeRef` may temporarily stand in for
@@ -75,7 +75,7 @@ box.z == volume(box) / (box.x * box.y)
 ```
 
 connect multiple semantic quantities and belong to the package that owns those
-semantics. OodiCore does not implement or solve such constraints.
+semantics. Episteme does not implement or solve such constraints.
 
 ## Three levels of validity
 
@@ -88,7 +88,7 @@ Keep these layers distinct:
    example `minh <= maxh` or `min_shots <= default_shots <= max_shots`.
 3. **Whole-model / domain constraints** relate different nodes, derived
    quantities, topologies, or physical equations. Those stay in the owning
-   package. OodiCore is not a constraint solver.
+   package. Episteme is not a constraint solver.
 
 Node-local rules are data, just like attribute rules. They are not closures.
 
@@ -115,7 +115,7 @@ inspect the complete local contract.
 
 ## Standard validation rules
 
-OodiCore currently provides symbolic rule kinds:
+Episteme currently provides symbolic rule kinds:
 
 - `:finite`
 - `:gt`
@@ -129,7 +129,7 @@ Downstream packages can introduce additional serializable rule kinds by
 extending `check_validation_rule(Val(:rule_name), value, parameters)`. The rule
 remains inspectable data even when its evaluator is package-specific.
 
-OodiCore also provides the node-local kind `:ordered`, which checks that named
+Episteme also provides the node-local kind `:ordered`, which checks that named
 attributes are non-decreasing. Downstream packages can introduce further
 node-local kinds by extending
 `check_node_validation_rule(Val(:rule_name), node, parameters)`.
@@ -140,7 +140,7 @@ Every declarative package eventually encounters behavior that is too rare,
 experimental, or inherently programmatic to deserve a permanent first-class
 node. External database access is a typical example.
 
-OodiCore therefore provides `script_node`:
+Episteme therefore provides `script_node`:
 
 ```julia
 script = script_node(
@@ -153,7 +153,7 @@ script = script_node(
 )
 ```
 
-The result is a `SemanticNode` of kind `Symbol("oodi/script")` with those
+The result is a `SemanticNode` of kind `Symbol("episteme/script")` with those
 attributes. The node kind is shared and the implementation language is an
 attribute. This keeps scripting usable by Monge, Delone, Oodi, and future
 packages without hard-coding Julia into the semantic vocabulary. `language`
@@ -189,7 +189,7 @@ helper that accepts an `Expr` is added later, it should still lower to canonical
 source or another explicitly portable representation before entering the tree;
 it must not make arbitrary Julia objects part of the serialized model.
 
-OodiCore never executes script source. A script is a trusted-code boundary, not
+Episteme never executes script source. A script is a trusted-code boundary, not
 a sandbox. A later execution layer must opt in explicitly, bind declared
 inputs/outputs, and decide whether declared effects such as `:network` or
 `:filesystem` are allowed.

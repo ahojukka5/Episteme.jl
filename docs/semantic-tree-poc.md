@@ -1,14 +1,14 @@
 # Semantic tree
 
-OodiCore provides a domain-neutral semantic tree that every Oodi package can
+Episteme provides a domain-neutral semantic tree that every consumer package can
 share. The in-memory Julia object tree is the authoritative model.
 
 The design rule is simple:
 
 > Julia types carry structure. Downstream packages carry semantics and
-> validation. OodiCore owns the shared tree and references.
+> validation. Episteme owns the shared tree and references.
 
-`OodiCore` does not know what a CAD rectangle, mesh, function space, weak form,
+`Episteme` does not know what a CAD rectangle, mesh, function space, weak form,
 solver, or visualization is. Packages such as `Monge.jl`, `Delone.jl`,
 `Oodi.jl`, and `Marey` may use the same generic tree structures to describe
 their own domain objects without depending on each other.
@@ -16,7 +16,7 @@ their own domain objects without depending on each other.
 ## Tree API
 
 ```julia
-using OodiCore
+using Episteme
 
 plate = SemanticNode(
     Symbol("monge/rectangle"),
@@ -45,22 +45,22 @@ in a stable order; child order is preserved because it may be semantically
 meaningful to the downstream package.
 
 Use `add_child!` (or `push!`), `attribute`, and `set_attribute!` to edit the
-tree. `OodiCore` does not resolve `NodeRef` values; the package that owns the
+tree. `Episteme` does not resolve `NodeRef` values; the package that owns the
 node vocabulary decides what a reference means.
 
 Differentiability is not a semantic type annotation. The same parameter node
 may hold `1.4` or a dual-like `Real` without changing the meaning of the node.
 
 Display uses ordinary Julia `show`. Leaf values print with their own `show`
-methods. OodiCore does not define a serialization or interchange format for
+methods. Episteme does not define a serialization or interchange format for
 arbitrary runtime objects, and `to_namedtuple` has no method for
 `SemanticNode` or `NodeRef`. Portable declarative documents (issue #34) are
 a strict subset of this tree and may be persisted through the shared
-archive vocabulary. Physical `.ah5` encoding lives in `AH5.jl`, not here.
+archive vocabulary. Physical `.ah5` encoding is the later JLD2-backed AH5 profile inside Episteme.
 See [`archive-ownership.md`](archive-ownership.md). Domain packages still
 own codecs for their custom portable value types.
 
-OodiCore does not depend on an AD library and does not store reverse-mode
+Episteme does not depend on an AD library and does not store reverse-mode
 tapes, pullbacks, or backend contexts as semantic model data.
 
 ## Local schemas
@@ -76,12 +76,12 @@ package.
 
 Use `validate(node, schema)` for a structured `ValidationReport`, or
 `validated_node(...)` for fail-fast construction. `script_node` is the shared
-scripting escape hatch; OodiCore stores the contract and never executes
+scripting escape hatch; Episteme stores the contract and never executes
 source.
 
 ## Still out of scope
 
-OodiCore still does **not** own:
+Episteme still does **not** own:
 
 - a serialization or interchange protocol for arbitrary runtime objects,
 - HDF5/XDMF/AH5 readers or writers,

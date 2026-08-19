@@ -1,11 +1,11 @@
-# Reproducible JLD2/AH5 persistence spike for OodiCore issue #47.
-# Does not add JLD2 or HDF5 to the OodiCore package itself.
+# Reproducible JLD2/AH5 persistence spike for issue #47.
+# Does not add JLD2 or HDF5 to the Episteme package itself.
 
 using Test
 using SparseArrays
 using JLD2
 using HDF5
-using OodiCore
+using Episteme
 
 include("types.jl")
 include("inspect.jl")

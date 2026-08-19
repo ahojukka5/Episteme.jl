@@ -1,16 +1,41 @@
-# AGENTS.md — OodiCore.jl
+# AGENTS.md — Episteme.jl
 
 Guidance for AI agents (and humans) working on or with this package.
 
 ## 1. What this package is
 
-`OodiCore.jl` is a lightweight shared core package for the Oodi ecosystem.
-It has no domain logic of its own. Its only job is to define the contracts
-that other Oodi packages implement or reuse.
+`Episteme.jl` is the semantic runtime and persistent scientific backbone for
+composable, reproducible, and eventually autonomous research.
+
+It is not an Oodi-specific core, and it is not a forever-minimal contracts
+package. Domain packages (Monge, Delone, Oodi, Stinespring, Lieb, Chappe, …)
+own scientific payloads and operation semantics. Episteme owns the shared
+semantics, schemas/contracts, identities and history vocabulary, the future
+orchestration protocol, and eventually JLD2-backed AH5 persistence.
+
+The accepted v1 product is:
+
+```text
+Episteme.jl = semantics + schemas + history/provenance
+            + orchestration protocol
+            + JLD2-backed AH5 persistence
+```
+
+This repository is the renamed/re-scoped former `OodiCore.jl` (issue #51).
+The GitHub repository path may still be `ahojukka5/OodiCore.jl` until that
+host-side rename is done. The Julia package name is `Episteme`; the UUID
+is unchanged.
+
+JLD2 and the `.ah5` writer are the **next** implementation PRs, not current
+code. HDF5.jl remains later optional `EpistemeHDF5Ext` work. Do not add
+them here unless the current task is that persistence PR.
+
+See [`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md)
+and [`docs/archive-ownership.md`](docs/archive-ownership.md).
 
 ## 2. What it owns
 
-`OodiCore.jl` owns the common introspection generics:
+Episteme owns the common introspection generics:
 
 - `report(x)`
 - `validate(x)`
@@ -19,30 +44,28 @@ that other Oodi packages implement or reuse.
 These are declared here, and only here, so downstream packages extend the same
 functions instead of creating locally scoped lookalikes.
 
-It also owns small generic supporting types and protocols that are useful in
-every product:
+It also owns small generic supporting types and protocols:
 
 - reports and diagnostics (`DiagnosticMessage`, `ValidationReport`, etc.),
 - the generic semantic tree (`SemanticNode`, `NodeRef`),
 - local declarative node schemas (`NodeSchema`, `AttributeSchema`,
   `ValidationRule`, `NodeValidationRule`),
 - an opaque cross-product scripting representation (`script_node`),
-- the dependency-free scientific-archive vocabulary (object/revision
-  identities, references, namespace and schema-version identifiers, portable
-  document envelopes, and inspectable provenance/integrity record types).
+- the scientific-archive vocabulary (object/revision identities, references,
+  namespace and schema-version identifiers, portable document envelopes, and
+  inspectable provenance/integrity record types).
 
-These facilities must remain domain-neutral. OodiCore may know that a local
-field is a finite positive real, but it must not know what a CAD box, mesh size,
-finite-element space, or solver tolerance means.
+Shared infrastructure kinds use the `:episteme` / `episteme/*` namespace
+(`episteme/script` today; `episteme/document` and `episteme/plan` when those
+types land). Domain kinds stay with the owning package (`monge/*`,
+`delone/*`, `oodi/*`, `lieb/*`, …).
 
-Physical AH5/HDF5/XDMF I/O does **not** live here today. Issue #25 assigned
-it to a dedicated `AH5.jl` package; the Episteme architecture study
-([#48](https://github.com/ahojukka5/OodiCore.jl/issues/48),
-[`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md))
-prefers that I/O as Episteme’s JLD2-backed archive/profile (JLD2 hard
-dep in v1; HDF5.jl later) instead of a third package. Do not start the
-rename or move file-format backends here until that note is accepted. See
-[`docs/archive-ownership.md`](docs/archive-ownership.md).
+These facilities must remain domain-neutral. Episteme may know that a local
+field is a finite positive real, but it must not know what a CAD box, mesh
+size, finite-element space, or solver tolerance means.
+
+Physical AH5/HDF5/XDMF I/O does **not** live here yet. It will land as
+Episteme's JLD2-backed AH5 profile, not as a standalone `AH5.jl` package.
 
 ## 3. Rule for downstream packages
 
@@ -51,7 +74,7 @@ exporters, etc.) must import and extend shared generic functions rather than
 shadowing them:
 
 ```julia
-import OodiCore: report, validate, readiness
+import Episteme: report, validate, readiness
 
 report(x::MyType) = ObjectReport(...)
 validate(x::MyType) = ValidationReport(...)
@@ -59,11 +82,11 @@ readiness(x::MyType, target::PipelineTarget) = ReadinessReport(...)
 ```
 
 Domain-specific report types are welcome and encouraged; they should subtype
-`AbstractOodiReport`, `AbstractValidationReport`, or
+`AbstractEpistemeReport`, `AbstractValidationReport`, or
 `AbstractReadinessReport` as appropriate.
 
 For declarative model nodes, domain packages own their vocabulary and may use
-OodiCore's local schema machinery:
+Episteme's local schema machinery:
 
 ```julia
 schema = NodeSchema(
@@ -78,27 +101,23 @@ schema = NodeSchema(
 ```
 
 Keep domain schemas next to the domain operations they describe rather than
-building a central OodiCore registry of Monge/Delone/Oodi concepts.
+building a central Episteme registry of Monge/Delone/Oodi concepts.
 
-## 4. Do not add heavy dependencies
+## 4. Dependencies
 
-`OodiCore.jl` must remain safe to use as a base dependency from every other
-Oodi package, including ones with no numerical or geometric code at all.
-Concretely:
+Do not add CAD kernels, meshing kernels, GPU packages, solver packages, or
+plotting packages. Do not depend on `Oodi.jl` or on other domain packages.
 
-- No dependency beyond the Julia standard library unless there is a very
-  strong, specific reason.
-- No CAD kernels, meshing kernels, GPU packages, solver packages, or plotting
-  packages.
-- No dependency on `Oodi.jl` itself or on packages that depend on OodiCore.
+JLD2 becomes a hard dependency in a later focused persistence PR. HDF5.jl,
+MPI, and XML stay out of `using Episteme` unless a later extension needs
+them (`EpistemeHDF5Ext` for bulk `/data` and parallel HDF5).
 
-Dependencies must flow one way, into OodiCore's consumers.
+Dependencies must flow one way, into Episteme's consumers.
 
 ## 5. Do not add domain logic
 
-No CAD logic, meshing logic, FEM/discretization logic, solver logic,
-file-format backends, or rendering backends belong here. HDF5, XDMF, MPI
-parallel I/O, and `.ah5` writers belong in `AH5.jl`, not in this package.
+No CAD logic, meshing logic, FEM/discretization logic, solver logic, QPU,
+Hubbard, or LLM semantics belong here.
 
 Local schema validation is in scope only when the rule is structurally generic:
 required fields, portable value kinds, finiteness, ranges, non-empty values,
@@ -157,20 +176,20 @@ script_node(
 )
 ```
 
-OodiCore stores this contract but **never executes source code**. Script
-execution is a trusted-code concern for a higher execution/orchestration layer,
-which must explicitly bind inputs/outputs and enforce allowed effects.
+Episteme stores this contract but **never executes source code**. Script
+execution is a trusted-code concern for the orchestration layer, which must
+explicitly bind inputs/outputs and enforce allowed effects.
 
 ## 10. Extending validation
 
-OodiCore provides a small standard set of symbolic local rule kinds such as
+Episteme provides a small standard set of symbolic local rule kinds such as
 `:finite`, `:gt`, `:ge`, `:lt`, `:le`, `:nonempty`, and `:one_of`.
 
 A downstream package may add a genuinely reusable/domain-specific symbolic rule
 by extending:
 
 ```julia
-import OodiCore: check_validation_rule
+import Episteme: check_validation_rule
 check_validation_rule(::Val{:my_rule}, value, parameters) = ...
 ```
 
@@ -180,7 +199,7 @@ opaque closure embedded in a schema.
 Node-local cross-field rules use the same pattern:
 
 ```julia
-import OodiCore: check_node_validation_rule
+import Episteme: check_node_validation_rule
 check_node_validation_rule(::Val{:my_node_rule}, node, parameters) = ...
 ```
 
@@ -190,8 +209,8 @@ ill-typed values skip the rule instead of producing secondary exceptions.
 
 ## 11. Out of scope for now
 
-The following introspection generics remain deliberately outside OodiCore
-unless a later architectural decision expands the contract:
+The following introspection generics remain outside Episteme unless a later
+architectural decision expands the contract:
 
 ```julia
 summary(x)
@@ -206,18 +225,20 @@ repair!
 Archive *record types* (identities, references, schema versions, software
 environment and execution-context fingerprints, content-hash rules) are in
 scope as data. They are not an implementation of `provenance(x)` or
-`artifacts(x)`, and they must not open files.
+`artifacts(x)`, and they must not open files until the persistence PR.
 
-Also out of scope:
+Also out of scope in the current code (planned later, not here):
 
+- `PlanId` / `ActivityId` / `DocumentId` / `AgentId` and Plan/Run/Activity/Event/Revision records,
+- `execute!` / `commit!` / orchestration,
+- JLD2 / `.ah5` writer / HDF5.jl,
+- `AbstractStore` or Mongo/Postgres backends,
 - domain constraint solvers,
 - expression evaluation semantics,
 - dependency-DAG/reference resolution,
 - automatic or implicit script execution,
-- security sandboxing for arbitrary user code,
-- HDF5/XDMF/AH5 readers, writers, inspectors, and migration runners.
+- security sandboxing for arbitrary user code.
 
 If a task seems to require one of these, keep the representation/protocol in
-OodiCore only when it is truly cross-product; keep the semantics in the owning
-downstream package or orchestration layer. Physical archive I/O stays in
-`AH5.jl`. See [`docs/archive-ownership.md`](docs/archive-ownership.md).
+Episteme only when it is truly cross-product; keep the semantics in the owning
+downstream package. See [`docs/archive-ownership.md`](docs/archive-ownership.md).

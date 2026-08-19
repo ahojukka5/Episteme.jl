@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # Shared introspection contracts
 #
-# OodiCore declares these generic functions and supporting data types once so
+# Episteme declares these generic functions and supporting data types once so
 # every downstream package extends the same API instead of defining local
 # lookalikes.
 # ---------------------------------------------------------------------------
@@ -14,7 +14,7 @@ Return a structured, human- and machine-readable report describing `x`.
 This is a generic function with no default implementation. Packages that
 define types meant to be inspected by users or LLM agents should add a
 method for their own type, typically returning an [`ObjectReport`](@ref) or
-a domain-specific subtype of [`AbstractOodiReport`](@ref).
+a domain-specific subtype of [`AbstractEpistemeReport`](@ref).
 
 Read-only: implementations must not mutate `x`.
 """
@@ -52,26 +52,26 @@ function readiness end
 # ---------------------------------------------------------------------------
 
 """
-    AbstractOodiReport
+    AbstractEpistemeReport
 
 Supertype for all report types returned by [`report`](@ref), [`validate`](@ref),
-and [`readiness`](@ref) across the Oodi ecosystem.
+and [`readiness`](@ref) across Episteme's consumers.
 """
-abstract type AbstractOodiReport end
+abstract type AbstractEpistemeReport end
 
 """
-    AbstractValidationReport <: AbstractOodiReport
+    AbstractValidationReport <: AbstractEpistemeReport
 
 Supertype for reports returned by [`validate`](@ref).
 """
-abstract type AbstractValidationReport <: AbstractOodiReport end
+abstract type AbstractValidationReport <: AbstractEpistemeReport end
 
 """
-    AbstractReadinessReport <: AbstractOodiReport
+    AbstractReadinessReport <: AbstractEpistemeReport
 
 Supertype for reports returned by [`readiness`](@ref).
 """
-abstract type AbstractReadinessReport <: AbstractOodiReport end
+abstract type AbstractReadinessReport <: AbstractEpistemeReport end
 
 """
     AbstractDiagnostic
@@ -172,7 +172,7 @@ readiness against, e.g. `PipelineTarget(:meshing)` or
 - `name::Symbol`: the name of the target pipeline stage.
 - `options::NamedTuple`: arbitrary small options relevant to the target.
 
-`OodiCore` intentionally does not hard-code the set of valid target names;
+`Episteme` intentionally does not hard-code the set of valid target names;
 downstream packages define and document their own.
 """
 struct PipelineTarget <: AbstractPipelineTarget
@@ -286,11 +286,11 @@ consistent with that convention.
 Base.isready(report::ReadinessReport) = report.ready
 
 """
-    ObjectReport <: AbstractOodiReport
+    ObjectReport <: AbstractEpistemeReport
 
 A simple general-purpose report, useful as a default return type for
 [`report`](@ref) on simple objects. Domain-specific packages are free to
-define their own richer `AbstractOodiReport` subtypes instead.
+define their own richer `AbstractEpistemeReport` subtypes instead.
 
 # Fields
 - `subject::Symbol`: a short label identifying the kind of object reported on.
@@ -299,7 +299,7 @@ define their own richer `AbstractOodiReport` subtypes instead.
 - `diagnostics::Vector{DiagnosticMessage}`: any relevant diagnostics.
 - `artifacts::Vector{ArtifactRef}`: references to related external artifacts.
 """
-struct ObjectReport <: AbstractOodiReport
+struct ObjectReport <: AbstractEpistemeReport
     subject::Symbol
     summary::String
     metadata::NamedTuple
@@ -314,7 +314,7 @@ end
 """
     to_namedtuple(x)
 
-Convert an `OodiCore` report/diagnostic/target type into a plain
+Convert an `Episteme` report/diagnostic/target type into a plain
 `NamedTuple`, suitable for further JSON encoding or logging.
 """
 function to_namedtuple end

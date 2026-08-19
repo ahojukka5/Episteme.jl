@@ -1,23 +1,26 @@
 using Test
-using OodiCore
+using Episteme
 
 struct DummyObject end
 
-@testset "OodiCore.jl" begin
+@testset "Episteme.jl" begin
 
     @testset "package loads" begin
-        @test isdefined(Main, :OodiCore)
+        @test isdefined(Main, :Episteme)
     end
 
     @testset "generic functions exist" begin
-        @test isdefined(OodiCore, :report)
-        @test isdefined(OodiCore, :validate)
-        @test isdefined(OodiCore, :readiness)
+        @test isdefined(Episteme, :report)
+        @test isdefined(Episteme, :validate)
+        @test isdefined(Episteme, :readiness)
+        @test isdefined(Episteme, :AbstractEpistemeReport)
+        @test !isdefined(Episteme, :AbstractOodiReport)
+        @test !isdefined(Episteme, :OodiCore)
     end
 
     @testset "diagnostic constructors" begin
         i = info_diagnostic(:ok, "Everything is fine")
-        @test i isa OodiCore.DiagnosticMessage
+        @test i isa Episteme.DiagnosticMessage
         @test i.severity == :info
         @test i.code == :ok
         @test i.message == "Everything is fine"
@@ -34,7 +37,7 @@ struct DummyObject end
         @test isdefined(@__MODULE__, :info_diagnostic)
         @test isdefined(@__MODULE__, :warning_diagnostic)
 
-        @test_throws ErrorException OodiCore._diagnostic(:bogus, :x, "nope")
+        @test_throws ErrorException Episteme._diagnostic(:bogus, :x, "nope")
     end
 
     @testset "PipelineTarget" begin
@@ -200,7 +203,7 @@ struct DummyObject end
         @test occursin("SemanticNode(:geometry, :demo)", shown)
         @test occursin("width = 20.0", shown)
         @test occursin("NodeRef(:plate)", shown)
-        @test !isdefined(OodiCore, :sexpr)
+        @test !isdefined(Episteme, :sexpr)
     end
 
     include("semantic_values.jl")

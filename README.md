@@ -1,25 +1,36 @@
-# OodiCore.jl
+# Episteme.jl
 
-`OodiCore.jl` is the lightweight shared core of the Oodi numerical pipeline.
+`Episteme.jl` is the semantic runtime and persistent scientific backbone for
+composable, reproducible, and eventually autonomous research.
 
-It exists so that CAD/geometry packages, meshing packages, `Oodi.jl` itself,
-and future pipeline tools (MCP servers, report exporters, agent-facing
-automation) can all speak the same small, generic "introspection" language
-without depending on each other or on any heavy numerical/graphics
-libraries.
+Domain packages (CAD/geometry, meshing, `Oodi.jl`, QPU, Hubbard, LLM serving,
+and future tools such as MCP servers) keep their payloads and operation
+semantics. They speak one shared introspection and archive language instead of
+depending on each other or on heavy numerical/graphics libraries.
+
+This repository is the renamed/re-scoped former `OodiCore.jl` (issue
+[#51](https://github.com/ahojukka5/OodiCore.jl/issues/51)). The Julia package
+name is `Episteme`; the package UUID is unchanged. The GitHub repository may
+still be `ahojukka5/OodiCore.jl` until that host-side rename is performed.
+
+The accepted v1 product ([#48](https://github.com/ahojukka5/OodiCore.jl/issues/48)) is:
+
+```text
+Episteme.jl = semantics + schemas + history/provenance
+            + orchestration protocol
+            + JLD2-backed AH5 persistence
+```
+
+This package currently ships the semantics, schemas, and archive *vocabulary*.
+JLD2-backed AH5 persistence and the orchestration protocol are the next
+implementation steps. They are **not** in this rename.
 
 ## Why this package exists
 
-Oodi is becoming an LLM-native numerical framework. The long-term pipeline
-looks like this:
-
-```text
-intent → geometry → validation → mesh → quality diagnostics → discretization
-→ operator/problem construction → solve → verification → report → revision
-```
-
-For an LLM agent (or a human) to drive that pipeline, every major object
-along the way needs to answer three questions in a consistent way:
+Independently owned scientific packages need a shared place to describe objects,
+validate them, compose a whole-model document, and (later) record inspectable
+history. For an LLM agent or a human to drive that work, every major object
+along the way needs to answer three questions consistently:
 
 ```julia
 report(x)              # What is this object?
@@ -27,20 +38,18 @@ validate(x)             # Is it internally valid?
 readiness(x, target)    # Can it move to the requested next pipeline stage?
 ```
 
-`OodiCore.jl` owns that shared interface. It defines `report`, `validate`,
+`Episteme.jl` owns that shared interface. It defines `report`, `validate`,
 and `readiness` as empty generic functions, plus a handful of lightweight
 report/diagnostic/target/artifact types used to implement them. It also owns
 the shared semantic tree (`SemanticNode`, `NodeRef`), local declarative
-schemas, and the dependency-free scientific-archive vocabulary (identities,
-references, schema versions, portable document envelopes). Physical
-AH5/HDF5/XDMF I/O is out of this package today (`docs/archive-ownership.md`,
-issue #25). The long-term Episteme architecture study
-([#48](https://github.com/ahojukka5/OodiCore.jl/issues/48),
-[`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md))
-prefers renaming this repository to `Episteme.jl` and treating AH5 as
-that backbone’s JLD2-backed archive/profile (JLD2 hard dep in v1;
-HDF5.jl later), not a third package. Do not start that rename until the
-note is accepted. See also
+schemas, and the scientific-archive vocabulary (identities, references,
+schema versions, portable document envelopes).
+
+Physical `.ah5` I/O is planned as Episteme's JLD2-backed archive/profile, not
+as a standalone `AH5.jl` package. HDF5.jl remains later optional
+`EpistemeHDF5Ext` work. See
+[`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md),
+[`docs/archive-ownership.md`](docs/archive-ownership.md),
 [`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md),
 [`docs/declarative-contracts.md`](docs/declarative-contracts.md), and
 [`docs/archive-envelope.md`](docs/archive-envelope.md).
@@ -53,18 +62,17 @@ meshing package inside `Oodi.jl`) would produce a name conflict: Julia would
 not know which `report` you meant, and `using` both packages would warn
 about ambiguous exports or silently shadow one method with another.
 
-By defining these functions in exactly one small package with no heavy
-dependencies, every other package in the ecosystem can safely depend on
-`OodiCore.jl` and add methods to the *same* generic function. This is
-Julia's standard multiple-dispatch idiom for shared interfaces, sometimes
-called an "interface package."
+By defining these functions in exactly one package, every other package in the
+ecosystem can safely depend on `Episteme.jl` and add methods to the *same*
+generic function. This is Julia's standard multiple-dispatch idiom for shared
+interfaces, sometimes called an "interface package."
 
 ## How downstream packages should extend the contract
 
 Always import the generic function before adding methods:
 
 ```julia
-import OodiCore: report, validate, readiness
+import Episteme: report, validate, readiness
 ```
 
 Never create local functions with these names in downstream packages.
@@ -72,13 +80,13 @@ Never create local functions with these names in downstream packages.
 ### Example
 
 ```julia
-using OodiCore
+using Episteme
 
 struct MyMesh
     nelements::Int
 end
 
-import OodiCore: report, validate, readiness
+import Episteme: report, validate, readiness
 
 report(mesh::MyMesh) = ObjectReport(
     :mesh,
@@ -131,15 +139,15 @@ packages):
 - `validate(x)`
 - `readiness(x, target)`
 
-OodiCore also implements `validate(node::SemanticNode, schema::NodeSchema)`
+Episteme also implements `validate(node::SemanticNode, schema::NodeSchema)`
 for local schema checks, and `validate` / `report` for the archive
 envelope types.
 
 Abstract types:
 
-- `AbstractOodiReport`
-- `AbstractValidationReport <: AbstractOodiReport`
-- `AbstractReadinessReport <: AbstractOodiReport`
+- `AbstractEpistemeReport`
+- `AbstractValidationReport <: AbstractEpistemeReport`
+- `AbstractReadinessReport <: AbstractEpistemeReport`
 - `AbstractDiagnostic`
 - `AbstractPipelineTarget`
 
@@ -166,7 +174,7 @@ Concrete types:
   archive identities. Equal strings do not make them the same kind of id.
 - `ArchiveObject` / `ArchiveReference` / `SchemaRef` / `ArchiveGraph` —
   the shared logical archive envelope. Package payloads stay in domain
-  types; this wrapper does not store them. No HDF5. See
+  types; this wrapper does not store them. No file I/O yet. See
   [`docs/archive-envelope.md`](docs/archive-envelope.md).
 
 Tree operations:
@@ -180,7 +188,8 @@ Tree operations:
 Declarative helpers:
 
 - `script_node(name; language = :julia, source, inputs, outputs, effects)`
-  — opaque scripting node. OodiCore never executes the source.
+  — opaque scripting node of kind `episteme/script`. Episteme never executes
+  the source.
 - `validated_node(schema, name; ...)` — fail-fast construction against a
   schema.
 - `check_validation_rule` / `check_node_validation_rule` — extension points
@@ -193,15 +202,14 @@ Serialization:
   `NodeValidationRule`), and archive envelope records into a plain
   `NamedTuple` suitable for JSON encoding or logging. It does **not**
   convert `SemanticNode` or `NodeRef`; arbitrary runtime values in the
-  tree have no OodiCore serialization protocol. Symbol-valued fields
+  tree have no Episteme serialization protocol. Symbol-valued fields
   (`severity`, `code`, `subject`, `kind`, target `name`, ...) are kept as
   `Symbol`s; a JSON-encoding step at the boundary is expected to turn
   them into strings.
 
-## What should and should not go into OodiCore
+## What should and should not go into Episteme
 
-`OodiCore.jl` should stay small and dependency-light forever. It is safe to
-add:
+It is safe to add:
 
 - generic function declarations shared across the ecosystem,
 - lightweight abstract report/result types,
@@ -215,7 +223,9 @@ add:
 - serialization-friendly structures for reports, diagnostics, targets,
   artifacts, and schemas,
 - scientific-archive identity, reference, namespace, schema-version, and
-  provenance *record types* (no file I/O).
+  provenance *record types*,
+- later: Plan/Run/Activity/Event/Revision records, orchestration protocol,
+  and JLD2-backed AH5 persistence (separate PRs).
 
 It must **not** contain:
 
@@ -223,38 +233,38 @@ It must **not** contain:
 - meshing logic,
 - FEM/discretization logic,
 - solver logic,
-- file-format backends, including HDF5, XDMF, and `.ah5` writers,
+- QPU / Hubbard / LLM domain semantics,
 - plotting/rendering backends,
 - Netgen/OpenCascade wrappers,
 - `Oodi.jl` operator or problem definitions,
-- dependencies on any of the above.
+- dependencies on any of the above,
+- `AbstractStore` or Mongo/Postgres backends.
 
-Shared archive I/O must not grow here until the #48 architecture note is
-accepted. Today that I/O is assigned to a future `AH5.jl`
-([`docs/archive-ownership.md`](docs/archive-ownership.md)); the Episteme
-study prefers a JLD2-backed AH5 profile *inside* renamed Episteme (JLD2
-hard dep in v1; HDF5.jl later). Domain packages must not start
-package-local HDF5 archive frameworks. A JLD2 persistence spike (issue
-#47) lives in
+Domain packages register payload codecs with Episteme's future AH5 profile
+and must not start package-local HDF5 archive frameworks. A JLD2 persistence
+spike (issue #47) lives in
 [`research/jld2-ah5-spike/`](research/jld2-ah5-spike/).
 
-If a proposed addition needs a heavy dependency, or logic specific to one
-domain (CAD, meshing, solving), it belongs in that domain's own package, not
-here.
+If a proposed addition is logic specific to one domain (CAD, meshing,
+solving), it belongs in that domain's own package, not here.
 
 ## Installation
 
-`OodiCore.jl` is not yet registered. Add it as a path or git dependency
-from its own repository, e.g.:
+`Episteme.jl` is not yet registered. The next General registration should be
+for `Episteme`, not the unmerged `OodiCore` attempt (issue #23). Add it as a
+path or git dependency from this repository, e.g.:
 
 ```julia
 pkg> add https://github.com/ahojukka5/OodiCore.jl
 # or
-pkg> dev /path/to/OodiCore.jl
+pkg> dev /path/to/OodiCore.jl   # local checkout; package name is Episteme
 ```
+
+Until the GitHub repository is renamed, the clone URL still contains
+`OodiCore.jl`. After `add`/`dev`, `using Episteme` is the Julia name.
 
 ## Running tests
 
 ```julia
-pkg> test OodiCore
+pkg> test Episteme
 ```

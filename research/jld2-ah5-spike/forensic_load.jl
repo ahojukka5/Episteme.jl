@@ -1,5 +1,5 @@
 # Clean-process forensic reader for issue #47.
-# Must not load OodiCore or types.jl. Only JLD2 + HDF5.
+# Must not load Episteme or types.jl. Only JLD2 + HDF5.
 
 using JLD2
 using HDF5
@@ -14,7 +14,7 @@ end
 io = IOBuffer()
 println(io, "# Clean-process forensic load")
 println(io)
-println(io, "Process loaded only JLD2 and HDF5. No `types.jl`, no OodiCore.")
+println(io, "Process loaded only JLD2 and HDF5. No `types.jl`, no Episteme.")
 println(io)
 
 println(io, "## Normal `load`")
