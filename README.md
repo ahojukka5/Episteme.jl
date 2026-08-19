@@ -3,17 +3,15 @@
 `Episteme.jl` is the semantic runtime and persistent scientific backbone for
 composable, reproducible, and eventually autonomous research.
 
-Domain packages (CAD/geometry, meshing, `Oodi.jl`, QPU, Hubbard, LLM serving,
-and future tools such as MCP servers) keep their payloads and operation
-semantics. They speak one shared introspection and archive language instead of
-depending on each other or on heavy numerical/graphics libraries.
+Domain packages keep their payloads and operation semantics. They speak one
+shared introspection and archive language instead of depending on each other or
+on heavy numerical/graphics libraries.
 
 This repository is the renamed/re-scoped former `OodiCore.jl` (issue
-[#51](https://github.com/ahojukka5/OodiCore.jl/issues/51)). The Julia package
-name is `Episteme`; the package UUID is unchanged. The GitHub repository may
-still be `ahojukka5/OodiCore.jl` until that host-side rename is performed.
+[#51](https://github.com/ahojukka5/Episteme.jl/issues/51)). The Julia package
+name is `Episteme`; the package UUID is unchanged.
 
-The accepted v1 product ([#48](https://github.com/ahojukka5/OodiCore.jl/issues/48)) is:
+The accepted v1 product ([#48](https://github.com/ahojukka5/Episteme.jl/issues/48)) is:
 
 ```text
 Episteme.jl = semantics + schemas + history/provenance
@@ -57,10 +55,10 @@ as a standalone `AH5.jl` package. HDF5.jl remains later optional
 ## Why shared generic functions avoid name conflicts
 
 If every package defined its own local `report`/`validate`/`readiness`
-function, then loading two such packages together (e.g. a CAD package and a
-meshing package inside `Oodi.jl`) would produce a name conflict: Julia would
-not know which `report` you meant, and `using` both packages would warn
-about ambiguous exports or silently shadow one method with another.
+function, then loading two such packages together would produce a name
+conflict: Julia would not know which `report` you meant, and `using` both
+packages would warn about ambiguous exports or silently shadow one method with
+another.
 
 By defining these functions in exactly one package, every other package in the
 ecosystem can safely depend on `Episteme.jl` and add methods to the *same*
@@ -255,13 +253,10 @@ for `Episteme`, not the unmerged `OodiCore` attempt (issue #23). Add it as a
 path or git dependency from this repository, e.g.:
 
 ```julia
-pkg> add https://github.com/ahojukka5/OodiCore.jl
+pkg> add https://github.com/ahojukka5/Episteme.jl
 # or
-pkg> dev /path/to/OodiCore.jl   # local checkout; package name is Episteme
+pkg> dev /path/to/Episteme.jl
 ```
-
-Until the GitHub repository is renamed, the clone URL still contains
-`OodiCore.jl`. After `add`/`dev`, `using Episteme` is the Julia name.
 
 ## Running tests
 
