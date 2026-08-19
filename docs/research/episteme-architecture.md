@@ -76,7 +76,7 @@ The tempting failure modes are well-represented in adjacent ecosystems: treat sc
 
 - Decide the long-term package mission, name, and ownership split, comparing end states **(A)** grown `Episteme.jl` vs **(B)** OodiCore + Episteme + AH5 fairly.
 - Adopt a conceptual model that distinguishes authored intent, resolved plan, materialized domain objects, measured evidence, and derived analysis.
-- Keep scientific objects (mesh, field, posterior, Hubbard sector, checkpoint) first-class, not as files produced by a shell stage.
+- Keep scientific objects (mesh, field, posterior, many-body state, checkpoint) first-class, not as files produced by a shell stage.
 - Make every committed execution inspectable history without turning every solver iteration into a revision.
 - Make the v1 dependency model explicit: JLD2 is a hard dependency; persistence is first-class; HDF5.jl / MPI / XML / vendor SDKs stay out of the default path until a real need.
 - Align persistence with #47: JLD2 creates the `.ah5` file and is the v1 writer; Episteme schemas stay independent of JLD2 `_types`. HDF5.jl `/data` and parallel writes are a later `EpistemeHDF5Ext`. AH5 is the format/profile, not a Julia package.
@@ -137,7 +137,7 @@ Working statement, kept:
 
 Refined operational reading:
 
-> Episteme.jl is the long-lived scientific backbone: it owns the shared semantic contracts, composes independently owned scientific packages into one inspectable research document, records immutable revisions of what was intended and what was realized, persists that history in a JLD2-backed `.ah5` profile, and exposes a trusted execution protocol that agents can drive. It does not own CAD, mesh, FEM, QPU, Hubbard, or LLM semantics. Persistence is first-class in v1 (JLD2 is a hard dependency). HDF5.jl is a later extension, not a reason to split the backbone.
+> Episteme.jl is the long-lived scientific backbone: it owns the shared semantic contracts, composes independently owned scientific packages into one inspectable research document, records immutable revisions of what was intended and what was realized, persists that history in a JLD2-backed `.ah5` profile, and exposes a trusted execution protocol that agents can drive. It does not own CAD, mesh, FEM, quantum-computing, or model-serving semantics. Persistence is first-class in v1 (JLD2 is a hard dependency). HDF5.jl is a later extension, not a reason to split the backbone.
 
 “Autonomous” means: an agent can discover capabilities, propose a plan, execute allowed operations, inspect evidence, and branch history *using the same contracts a human uses*. It does not mean Episteme executes untrusted source or invents domain operations.
 
@@ -339,7 +339,7 @@ classDiagram
 | **Operation** | One domain-owned step in a plan (`monge/extrude`, `delone/mesh`, `oodi/solve`, `stinespring/acquire`, `lieb/lanczos`, `chappe/benchmark`). | domain package | activity type |
 | **Run** | One execution of a plan (or of an ad-hoc operation sequence). Has status, software env, execution context. | `RunId` exists; record does not | `prov:Activity` (bundle) |
 | **Activity** | One operation instance inside a run. Uses and generates objects. | new | `prov:Activity` |
-| **Domain object** | Live Julia value owned by a package (`Mesh`, `Field`, `Posterior`, `HubbardSector`). | package types | — |
+| **Domain object** | Live Julia value owned by a package (`Mesh`, `Field`, `Posterior`, `ModelState`). | package types | — |
 | **Archive object** | Envelope of one object *version*: ids, kind, schema, references. Payload stays with the package codec. | `ArchiveObject` | `prov:Entity` |
 | **Content** | Logical bytes/identity independent of HDF5 layout. | `ContentId`; hash rules #42 | entity specialization |
 | **Artifact** | Stored content that may be embedded (`/data`) or external (content-addressed pointer). Includes debug/derived (#32). | planned | `prov:Entity` |
@@ -436,7 +436,7 @@ Concrete bindings:
 | Concept | Monge | Delone | Oodi | Stinespring | Lieb | Chappe |
 | --- | --- | --- | --- | --- | --- | --- |
 | Document fragment | `monge/box` tree | `delone/model` | `oodi/poisson` spec | measurement-config + program | lattice/sector spec | serving/benchmark campaign |
-| Domain object | reconstructable solid | `Mesh` | `Field`, solver state | posterior, raw shots | `HubbardSector`, Krylov state | checkpoint identity, cost surface |
+| Domain object | reconstructable solid | `Mesh` | `Field`, solver state | posterior, raw shots | many-body state, Krylov state | checkpoint identity, cost surface |
 | Activity | extrude, boolean | mesh, adapt | assemble, solve | acquire, infer | Lanczos step *batch* (not every iteration) | benchmark, search trial |
 | Evidence | BREP / visualization projection | quality report | residual history | raw QPU shots (immutable) | eigenpairs, timings | latency/cost measurements |
 | Derived | — | hierarchy | postprocessed field | updated posterior | sweep table | ranking / chosen config |
@@ -621,7 +621,7 @@ before_object_store / after_object_store
 | Bulk arrays | `ContentId` + `LogicalArraySpec` | Logical spec yes; physical layout no | JLD2 in v1; later HDF5.jl `/data` via `EpistemeHDF5Ext` |
 | Unsafe (MPI comm, IO, GPU array, closure, task, provider client) | — | — | **Reject at codec boundary** (#47) |
 
-JLD2 `Upgrade` / `typemap` reconstructs a Julia struct. It does not answer “did `lieb/hubbard-sector` change meaning?” That remains `SchemaRef` + #41.
+JLD2 `Upgrade` / `typemap` reconstructs a Julia struct. It does not answer “did `example/model-state` change meaning?” That remains `SchemaRef` + #41.
 
 ### 11. `using Episteme` vs extensions (architecture question 10)
 
@@ -785,7 +785,7 @@ Sources: [Tracking](https://mlflow.org/docs/latest/ml/tracking/), [Model Registr
 Hierarchy: Experiment → Run → metrics/params/tags/artifacts; separately, logged Model with `model_id`, registry name/version/**alias**. Backend store (files or SQL) is split from artifact store (S3/local). Autolog monkey-patches training libraries. Model aliases (`@production`) are movable pointers — conceptually heads, but for models only.
 
 - **Steal:** metadata/artifact split (envelope vs `/data`); aliases as movable heads; searchable run metadata; parent/child runs for sweeps.
-- **Avoid:** Experiment/Model as the scientific taxonomy (a Hubbard sector is not a model version); autolog; requiring a tracking server; metric-centric UI as the archive.
+- **Avoid:** Experiment/Model as the scientific taxonomy (a scientific state is not a model version); autolog; requiring a tracking server; metric-centric UI as the archive.
 
 ### Metaflow
 
@@ -1330,7 +1330,7 @@ A demonstration that the existing OodiCore + per-domain scripts already satisfy 
 ### “Minimal OodiCore forever” and standalone AH5.jl — explicit verdict
 
 - **Superseded as the locked topology:** OodiCore as a permanently minimal contracts package; AH5.jl as a required third package; `oodicore/*` as the long-lived namespace.
-- **Kept as discipline:** Episteme does not own CAD/mesh/FEM/QPU/Hubbard/LLM meaning; it does not execute untrusted source; domain packages keep payloads, operations, and reuse policy; JLD2-backed `.ah5` is the v1 hierarchical backend.
+- **Kept as discipline:** Episteme does not own CAD/mesh/FEM/quantum-computing/model-serving meaning; it does not execute untrusted source; domain packages keep payloads, operations, and reuse policy; JLD2-backed `.ah5` is the v1 hierarchical backend.
 - **Superseded:** the assumption that whole-model composition lives in a package named Loom.
 
 ---

@@ -43,8 +43,8 @@ is silent data loss. Episteme should reject those types at the codec
 boundary, not rely on JLD2.
 
 **`writeas` / `wconvert` / `rconvert`:** not required for the OodiCore
-envelope or the two domain stand-ins (`MongeSpike.Box`,
-`LiebSpike.HubbardSector`). Use them for handles that must not hit disk,
+envelope or the two domain stand-ins (`GeometrySpike.Box`,
+`DomainSpike.ModelState`). Use them for handles that must not hit disk,
 or for a compact array representation of a domain type.
 
 ## 2. Physical HDF5 representation
@@ -138,11 +138,11 @@ the serial AH5 design.
 
 ## 6. Type evolution vs Episteme schema migration
 
-Writing `HubbardSector` and reading it as `HubbardSectorV2` via
+Writing `ModelState` and reading it as `ModelStateV2` via
 
 ```julia
-typemap = Dict("…HubbardSector" => JLD2.Upgrade(HubbardSectorV2))
-JLD2.rconvert(::Type{HubbardSectorV2}, nt::NamedTuple) = ...
+typemap = Dict("…ModelState" => JLD2.Upgrade(ModelStateV2))
+JLD2.rconvert(::Type{ModelStateV2}, nt::NamedTuple) = ...
 ```
 
 succeeded. JLD2 loads old fields as a `NamedTuple` and calls `rconvert`.
@@ -162,7 +162,7 @@ not include `types.jl` or OodiCore.
 
 | Mode | Result |
 | --- | --- |
-| `load` | `JLD2.ReconstructedStatic{:Box,…}` / `ReconstructedStatic{:HubbardSector,…}` with the stored field values |
+| `load` | `JLD2.ReconstructedStatic{:Box,…}` / `ReconstructedStatic{:ModelState,…}` with the stored field values |
 | `load(; plain = true)` | `@NamedTuple{width,depth,height}` / `{sites,particles,Sz}` |
 | HDF5.jl inspect | `/_types`, compound datasets, field names and numeric dtypes visible |
 
