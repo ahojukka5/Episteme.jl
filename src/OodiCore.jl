@@ -23,6 +23,6 @@ export ObjectRef, ArchiveReference
 export LogicalType, LogicalArraySpec, LOGICAL_SCALAR_KINDS
 export ArchiveObject, WorkflowHead, ArchiveGraph, ArchiveCatalog
 export ordered_objects, ordered_references, ordered_heads
-export find_object, find_revisions
+export find_object, find_objects, find_revisions
 
 end # module OodiCore

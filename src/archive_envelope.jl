@@ -1,10 +1,9 @@
 # ---------------------------------------------------------------------------
 # Shared scientific-archive envelope
 #
-# Logical identities, references, schema-version rules, and package-owned
-# payload extension points. No HDF5, no domain payload schemas, and no
-# software-environment or execution-context capture. Those remain later
-# issues and AH5.jl.
+# Logical identities, references, and schema-version rules. No HDF5, no
+# package payload store, and no software-environment or execution-context
+# capture. Those remain later issues, domain packages, and AH5.jl.
 # ---------------------------------------------------------------------------
 
 """
@@ -25,9 +24,13 @@ end
 """
     ObjectId(value)
 
-Stable logical identity of an archived scientific object. Two revisions of
-the same mesh share one `ObjectId`. This is not a content hash and not a
-workflow head.
+Stable logical identity of an archived scientific object, unique across
+the whole archive. Namespace is not part of the id; `ObjectRef` therefore
+does not carry a namespace.
+
+Prefer an opaque value such as a UUID. Display names are not identity.
+Two workflow revisions of the same object share one `ObjectId`. This is
+not a content hash and not a workflow head.
 """
 struct ObjectId <: AbstractArchiveId
     value::String
@@ -37,8 +40,10 @@ end
 """
     RevisionId(value)
 
-Immutable identity of one produced workflow revision or object snapshot.
-Ordinary writes never reuse a `RevisionId`.
+Immutable identity of one global workflow revision. A single revision may
+materialize several [`ArchiveObject`](@ref)s. Ordinary writes never reuse
+a `RevisionId`. Parent/input revision edges belong to issue #30; they are
+not stored on the object envelope.
 """
 struct RevisionId <: AbstractArchiveId
     value::String
@@ -205,30 +210,27 @@ struct KnownSchema
 end
 
 """
-    ProvenanceRefs(; software_environment=nothing, execution_context=nothing,
-                     producer_revision=nothing)
+    ProvenanceRefs(; software_environment=nothing, execution_context=nothing)
 
 Minimal provenance *references* carried by an archive object.
 
-Full software manifests (#37), execution fingerprints (#43), and revision
-graphs (#30) are separate contracts. `nothing` means explicitly not
-recorded, never a guessed current machine or package version.
+The producing workflow revision is [`ArchiveObject.revision_id`](@ref),
+not a second field here. Full software manifests (#37), execution
+fingerprints (#43), and the revision DAG (#30) are separate contracts.
+`nothing` means explicitly not recorded.
 """
 struct ProvenanceRefs
     software_environment::Union{Nothing,SoftwareEnvironmentId}
     execution_context::Union{Nothing,ExecutionContextId}
-    producer_revision::Union{Nothing,RevisionId}
 end
 
 function ProvenanceRefs(;
     software_environment = nothing,
     execution_context = nothing,
-    producer_revision = nothing,
 )
     return ProvenanceRefs(
         _optional_id(SoftwareEnvironmentId, software_environment),
         _optional_id(ExecutionContextId, execution_context),
-        _optional_id(RevisionId, producer_revision),
     )
 end
 
@@ -245,10 +247,13 @@ end
 """
     ObjectRef(object_id, revision_id=nothing)
 
-Cross-object reference by logical identity, not by HDF5 path.
+Cross-object reference by archive-global [`ObjectId`](@ref), not by HDF5
+path and not by namespace.
 
-If `revision_id` is `nothing`, any revision of `object_id` satisfies the
-reference. A pinned revision stays valid when unrelated objects are
+An unpinned reference (`revision_id === nothing`) is a logical-object
+link: it resolves if any version of that object exists. Exact scientific
+dependencies must pin a [`RevisionId`](@ref) or use issue #30's revision
+inputs. A pinned reference stays valid when unrelated objects are
 appended.
 """
 struct ObjectRef
@@ -387,10 +392,12 @@ end
 """
     ArchiveObject(object_id, revision_id; namespace, kind, schema, kwargs...)
 
-Minimal shared archive envelope around a package-owned payload.
+Minimal shared archive envelope. It identifies an object version; it does
+not store the scientific payload.
 
 # Required
-- `object_id`, `revision_id` — logical object and this immutable snapshot
+- `object_id` — archive-global logical object identity
+- `revision_id` — workflow revision that materialized this version
 - `namespace` — owning package namespace
 - `kind` — package-qualified kind, e.g. `Symbol("oodi/field")`
 - `schema` — exact payload schema id and version
@@ -398,13 +405,11 @@ Minimal shared archive envelope around a package-owned payload.
 # Optional
 - `content_id` — logical content identity (#42 supplies hash rules)
 - `run_id` — producing run
-- `provenance` — software/execution/producer references
+- `provenance` — software/execution references
 - `references` — named [`ArchiveReference`](@ref)s
-- `extras` — package-owned payload fields as a `NamedTuple`
 
-OodiCore does not interpret `extras`. Domain packages must not place
-runtime handles, communicator objects, or other non-portable state there
-if the object is meant to be archived.
+Package-owned typed models remain authoritative. AH5 later calls
+package-owned codecs; do not flatten payload arrays into this wrapper.
 """
 struct ArchiveObject
     object_id::ObjectId
@@ -416,7 +421,6 @@ struct ArchiveObject
     schema::SchemaRef
     provenance::ProvenanceRefs
     references::Vector{ArchiveReference}
-    extras::NamedTuple
 end
 
 function ArchiveObject(
@@ -429,7 +433,6 @@ function ArchiveObject(
     schema::SchemaRef,
     provenance::ProvenanceRefs = ProvenanceRefs(),
     references = ArchiveReference[],
-    extras::NamedTuple = (;),
 )
     return ArchiveObject(
         object_id,
@@ -441,7 +444,6 @@ function ArchiveObject(
         schema,
         provenance,
         _archive_references(references),
-        extras,
     )
 end
 
@@ -458,10 +460,11 @@ end
 """
     WorkflowHead(id, name, revision_id)
 
-A movable bookmark pointing at an immutable revision.
+A movable bookmark pointing at a workflow [`RevisionId`](@ref).
 
-Replacing `revision_id` does not change historical objects. Head identity
-and revision identity remain distinct.
+Replacing `revision_id` does not change historical objects. The head
+identifies a revision, not a single object snapshot; several objects may
+have been materialized in that revision.
 """
 struct WorkflowHead
     id::WorkflowHeadId
@@ -598,6 +601,19 @@ function find_object(graph::ArchiveGraph, object_id::ObjectId, revision_id::Revi
         end
     end
     return nothing
+end
+
+"""
+    find_objects(graph, revision_id) -> Vector{ArchiveObject}
+
+Every object materialized in the given workflow revision, in logical order.
+"""
+function find_objects(graph::ArchiveGraph, revision_id::RevisionId)
+    matches = ArchiveObject[]
+    for object in graph.objects
+        object.revision_id == revision_id && push!(matches, object)
+    end
+    return sort(matches; by = _object_sort_key)
 end
 
 function _reference_resolves(graph::ArchiveGraph, target::ObjectRef)
@@ -781,6 +797,7 @@ end
 
 function _validate_archive_graph!(diagnostics, graph::ArchiveGraph)
     seen_revisions = Tuple{String,String}[]
+    seen_objects = Dict{String,Tuple{Symbol,Symbol}}()
     for object in ordered_objects(graph)
         _validate_archive_object!(diagnostics, object)
         key = (object.object_id.value, object.revision_id.value)
@@ -795,15 +812,28 @@ function _validate_archive_graph!(diagnostics, graph::ArchiveGraph)
             push!(seen_revisions, key)
         end
 
-        producer = object.provenance.producer_revision
-        if producer !== nothing &&
-           !any(other -> other.revision_id == producer, graph.objects)
-            push!(diagnostics, error_diagnostic(
-                :dangling_producer_revision,
-                "producer revision $(producer.value) is not in the graph";
-                object_id = object.object_id.value,
-                producer_revision = producer.value,
-            ))
+        previous = get(seen_objects, object.object_id.value, nothing)
+        if previous === nothing
+            seen_objects[object.object_id.value] = (object.namespace.id, object.kind)
+        else
+            prev_namespace, prev_kind = previous
+            if prev_namespace != object.namespace.id
+                push!(diagnostics, error_diagnostic(
+                    :object_id_namespace_conflict,
+                    "object id $(object.object_id.value) is used in both :$prev_namespace and :$(object.namespace.id)";
+                    object_id = object.object_id.value,
+                    namespace = object.namespace.id,
+                    other_namespace = prev_namespace,
+                ))
+            elseif prev_kind != object.kind
+                push!(diagnostics, error_diagnostic(
+                    :object_id_kind_conflict,
+                    "object id $(object.object_id.value) is used as both $prev_kind and $(object.kind)";
+                    object_id = object.object_id.value,
+                    kind = object.kind,
+                    other_kind = prev_kind,
+                ))
+            end
         end
 
         for ref in ordered_references(object)
@@ -844,7 +874,6 @@ function _validate_archive_graph!(diagnostics, graph::ArchiveGraph)
 end
 
 function report(object::ArchiveObject)
-    extras_names = Tuple(sort!(collect(keys(object.extras)); by = String))
     return ObjectReport(
         object.kind,
         "Archive object $(object.kind) $(object.object_id.value) @ $(object.revision_id.value).",
@@ -855,7 +884,6 @@ function report(object::ArchiveObject)
             namespace = object.namespace.id,
             schema = schema_kind(object.schema),
             schema_version = object.schema.version,
-            extras = extras_names,
         ),
         DiagnosticMessage[],
         ArtifactRef[],
@@ -905,8 +933,6 @@ to_namedtuple(prov::ProvenanceRefs) = (
         to_namedtuple(prov.software_environment),
     execution_context = prov.execution_context === nothing ? nothing :
         to_namedtuple(prov.execution_context),
-    producer_revision = prov.producer_revision === nothing ? nothing :
-        to_namedtuple(prov.producer_revision),
 )
 
 to_namedtuple(ref::ObjectRef) = (
@@ -950,7 +976,6 @@ function to_namedtuple(object::ArchiveObject)
         schema = to_namedtuple(object.schema),
         provenance = to_namedtuple(object.provenance),
         references = Tuple(to_namedtuple.(ordered_references(object))),
-        extras = object.extras,
     )
 end
 
