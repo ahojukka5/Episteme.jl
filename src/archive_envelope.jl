@@ -9,9 +9,9 @@
 """
     AbstractArchiveId
 
-Supertype for archive identity values. Distinct subtypes keep logical object
-identity, revision identity, content identity, and workflow-head identity
-from being interchangeable.
+Supertype for archive identity values. Distinct subtypes keep object,
+revision, content, workflow-head, document, plan, activity, and agent
+identities from being interchangeable.
 """
 abstract type AbstractArchiveId end
 
@@ -107,6 +107,51 @@ struct ExecutionContextId <: AbstractArchiveId
     function ExecutionContextId(value::AbstractString)
         return new(_archive_id_value("ExecutionContextId", value))
     end
+end
+
+"""
+    DocumentId(value)
+
+Identity of an authored semantic document object. This is not a workflow
+[`RevisionId`](@ref), not a [`ContentId`](@ref), and not a compiled
+[`PlanId`](@ref).
+"""
+struct DocumentId <: AbstractArchiveId
+    value::String
+    DocumentId(value::AbstractString) = new(_archive_id_value("DocumentId", value))
+end
+
+"""
+    PlanId(value)
+
+Identity of a resolved, executable plan. Distinct from the source
+[`DocumentId`](@ref) and from a later [`RunId`](@ref).
+"""
+struct PlanId <: AbstractArchiveId
+    value::String
+    PlanId(value::AbstractString) = new(_archive_id_value("PlanId", value))
+end
+
+"""
+    ActivityId(value)
+
+Identity of one operation instance inside a run. This is bookkeeping, not
+an idempotency key; domain packages own `idempotency_key` separately.
+"""
+struct ActivityId <: AbstractArchiveId
+    value::String
+    ActivityId(value::AbstractString) = new(_archive_id_value("ActivityId", value))
+end
+
+"""
+    AgentId(value)
+
+Identity of a human, software, or LLM actor when provenance needs
+attribution. This is not authentication or authorization.
+"""
+struct AgentId <: AbstractArchiveId
+    value::String
+    AgentId(value::AbstractString) = new(_archive_id_value("AgentId", value))
 end
 
 Base.string(id::AbstractArchiveId) = id.value
