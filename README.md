@@ -4,8 +4,7 @@
 composable, reproducible, and eventually autonomous research.
 
 Domain packages keep their payloads and operation semantics. They speak one
-shared introspection and archive language instead of depending on each other or
-on heavy numerical/graphics libraries.
+shared introspection and archive language instead of depending on each other.
 
 This repository is the renamed/re-scoped former `OodiCore.jl` (issue
 [#51](https://github.com/ahojukka5/Episteme.jl/issues/51)). The Julia package
@@ -21,31 +20,28 @@ Episteme.jl = semantics + schemas + history/provenance
 
 This package currently ships the semantics, schemas, and archive *vocabulary*.
 JLD2-backed AH5 persistence and the orchestration protocol are the next
-implementation steps. They are **not** in this rename.
+implementation steps.
 
 ## Why this package exists
 
 Independently owned scientific packages need a shared place to describe objects,
-validate them, compose a whole-model document, and (later) record inspectable
-history. For an LLM agent or a human to drive that work, every major object
-along the way needs to answer three questions consistently:
+validate them, compose research workflows, and record inspectable history. For
+an LLM agent or a human to drive that work, every major object needs to answer
+three questions consistently:
 
 ```julia
 report(x)              # What is this object?
 validate(x)             # Is it internally valid?
-readiness(x, target)    # Can it move to the requested next pipeline stage?
+readiness(x, target)    # Can it move to the requested next stage?
 ```
 
-`Episteme.jl` owns that shared interface. It defines `report`, `validate`,
-and `readiness` as empty generic functions, plus a handful of lightweight
-report/diagnostic/target/artifact types used to implement them. It also owns
-the shared semantic tree (`SemanticNode`, `NodeRef`), local declarative
-schemas, and the scientific-archive vocabulary (identities, references,
-schema versions, portable document envelopes).
+`Episteme.jl` owns that shared interface. It defines `report`, `validate`, and
+`readiness` as generic functions, plus structured report, diagnostic, schema,
+semantic-tree, identity, reference, and archive-record vocabulary.
 
-Physical `.ah5` I/O is planned as Episteme's JLD2-backed archive/profile, not
-as a standalone `AH5.jl` package. HDF5.jl remains later optional
-`EpistemeHDF5Ext` work. See
+Physical `.ah5` I/O is planned as Episteme's JLD2-backed archive/profile.
+HDF5.jl remains a later optional extension for capabilities that need direct or
+parallel HDF5 access. See
 [`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md),
 [`docs/archive-ownership.md`](docs/archive-ownership.md),
 [`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md),
@@ -56,16 +52,11 @@ as a standalone `AH5.jl` package. HDF5.jl remains later optional
 
 If every package defined its own local `report`/`validate`/`readiness`
 function, then loading two such packages together would produce a name
-conflict: Julia would not know which `report` you meant, and `using` both
-packages would warn about ambiguous exports or silently shadow one method with
-another.
+conflict. By defining these functions in exactly one package, every domain
+package can add methods to the *same* generic functions using Julia multiple
+dispatch.
 
-By defining these functions in exactly one package, every other package in the
-ecosystem can safely depend on `Episteme.jl` and add methods to the *same*
-generic function. This is Julia's standard multiple-dispatch idiom for shared
-interfaces, sometimes called an "interface package."
-
-## How downstream packages should extend the contract
+## How domain packages extend the contract
 
 Always import the generic function before adding methods:
 
@@ -73,73 +64,55 @@ Always import the generic function before adding methods:
 import Episteme: report, validate, readiness
 ```
 
-Never create local functions with these names in downstream packages.
+Never create local lookalikes with the same role.
 
 ### Example
 
 ```julia
 using Episteme
 
-struct MyMesh
-    nelements::Int
+struct MyModel
+    size::Int
 end
 
 import Episteme: report, validate, readiness
 
-report(mesh::MyMesh) = ObjectReport(
-    :mesh,
-    "Mesh with $(mesh.nelements) elements.",
-    (; nelements = mesh.nelements),
+report(x::MyModel) = ObjectReport(
+    :model,
+    "Model with size $(x.size).",
+    (; size = x.size),
     DiagnosticMessage[],
     ArtifactRef[],
 )
 
-validate(mesh::MyMesh) = ValidationReport(
-    :mesh,
-    mesh.nelements > 0,
-    mesh.nelements > 0 ? DiagnosticMessage[] :
-        [error_diagnostic(:empty_mesh, "Mesh has no elements.")],
-    (; nelements = mesh.nelements),
+validate(x::MyModel) = ValidationReport(
+    :model,
+    x.size > 0,
+    x.size > 0 ? DiagnosticMessage[] :
+        [error_diagnostic(:invalid_size, "Size must be positive.")],
+    (; size = x.size),
 )
 
-readiness(mesh::MyMesh, target::PipelineTarget) = ReadinessReport(
-    :mesh,
+readiness(x::MyModel, target::PipelineTarget) = ReadinessReport(
+    :model,
     target,
-    mesh.nelements > 0,
-    mesh.nelements > 0 ? DiagnosticMessage[] :
-        [error_diagnostic(:not_ready, "Mesh cannot be used because it is empty.")],
-    (; nelements = mesh.nelements),
+    x.size > 0,
+    x.size > 0 ? DiagnosticMessage[] :
+        [error_diagnostic(:not_ready, "Model is not ready.")],
+    (; size = x.size),
 )
 ```
-
-Given this, any agent or user can now do:
-
-```julia
-julia> m = MyMesh(0);
-
-julia> validate(m)
-ValidationReport(subject=:mesh, valid=false)
-  [error:empty_mesh] Mesh has no elements.
-
-julia> readiness(m, PipelineTarget(:gmg))
-ReadinessReport(subject=:mesh, target=:gmg, ready=false)
-  [error:not_ready] Mesh cannot be used because it is empty.
-```
-
-without needing to know anything about `MyMesh` internals.
 
 ## Public API
 
-Generic functions (define no default method — implement in downstream
-packages):
+Generic functions:
 
 - `report(x)`
 - `validate(x)`
 - `readiness(x, target)`
 
-Episteme also implements `validate(node::SemanticNode, schema::NodeSchema)`
-for local schema checks, and `validate` / `report` for the archive
-envelope types.
+Episteme also implements local semantic-node/schema validation and reporting
+for shared archive-envelope records.
 
 Abstract types:
 
@@ -149,108 +122,78 @@ Abstract types:
 - `AbstractDiagnostic`
 - `AbstractPipelineTarget`
 
-Concrete types:
+Selected concrete types:
 
-- `DiagnosticMessage` — one structured diagnostic (`severity`, `code`,
-  `message`, `context`). Build with `info_diagnostic`, `warning_diagnostic`,
-  `error_diagnostic`.
-- `ValidationReport` — result of `validate`. Query with `Base.isvalid`.
-- `PipelineTarget` — a named pipeline stage descriptor, e.g.
-  `PipelineTarget(:meshing)`, `PipelineTarget(:gmg; levels = 3)`.
-- `ReadinessReport` — result of `readiness`. Query with `Base.isready`.
-- `ObjectReport` — a general-purpose default report type for simple objects.
-- `ArtifactRef` — a lightweight reference to an external artifact (file,
-  image, log, ...) without embedding its data.
-- `SemanticNode` / `NodeRef` — the shared semantic tree and references. If
-  Julia can hold a value, the tree can hold it. Display uses ordinary Julia
-  `show`. See [`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md).
-- `ValidationRule` / `AttributeSchema` / `NodeSchema` / `NodeValidationRule`
-  — introspectable local schemas. Attribute rules inspect one value;
-  node-local rules inspect relationships inside one node. See
-  [`docs/declarative-contracts.md`](docs/declarative-contracts.md).
+- `DiagnosticMessage` — structured diagnostics with stable codes and context.
+- `ValidationReport` — result of `validate`.
+- `PipelineTarget` — a named next-stage descriptor.
+- `ReadinessReport` — result of `readiness`.
+- `ObjectReport` — a general-purpose report type.
+- `ArtifactRef` — a lightweight reference to an external artifact.
+- `SemanticNode` / `NodeRef` — shared semantic-tree nodes and references.
+- `ValidationRule` / `AttributeSchema` / `NodeSchema` /
+  `NodeValidationRule` — local declarative schema vocabulary.
 - `ObjectId` / `RevisionId` / `ContentId` / `WorkflowHeadId` — distinct
-  archive identities. Equal strings do not make them the same kind of id.
+  archive identities.
 - `ArchiveObject` / `ArchiveReference` / `SchemaRef` / `ArchiveGraph` —
-  the shared logical archive envelope. Package payloads stay in domain
-  types; this wrapper does not store them. No file I/O yet. See
-  [`docs/archive-envelope.md`](docs/archive-envelope.md).
+  shared logical archive-envelope records.
 
 Tree operations:
 
-- `add_child!(parent, child)` — append a child and preserve child order.
-  `push!` is an alias.
-- `attribute(node, key)` / `attribute(node, key, default)` — read an
-  attribute.
-- `set_attribute!(node, key, value)` — set or add an attribute.
+- `add_child!(parent, child)` / `push!`
+- `attribute(node, key)`
+- `set_attribute!(node, key, value)`
 
 Declarative helpers:
 
-- `script_node(name; language = :julia, source, inputs, outputs, effects)`
-  — opaque scripting node of kind `episteme/script`. Episteme never executes
-  the source.
-- `validated_node(schema, name; ...)` — fail-fast construction against a
-  schema.
-- `check_validation_rule` / `check_node_validation_rule` — extension points
-  for additional symbolic rule kinds.
+- `script_node(name; language, source, inputs, outputs, effects)` — opaque
+  scripting contract; Episteme stores but does not implicitly execute source.
+- `validated_node(schema, name; ...)` — fail-fast local construction.
+- `check_validation_rule` / `check_node_validation_rule` — extension points for
+  symbolic validation rules.
 
 Serialization:
 
-- `to_namedtuple(x)` — converts reports, diagnostics, targets, artifacts,
-  schemas (`ValidationRule`, `AttributeSchema`, `NodeSchema`,
-  `NodeValidationRule`), and archive envelope records into a plain
-  `NamedTuple` suitable for JSON encoding or logging. It does **not**
-  convert `SemanticNode` or `NodeRef`; arbitrary runtime values in the
-  tree have no Episteme serialization protocol. Symbol-valued fields
-  (`severity`, `code`, `subject`, `kind`, target `name`, ...) are kept as
-  `Symbol`s; a JSON-encoding step at the boundary is expected to turn
-  them into strings.
+- `to_namedtuple(x)` converts supported shared records into plain,
+  serialization-friendly structures. Arbitrary runtime values inside a
+  `SemanticNode` are not automatically promoted into a portable interchange
+  contract.
 
-## What should and should not go into Episteme
+## What belongs in Episteme
 
-It is safe to add:
+Episteme owns domain-neutral infrastructure shared across research packages:
 
-- generic function declarations shared across the ecosystem,
-- lightweight abstract report/result types,
-- simple diagnostic/message types,
-- simple readiness target types,
-- artifact/provenance reference types,
-- the generic semantic tree and references,
-- local declarative schemas and validation rules,
-- small helper constructors,
-- readable `show` methods,
-- serialization-friendly structures for reports, diagnostics, targets,
-  artifacts, and schemas,
-- scientific-archive identity, reference, namespace, schema-version, and
-  provenance *record types*,
-- later: Plan/Run/Activity/Event/Revision records, orchestration protocol,
-  and JLD2-backed AH5 persistence (separate PRs).
+- semantic trees and references,
+- schemas and structured validation,
+- reports and diagnostics,
+- archive identities, references, provenance and history vocabulary,
+- declarative research-document and plan vocabulary,
+- orchestration protocols that remain independent of domain science,
+- JLD2-backed AH5 persistence and generic archive inspection.
 
-It must **not** contain:
+It must **not** contain domain-specific scientific or numerical semantics. In
+particular, keep the following in the package that owns the domain:
 
-- CAD logic,
-- meshing logic,
-- FEM/discretization logic,
-- solver logic,
-- QPU / Hubbard / LLM domain semantics,
-- plotting/rendering backends,
-- Netgen/OpenCascade wrappers,
-- `Oodi.jl` operator or problem definitions,
-- dependencies on any of the above,
-- `AbstractStore` or Mongo/Postgres backends.
+- physical models, equations, constitutive laws, and scientific assumptions,
+- geometry, CAD, meshing, and topology algorithms,
+- discretization and numerical methods such as FEM, finite-volume, spectral,
+  or particle formulations,
+- linear, nonlinear, eigensystem, time-integration, and optimization solvers,
+- quantum-computing algorithms, device semantics, and experiment logic,
+- machine-learning or model-serving algorithms and policies,
+- rendering, visualization, and domain-specific export logic,
+- integrations whose semantics belong to a particular external scientific
+  library or service.
 
-Domain packages register payload codecs with Episteme's future AH5 profile
-and must not start package-local HDF5 archive frameworks. A JLD2 persistence
-spike (issue #47) lives in
-[`research/jld2-ah5-spike/`](research/jld2-ah5-spike/).
+Likewise, do not introduce speculative infrastructure abstractions for storage
+or services without a concrete second implementation that requires them.
 
-If a proposed addition is logic specific to one domain (CAD, meshing,
-solving), it belongs in that domain's own package, not here.
+The rule is simple: **Episteme owns the cross-domain research contract; domain
+packages own the science and the algorithms.**
 
 ## Installation
 
-`Episteme.jl` is not yet registered. The next General registration should be
-for `Episteme`, not the unmerged `OodiCore` attempt (issue #23). Add it as a
-path or git dependency from this repository, e.g.:
+`Episteme.jl` is not yet registered. Add it as a git or path dependency:
 
 ```julia
 pkg> add https://github.com/ahojukka5/Episteme.jl
