@@ -1,5 +1,20 @@
 # Logical archive envelope (#26). These tests must not require HDF5.
 
+const ID_GEOM = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+const ID_MESH = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+const ID_SPACE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+const ID_FIELD = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+const ID_POST = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+const ID_SECTOR = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+const ID_MODEL = "00000000-0000-4000-8000-000000000001"
+const ID_FIELD_COPY = "00000000-0000-4000-8000-000000000002"
+const ID_VOL = "00000000-0000-4000-8000-000000000003"
+
+const REV_1 = "11111111-1111-4111-8111-111111111111"
+const REV_2 = "22222222-2222-4222-8222-222222222222"
+const REV_3 = "33333333-3333-4333-8333-333333333333"
+const REV_4 = "44444444-4444-4444-8444-444444444444"
+
 function _ns(id::Symbol; uuid = "", display = "")
     return ArchiveNamespace(id; package_uuid = uuid, display_name = display)
 end
@@ -10,7 +25,6 @@ function _obj(
     object::AbstractString,
     revision::AbstractString;
     version = "1.0.0",
-    extras = (;),
     references = ArchiveReference[],
     content = nothing,
     run = nothing,
@@ -29,7 +43,6 @@ function _obj(
         schema = SchemaRef(namespace, schema_id, version),
         provenance = provenance,
         references = references,
-        extras = extras,
     )
 end
 
@@ -100,98 +113,61 @@ end
     @test_throws ArgumentError KnownSchema(v1, :probably_fine)
 end
 
-@testset "package extras stay package-owned" begin
-    field = _obj(
-        :oodi,
-        "field",
-        "field-1",
-        "rev-field";
-        extras = (; values = :package_owned, association = :node),
-    )
-    @test field.extras.values === :package_owned
-    @test !hasfield(typeof(field), :values)
+@testset "envelope does not store package payloads" begin
+    field = _obj(:oodi, "field", ID_FIELD, REV_3)
+    @test !hasfield(typeof(field), :extras)
+    @test !hasfield(typeof(field), :payload)
     nt = to_namedtuple(field)
-    @test nt.extras.values === :package_owned
+    @test !haskey(nt, :extras)
     @test nt.kind === Symbol("oodi/field")
 end
 
 @testset "geometry to field graph plus sibling-domain objects" begin
-    geometry = _obj(
-        :monge,
-        "box",
-        "geom-1",
-        "rev-geom";
-        extras = (; width = 0.4, depth = 0.5, height = 2.0),
-    )
+    geometry = _obj(:monge, "box", ID_GEOM, REV_1)
     mesh = _obj(
         :delone,
         "mesh",
-        "mesh-1",
-        "rev-mesh";
-        references = [ArchiveReference(:geometry, geometry.object_id; revision_id = geometry.revision_id)],
-        extras = (; nelements = 12),
-        provenance = ProvenanceRefs(; producer_revision = geometry.revision_id),
+        ID_MESH,
+        REV_2;
+        references = [ArchiveReference(
+            :geometry,
+            geometry.object_id;
+            revision_id = geometry.revision_id,
+        )],
     )
+    # One workflow revision may materialize several objects.
     space = _obj(
         :oodi,
         "space",
-        "space-1",
-        "rev-space";
+        ID_SPACE,
+        REV_3;
         references = [ArchiveReference(:mesh, mesh.object_id; revision_id = mesh.revision_id)],
-        extras = (; basis = :lagrange),
         provenance = ProvenanceRefs(;
             software_environment = SoftwareEnvironmentId("env-1"),
             execution_context = ExecutionContextId("ctx-1"),
-            producer_revision = mesh.revision_id,
         ),
     )
     field = _obj(
         :oodi,
         "field",
-        "field-1",
-        "rev-field";
+        ID_FIELD,
+        REV_3;
         content = "hash-u",
         run = "run-1",
         references = [ArchiveReference(:space, space.object_id; revision_id = space.revision_id)],
-        extras = (; association = :node),
-        provenance = ProvenanceRefs(; producer_revision = space.revision_id),
     )
-    posterior = _obj(
-        :stinespring,
-        "posterior",
-        "post-1",
-        "rev-post";
-        extras = (; draws = 128),
-    )
-    sector = _obj(
-        :lieb,
-        "hubbard-sector",
-        "sector-1",
-        "rev-sector";
-        extras = (; particles = 6, sites = 8),
-    )
-    model = _obj(
-        :chappe,
-        "model",
-        "model-1",
-        "rev-model";
-        extras = (; family = :moe),
-    )
+    posterior = _obj(:stinespring, "posterior", ID_POST, REV_4)
+    sector = _obj(:lieb, "hubbard-sector", ID_SECTOR, REV_4)
+    model = _obj(:chappe, "model", ID_MODEL, REV_4)
 
     # Same logical content may be reused without sharing object identity.
-    field_copy = _obj(
-        :oodi,
-        "field",
-        "field-alias",
-        "rev-alias";
-        content = "hash-u",
-        extras = (; association = :node),
-    )
+    field_copy = _obj(:oodi, "field", ID_FIELD_COPY, REV_4; content = "hash-u")
     @test field.content_id == field_copy.content_id
     @test field.object_id != field_copy.object_id
-    @test field.revision_id != field_copy.revision_id
+    @test space.revision_id == field.revision_id
+    @test space.object_id != field.object_id
 
-    head = WorkflowHead(WorkflowHeadId("head-main"), :main, field.revision_id)
+    head = WorkflowHead(WorkflowHeadId("head-main"), :main, RevisionId(REV_3))
     graph = ArchiveGraph(
         [field, sector, geometry, posterior, space, mesh, model, field_copy];
         heads = [head],
@@ -223,26 +199,70 @@ end
 
     @test find_object(graph, mesh.object_id, mesh.revision_id) === mesh
     @test find_revisions(graph, field.object_id) == [field]
+    @test find_objects(graph, RevisionId(REV_3)) == [space, field]
 
-    appended = ArchiveGraph(vcat(graph.objects, [_obj(:sorby, "volume", "vol-1", "rev-vol")]))
+    appended = ArchiveGraph(vcat(graph.objects, [_obj(:sorby, "volume", ID_VOL, REV_4)]))
     @test isvalid(validate(appended))
     @test find_object(appended, mesh.object_id, mesh.revision_id).references[1].target.object_id ==
         geometry.object_id
 
     rep = report(field)
     @test rep.subject === Symbol("oodi/field")
-    @test occursin("field-1", rep.summary)
+    @test occursin(ID_FIELD, rep.summary)
     @test sprint(show, graph) == "ArchiveGraph(objects=8, heads=1)"
 end
 
+@testset "ObjectId is archive-global and unpinned refs are logical links" begin
+    first = _obj(:oodi, "field", ID_FIELD, REV_1)
+    collided = _obj(:lieb, "hubbard-sector", ID_FIELD, REV_2)
+    conflict = validate(ArchiveGraph([first, collided]))
+    @test !isvalid(conflict)
+    @test any(d -> d.code === :object_id_namespace_conflict, conflict.diagnostics)
+
+    same_ns_other_kind = ArchiveObject(
+        ObjectId(ID_FIELD),
+        RevisionId(REV_2);
+        namespace = _ns(:oodi),
+        kind = Symbol("oodi/space"),
+        schema = SchemaRef(:oodi, "space", "1.0.0"),
+    )
+    kind_conflict = validate(ArchiveGraph([first, same_ns_other_kind]))
+    @test any(d -> d.code === :object_id_kind_conflict, kind_conflict.diagnostics)
+
+    geometry_v1 = _obj(:monge, "box", ID_GEOM, REV_1)
+    geometry_v2 = _obj(:monge, "box", ID_GEOM, REV_2)
+    unpinned = _obj(
+        :delone,
+        "mesh",
+        ID_MESH,
+        REV_2;
+        references = [ArchiveReference(:geometry, ObjectId(ID_GEOM))],
+    )
+    @test isvalid(validate(ArchiveGraph([geometry_v1, geometry_v2, unpinned])))
+
+    pinned_v1 = _obj(
+        :delone,
+        "mesh",
+        ID_MESH,
+        REV_2;
+        references = [ArchiveReference(
+            :geometry,
+            ObjectId(ID_GEOM);
+            revision_id = RevisionId(REV_1),
+        )],
+    )
+    @test isvalid(validate(ArchiveGraph([geometry_v1, geometry_v2, pinned_v1])))
+    @test pinned_v1.references[1].target.revision_id == RevisionId(REV_1)
+end
+
 @testset "dangling and incompatible metadata fail explicitly" begin
-    geometry = _obj(:monge, "box", "geom-1", "rev-geom")
+    geometry = _obj(:monge, "box", ID_GEOM, REV_1)
     mesh = _obj(
         :delone,
         "mesh",
-        "mesh-1",
-        "rev-mesh";
-        references = [ArchiveReference(:geometry, ObjectId("missing-geom"))],
+        ID_MESH,
+        REV_2;
+        references = [ArchiveReference(:geometry, ObjectId("missing-geom-id"))],
     )
     dangling = validate(ArchiveGraph([geometry, mesh]))
     @test !isvalid(dangling)
@@ -251,8 +271,8 @@ end
     pinned_missing = _obj(
         :delone,
         "mesh",
-        "mesh-2",
-        "rev-mesh-2";
+        ID_MESH,
+        REV_2;
         references = [ArchiveReference(
             :geometry,
             geometry.object_id;
@@ -262,18 +282,6 @@ end
     pinned = validate(ArchiveGraph([geometry, pinned_missing]))
     @test !isvalid(pinned)
     @test any(d -> d.code === :dangling_reference, pinned.diagnostics)
-
-    producer = _obj(
-        :oodi,
-        "field",
-        "field-1",
-        "rev-field";
-        provenance = ProvenanceRefs(; producer_revision = RevisionId("rev-ghost")),
-    )
-    @test any(
-        d -> d.code === :dangling_producer_revision,
-        validate(ArchiveGraph([producer])).diagnostics,
-    )
 
     head = WorkflowHead(WorkflowHeadId("head-1"), :main, RevisionId("rev-ghost"))
     @test any(
@@ -304,23 +312,23 @@ end
         software_environments = SoftwareEnvironmentId[],
         execution_contexts = ExecutionContextId[],
     )
-    current = _obj(:oodi, "field", "f1", "r1")
+    current = _obj(:oodi, "field", ID_FIELD, REV_1)
     @test isvalid(validate(current, catalog))
 
-    missing = _obj(:oodi, "field", "f2", "r2"; version = "3.0.0")
+    missing = _obj(:oodi, "field", ID_FIELD, REV_1; version = "3.0.0")
     @test any(d -> d.code === :missing_schema, validate(missing, catalog).diagnostics)
 
-    old = _obj(:oodi, "field", "f3", "r3"; version = "0.9.0")
+    old = _obj(:oodi, "field", ID_FIELD, REV_1; version = "0.9.0")
     @test any(d -> d.code === :unsupported_schema, validate(old, catalog).diagnostics)
 
-    migrate = _obj(:oodi, "field", "f4", "r4"; version = "0.8.0")
+    migrate = _obj(:oodi, "field", ID_FIELD, REV_1; version = "0.8.0")
     @test any(d -> d.code === :migration_required, validate(migrate, catalog).diagnostics)
 
     env_obj = _obj(
         :oodi,
         "field",
-        "f5",
-        "r5";
+        ID_FIELD,
+        REV_1;
         provenance = ProvenanceRefs(;
             software_environment = SoftwareEnvironmentId("env-missing"),
             execution_context = ExecutionContextId("ctx-missing"),
@@ -340,15 +348,15 @@ end
     obj = _obj(
         :lieb,
         "hubbard-sector",
-        "sector-1",
-        "rev-1";
-        extras = (; sites = 8),
-        references = [ArchiveReference(:parent, ObjectId("model-1"))],
+        ID_SECTOR,
+        REV_1;
+        references = [ArchiveReference(:parent, ObjectId(ID_MODEL))],
     )
     nt = to_namedtuple(obj)
-    @test nt.object_id == "sector-1"
+    @test nt.object_id == ID_SECTOR
     @test nt.schema.kind === Symbol("lieb/hubbard-sector")
     @test nt.references[1].name === :parent
+    @test nt.references[1].target.revision_id === nothing
     @test to_namedtuple(schema).version == "1.0.0"
     @test to_namedtuple(LogicalType(:integer; units = "1")).kind === :integer
 

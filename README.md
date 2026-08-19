@@ -159,8 +159,9 @@ Concrete types:
 - `ObjectId` / `RevisionId` / `ContentId` / `WorkflowHeadId` — distinct
   archive identities. Equal strings do not make them the same kind of id.
 - `ArchiveObject` / `ArchiveReference` / `SchemaRef` / `ArchiveGraph` —
-  the shared logical archive envelope. Package payload fields stay in
-  `extras`. No HDF5. See [`docs/archive-envelope.md`](docs/archive-envelope.md).
+  the shared logical archive envelope. Package payloads stay in domain
+  types; this wrapper does not store them. No HDF5. See
+  [`docs/archive-envelope.md`](docs/archive-envelope.md).
 
 Tree operations:
 
