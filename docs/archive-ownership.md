@@ -403,3 +403,10 @@ domain payloads or of the `.ah5` profile.
 - choosing exact HDF5 paths, chunking, or hash algorithms
 - forcing every domain package to hard-depend on OodiCore or AH5
 - replacing Oodi's existing mesh/field visualization exporters
+
+## Related study
+
+Issue [#47](https://github.com/ahojukka5/OodiCore.jl/issues/47) studies
+JLD2 as a Julia-native codec inside AH5.jl. It does not add JLD2 or HDF5
+to OodiCore. Findings and the adopt-with-constraints recommendation are
+in [`research/jld2-ah5-spike/FINDINGS.md`](../research/jld2-ah5-spike/FINDINGS.md).
