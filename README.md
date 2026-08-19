@@ -36,8 +36,10 @@ references, schema versions, portable document envelopes). Physical
 AH5/HDF5/XDMF I/O lives in a dedicated `AH5.jl` package so provider-free
 cores never load HDF5. See [`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md),
 [`docs/declarative-contracts.md`](docs/declarative-contracts.md),
-[`docs/archive-ownership.md`](docs/archive-ownership.md), and
-[`docs/archive-envelope.md`](docs/archive-envelope.md).
+[`docs/archive-ownership.md`](docs/archive-ownership.md),
+[`docs/archive-envelope.md`](docs/archive-envelope.md), and the
+Episteme architecture study
+[`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md).
 
 ## Why shared generic functions avoid name conflicts
 

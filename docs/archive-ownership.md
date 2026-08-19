@@ -410,3 +410,10 @@ Issue [#47](https://github.com/ahojukka5/OodiCore.jl/issues/47) studies
 JLD2 as a Julia-native codec inside AH5.jl. It does not add JLD2 or HDF5
 to OodiCore. Findings and the adopt-with-constraints recommendation are
 in [`research/jld2-ah5-spike/FINDINGS.md`](../research/jld2-ah5-spike/FINDINGS.md).
+
+Issue [#48](https://github.com/ahojukka5/OodiCore.jl/issues/48) is the
+long-term Episteme architecture study. Decision: **REVISE** (keep
+OodiCore; add `Episteme.jl` for composition and the orchestration
+protocol; leave physical I/O in AH5.jl). See
+[`docs/research/episteme-architecture.md`](research/episteme-architecture.md).
+Do not start the Episteme refactor until that note is accepted.
