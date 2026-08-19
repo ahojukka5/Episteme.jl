@@ -10,11 +10,11 @@ using Episteme
 include("types.jl")
 include("inspect.jl")
 
-using .MongeSpike
-using .LiebSpike
+using .GeometrySpike
+using .DomainSpike
 
-JLD2.rconvert(::Type{HubbardSectorV2}, nt::NamedTuple) =
-    HubbardSectorV2(nt.sites, nt.particles, Float64(nt.Sz), 0)
+JLD2.rconvert(::Type{ModelStateV2}, nt::NamedTuple) =
+    ModelStateV2(nt.sites, nt.particles, Float64(nt.Sz), 0)
 
 const ROOT = @__DIR__
 const OUT = joinpath(ROOT, "out")
@@ -122,7 +122,7 @@ function experiment_roundtrip()
     path = joinpath(OUT, "roundtrip.ah5")
     model, box, dual = semantic_fixture()
     graph = archive_fixture()
-    sector = HubbardSector(8, 6, 0)
+    sector = ModelState(8, 6, 0)
     mesh = Mesh{Float64}(rand(3, 4), [1 2 3 4; 5 6 7 8])
     counter = Counter(3)
     nt = (a = 1, b = :sym)
@@ -140,7 +140,7 @@ function experiment_roundtrip()
         f["graph"] = graph
         f["schema"] = SchemaRef(:oodi, "field", "1.0.0")
         f["monge_box"] = box
-        f["lieb_sector"] = sector
+        f["model_state"] = sector
         f["mesh"] = mesh
         f["counter"] = counter
         f["namedtuple"] = nt
@@ -169,7 +169,7 @@ function experiment_roundtrip()
     checks["archive_graph"] = to_namedtuple(loaded["graph"]) == to_namedtuple(graph)
     checks["schema_ref"] = loaded["schema"] == SchemaRef(:oodi, "field", "1.0.0")
     checks["monge_box"] = loaded["monge_box"] == box
-    checks["lieb_sector"] = loaded["lieb_sector"] == sector
+    checks["model_state"] = loaded["model_state"] == sector
     checks["mesh_parametric"] = loaded["mesh"].connectivity == mesh.connectivity
     checks["mutable_counter"] = loaded["counter"].n == 3
     checks["namedtuple"] = loaded["namedtuple"] == nt
@@ -296,15 +296,15 @@ function experiment_interop()
     end
     _, write_warn = _with_stderr() do
         _record(results, "hdf5_then_jld2_write", () -> jldopen(p2, "r+") do f
-            f["packages/lieb/sector"] = HubbardSector(4, 2, 0)
-            f["schemas/lieb/hubbard-sector"] = SchemaRef(:lieb, "hubbard-sector", "1.0.0")
+            f["packages/example/sector"] = ModelState(4, 2, 0)
+            f["schemas/example/model-state"] = SchemaRef(:example, "model-state", "1.0.0")
             true
         end)
     end
     results["hdf5_then_jld2_write_stderr"] = write_warn
     _, read_warn = _with_stderr() do
         _record(results, "hdf5_then_jld2_jld2_reads", () -> jldopen(p2, "r") do f
-            f["packages/lieb/sector"] == HubbardSector(4, 2, 0)
+            f["packages/example/sector"] == ModelState(4, 2, 0)
         end)
     end
     results["hdf5_then_jld2_read_stderr"] = read_warn
@@ -345,13 +345,13 @@ function experiment_interop()
     end
     _, p2b_warn = _with_stderr() do
         _record(results, "hdf5_then_jld2_pregroup_write", () -> jldopen(p2b, "r+") do f
-            f["packages/sector"] = HubbardSector(4, 2, 0)
+            f["packages/sector"] = ModelState(4, 2, 0)
             true
         end)
     end
     results["hdf5_then_jld2_pregroup_stderr"] = p2b_warn
     _record(results, "hdf5_then_jld2_pregroup_read", () -> jldopen(p2b, "r") do f
-        f["packages/sector"] == HubbardSector(4, 2, 0)
+        f["packages/sector"] == ModelState(4, 2, 0)
     end)
     _record(results, "hdf5_then_jld2_pregroup_keys", () -> jldopen(p2b, "r") do f
         collect(keys(f))
@@ -560,14 +560,14 @@ function experiment_parallel()
     isfile(path) && rm(path)
     jldopen(path, "w") do f
         f["episteme/phase"] = "metadata"
-        f["objects/problem"] = HubbardSector(8, 6, 0)
+        f["objects/problem"] = ModelState(8, 6, 0)
     end
     h5open(path, "r+") do f
         dset = create_dataset(f, "data/vector", Float64, (1024,); chunk = (256,))
         dset[:] = randn(1024)
     end
     ok = jldopen(path, "r") do f
-        f["objects/problem"] == HubbardSector(8, 6, 0)
+        f["objects/problem"] == ModelState(8, 6, 0)
     end
     FINDINGS["parallel_serial_analogue_ok"] = ok
     return _status(;
@@ -585,16 +585,16 @@ end
 function experiment_evolution()
     logstep("6. Type evolution and migration")
     path = joinpath(OUT, "evolution.ah5")
-    old = HubbardSector(8, 6, 0)
+    old = ModelState(8, 6, 0)
     jldsave(path; sector = old)
     loaded = load(
         path,
         "sector";
-        typemap = Dict("Main.LiebSpike.HubbardSector" => JLD2.Upgrade(HubbardSectorV2)),
+        typemap = Dict("Main.DomainSpike.ModelState" => JLD2.Upgrade(ModelStateV2)),
     )
     # Type name as stored may include the parent module path.
     loaded2 = loaded
-    if !(loaded isa HubbardSectorV2)
+    if !(loaded isa ModelStateV2)
         # Try the nested module name JLD2 actually wrote.
         stored = jldopen(path, "r") do f
             # fall back: remap whatever path was stored
@@ -602,8 +602,8 @@ function experiment_evolution()
                 path,
                 "sector";
                 typemap = function (file, typepath, params)
-                    endswith(typepath, "HubbardSector") &&
-                        return JLD2.Upgrade(HubbardSectorV2)
+                    endswith(typepath, "ModelState") &&
+                        return JLD2.Upgrade(ModelStateV2)
                     return JLD2.default_typemap(file, typepath, params)
                 end,
             )
@@ -611,7 +611,7 @@ function experiment_evolution()
         loaded2 = stored
     end
     FINDINGS["evolution_loaded_type"] = string(typeof(loaded2))
-    FINDINGS["evolution_ok"] = loaded2 isa HubbardSectorV2 &&
+    FINDINGS["evolution_ok"] = loaded2 isa ModelStateV2 &&
         loaded2.sites == 8 &&
         loaded2.Sz == 0.0
     FINDINGS["evolution_note"] =
@@ -631,7 +631,7 @@ end
 function experiment_forensic()
     logstep("7. Missing-type / forensic read")
     path = joinpath(OUT, "forensic.ah5")
-    jldsave(path; box = Box(1.0, 2.0, 3.0), sector = HubbardSector(4, 2, 0))
+    jldsave(path; box = Box(1.0, 2.0, 3.0), sector = ModelState(4, 2, 0))
     tree = hdf5_tree(path)
     _write_text(joinpath(EXCERPTS, "forensic_hdf5_tree.txt"), tree)
 

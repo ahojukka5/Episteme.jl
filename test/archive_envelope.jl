@@ -221,7 +221,7 @@ end
         references = [ArchiveReference(:space, space.object_id; revision_id = space.revision_id)],
     )
     posterior = _obj(:stinespring, "posterior", ID_POST, REV_4)
-    sector = _obj(:lieb, "hubbard-sector", ID_SECTOR, REV_4)
+    sector = _obj(:example, "model-state", ID_SECTOR, REV_4)
     model = _obj(:chappe, "model", ID_MODEL, REV_4)
 
     # Same logical content may be reused without sharing object identity.
@@ -258,7 +258,7 @@ end
 
     ordered = ordered_objects(graph)
     @test [obj.namespace.id for obj in ordered] ==
-        [:chappe, :delone, :lieb, :monge, :oodi, :oodi, :oodi, :stinespring]
+        [:chappe, :delone, :example, :monge, :oodi, :oodi, :oodi, :stinespring]
     @test ordered != graph.objects
 
     @test find_object(graph, mesh.object_id, mesh.revision_id) === mesh
@@ -278,7 +278,7 @@ end
 
 @testset "ObjectId is archive-global and unpinned refs are logical links" begin
     first = _obj(:oodi, "field", ID_FIELD, REV_1)
-    collided = _obj(:lieb, "hubbard-sector", ID_FIELD, REV_2)
+    collided = _obj(:example, "model-state", ID_FIELD, REV_2)
     conflict = validate(ArchiveGraph([first, collided]))
     @test !isvalid(conflict)
     @test any(d -> d.code === :object_id_namespace_conflict, conflict.diagnostics)
@@ -408,23 +408,23 @@ end
 end
 
 @testset "to_namedtuple and report cover envelope types" begin
-    schema = SchemaRef(:lieb, "hubbard-sector", "1.0.0")
+    schema = SchemaRef(:example, "model-state", "1.0.0")
     obj = _obj(
-        :lieb,
-        "hubbard-sector",
+        :example,
+        "model-state",
         ID_SECTOR,
         REV_1;
         references = [ArchiveReference(:parent, ObjectId(ID_MODEL))],
     )
     nt = to_namedtuple(obj)
     @test nt.object_id == ID_SECTOR
-    @test nt.schema.kind === Symbol("lieb/hubbard-sector")
+    @test nt.schema.kind === Symbol("example/model-state")
     @test nt.references[1].name === :parent
     @test nt.references[1].target.revision_id === nothing
     @test to_namedtuple(schema).version == "1.0.0"
     @test to_namedtuple(LogicalType(:integer; units = "1")).kind === :integer
 
     graph_nt = to_namedtuple(ArchiveGraph([obj]))
-    @test graph_nt.objects[1].kind === Symbol("lieb/hubbard-sector")
+    @test graph_nt.objects[1].kind === Symbol("example/model-state")
     @test report(ArchiveGraph([obj])).metadata.objects == 1
 end

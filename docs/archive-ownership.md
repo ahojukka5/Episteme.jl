@@ -115,7 +115,7 @@ Safe to add here, as ordinary immutable structs and symbolic rules:
 
 Episteme still does not (in current code, and never as domain meaning):
 
-- know a CAD box, mesh, Hubbard sector, QPU job, or LLM checkpoint
+- know a geometry box, mesh, many-body state, experiment job, or model checkpoint
 - execute untrusted script source
 - introduce `provenance(x)` or `artifacts(x)` as new introspection
   generics; those names remain reserved and unimplemented
@@ -129,7 +129,7 @@ Monge, Sorby, Delone, Oodi, Stinespring, Lieb, Chappe, and future
 packages own:
 
 - their scientific payload types and schema definitions
-- package-qualified kinds such as `lieb/hubbard-sector` or `oodi/field`
+- package-qualified kinds such as `example/model-state` or `example/field`
 - read/write codecs that encode those payloads into the AH5 profile
 - schema-migration *implementations* (`oodi/field` 1.0 → 2.0, Delone
   mesh 2 → 3, and so on), registered with Episteme and executed by its

@@ -1,7 +1,7 @@
 # Representative domain-owned types for the spike. These stand in for
-# Monge/Lieb payloads; they are not the real packages.
+# independently owned payloads; they are not real domain packages.
 
-module MongeSpike
+module GeometrySpike
 
 export Box, DualLike
 
@@ -22,9 +22,9 @@ Base.:+(a::DualLike, b::DualLike) = DualLike(a.value + b.value, a.partial + b.pa
 
 end # module
 
-module LiebSpike
+module DomainSpike
 
-export HubbardSector, HubbardSectorV2, Status, idle, running, done
+export ModelState, ModelStateV2, Status, idle, running, done
 
 @enum Status begin
     idle = 1
@@ -32,14 +32,14 @@ export HubbardSector, HubbardSectorV2, Status, idle, running, done
     done = 3
 end
 
-struct HubbardSector
+struct ModelState
     sites::Int
     particles::Int
     Sz::Int
 end
 
 # v2 used only in the type-evolution experiment.
-struct HubbardSectorV2
+struct ModelStateV2
     sites::Int
     particles::Int
     Sz::Float64

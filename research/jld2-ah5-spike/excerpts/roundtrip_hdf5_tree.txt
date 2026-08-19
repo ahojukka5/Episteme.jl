@@ -59,14 +59,14 @@ DATASET /graph dims=() dtype=HDF5.Datatype: /_types/00000014 H5T_COMPOUND {
        H5T_REFERENCE { H5T_STD_REF_OBJECT } "objects" : 0;
        H5T_REFERENCE { H5T_STD_REF_OBJECT } "heads" : 8;
    }
-DATASET /lieb_sector dims=() dtype=HDF5.Datatype: /_types/00000026 H5T_COMPOUND {
-      H5T_STD_I64LE "sites" : 0;
-      H5T_STD_I64LE "particles" : 8;
-      H5T_STD_I64LE "Sz" : 16;
-   }
 DATASET /mesh dims=() dtype=HDF5.Datatype: /_types/00000027 H5T_COMPOUND {
        H5T_REFERENCE { H5T_STD_REF_OBJECT } "coords" : 0;
        H5T_REFERENCE { H5T_STD_REF_OBJECT } "connectivity" : 8;
+   }
+DATASET /model_state dims=() dtype=HDF5.Datatype: /_types/00000026 H5T_COMPOUND {
+      H5T_STD_I64LE "sites" : 0;
+      H5T_STD_I64LE "particles" : 8;
+      H5T_STD_I64LE "Sz" : 16;
    }
 DATASET /monge_box dims=() dtype=HDF5.Datatype: /_types/00000010 H5T_COMPOUND {
       H5T_IEEE_F64LE "width" : 0;

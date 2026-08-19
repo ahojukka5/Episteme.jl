@@ -1,6 +1,6 @@
 # Clean-process forensic load
 
-Process loaded only JLD2 and HDF5. No `types.jl`, no OodiCore.
+Process loaded only JLD2 and HDF5. No `types.jl`, no Episteme.
 
 ## Normal `load`
 
@@ -9,11 +9,11 @@ ok: true
 ```
 Dict{String, Any} with 2 entries:
   "box" => Reconstruct@Box((1.0, 2.0, 3.0))
-  "sector" => Reconstruct@HubbardSector((4, 2, 0))
+  "sector" => Reconstruct@ModelState((4, 2, 0))
 ```
 
 - `box` typeof = `JLD2.ReconstructedStatic{:Box, (:width, :depth, :height), Tuple{Float64, Float64, Float64}}`
-- `sector` typeof = `JLD2.ReconstructedStatic{:HubbardSector, (:sites, :particles, :Sz), Tuple{Int64, Int64, Int64}}`
+- `sector` typeof = `JLD2.ReconstructedStatic{:ModelState, (:sites, :particles, :Sz), Tuple{Int64, Int64, Int64}}`
 
 ## `load(; plain = true)`
 
