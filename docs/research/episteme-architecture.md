@@ -5,12 +5,12 @@
 | Title | Long-term architecture for Episteme: a semantic runtime for scientific research |
 | Author | Architecture study (issue [#48](https://github.com/ahojukka5/OodiCore.jl/issues/48)) |
 | Date | 2026-08-19 |
-| Status | Ready for acceptance |
+| Status | Accepted (#48 / PR #50). Package rename: #51. |
 | Decision | **REVISE** the #25/#5 package topology; **prefer end state (A)** — grown `Episteme.jl` as the scientific backbone |
 | Coordinates | [#47](https://github.com/ahojukka5/OodiCore.jl/issues/47) (JLD2/AH5 spike), [#24](https://github.com/ahojukka5/OodiCore.jl/issues/24) (AH5 epic), [#5](https://github.com/ahojukka5/OodiCore.jl/issues/5) (Loom / whole-model composition), [#25](https://github.com/ahojukka5/OodiCore.jl/issues/25)–[#26](https://github.com/ahojukka5/OodiCore.jl/issues/26), [#12](https://github.com/ahojukka5/OodiCore.jl/issues/12), [#34](https://github.com/ahojukka5/OodiCore.jl/issues/34) |
 | Audience | Maintainers of this repository and the domain packages (Monge, Sorby, Delone, Oodi, Stinespring, Lieb, Chappe) |
 
-**Do not implement the Episteme rename or refactor until this document is accepted.** The conceptual model below is the long-term product; the current `OodiCore.jl` name and the two-package AH5 split from #25 are working assumptions this study reopens.
+**Accepted.** This note is the decision record. Issue [#51](https://github.com/ahojukka5/OodiCore.jl/issues/51) performs the package rename/re-scope. JLD2-backed AH5 persistence remains a later PR. Historical `OodiCore` language below describes the *then* package, not the long-lived name.
 
 ---
 
@@ -1377,7 +1377,7 @@ These do not block accepting the topology-(A) decision. Commit/execute (former Q
 - [`docs/declarative-contracts.md`](../../docs/declarative-contracts.md)
 - [`docs/semantic-tree-poc.md`](../../docs/semantic-tree-poc.md)
 - [`research/jld2-ah5-spike/FINDINGS.md`](../../research/jld2-ah5-spike/FINDINGS.md) (#47)
-- [`src/OodiCore.jl`](../../src/OodiCore.jl), [`src/archive_envelope.jl`](../../src/archive_envelope.jl), [`src/introspection.jl`](../../src/introspection.jl)
+- [`src/Episteme.jl`](../../src/Episteme.jl), [`src/archive_envelope.jl`](../../src/archive_envelope.jl), [`src/introspection.jl`](../../src/introspection.jl)
 - Issues [#5](https://github.com/ahojukka5/OodiCore.jl/issues/5), [#12](https://github.com/ahojukka5/OodiCore.jl/issues/12), [#24](https://github.com/ahojukka5/OodiCore.jl/issues/24), [#25](https://github.com/ahojukka5/OodiCore.jl/issues/25), [#26](https://github.com/ahojukka5/OodiCore.jl/issues/26), [#34](https://github.com/ahojukka5/OodiCore.jl/issues/34), [#47](https://github.com/ahojukka5/OodiCore.jl/issues/47), [#48](https://github.com/ahojukka5/OodiCore.jl/issues/48)
 
 ### External primary documentation

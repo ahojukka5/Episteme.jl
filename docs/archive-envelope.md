@@ -2,8 +2,9 @@
 
 This is the logical object/reference/schema-version contract from issue
 [#26](https://github.com/ahojukka5/OodiCore.jl/issues/26). It lives entirely
-in OodiCore and does not open files. Physical `.ah5` encoding is AH5.jl;
-see [`archive-ownership.md`](archive-ownership.md).
+in Episteme and does not open files. Physical `.ah5` encoding is the later
+JLD2-backed AH5 profile inside Episteme; see
+[`archive-ownership.md`](archive-ownership.md).
 
 The envelope lets independently owned package payloads share one archive
 without depending on each other or on package-native runtime handles.
@@ -148,7 +149,7 @@ compression. They are not a place to store payload arrays.
 ## What this is not
 
 - package payload schemas or payload bytes (domain packages / AH5 codecs)
-- HDF5 layout, `.ah5` profile, or XDMF (AH5.jl)
+- HDF5 layout, `.ah5` profile, or XDMF (later Episteme AH5 profile)
 - the revision DAG of parent/input revisions (#30)
 - schema migration implementations (#41)
 - content-hash algorithms (#42)

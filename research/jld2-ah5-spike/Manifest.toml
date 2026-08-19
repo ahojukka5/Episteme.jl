@@ -225,7 +225,7 @@ version = "2025.11.4"
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.3.0"
 
-[[deps.OodiCore]]
+[[deps.Episteme]]
 path = "../.."
 uuid = "7c15cd61-9c6a-4671-bc94-9960963998ac"
 version = "0.1.0"

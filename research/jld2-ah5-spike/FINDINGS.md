@@ -1,12 +1,12 @@
 # JLD2 as the Julia-native AH5 persistence layer
 
-Spike for [OodiCore.jl#47](https://github.com/ahojukka5/OodiCore.jl/issues/47).
-This is evidence and a recommendation. It does **not** change the AH5
-ownership decision in `docs/archive-ownership.md` and does not add JLD2
-or HDF5 to OodiCore.
+Spike for [issue #47](https://github.com/ahojukka5/OodiCore.jl/issues/47).
+This is evidence and a recommendation. It does **not** add JLD2 or HDF5
+to Episteme. Historical notes below may still say `OodiCore` for the
+then-named package.
 
 Run: `julia --project=. run_spike.jl`. Packages: JLD2 0.6.5, HDF5.jl
-0.17.3, OodiCore path dependency. Generated files live in `out/`
+0.17.3, Episteme path dependency. Generated files live in `out/`
 (gitignored). Compact trees live in `excerpts/`.
 
 **Recommendation: adopt with constraints.**
@@ -223,7 +223,7 @@ extendible `/events` if we choose). `/_types` is JLD2-owned.
 
 **Adopt with constraints.**
 
-Use JLD2 inside AH5.jl (not OodiCore) as the Julia-native codec for
+Use JLD2 inside Episteme's later AH5 profile (not as a third package) as the Julia-native codec for
 envelope records, schemas, and domain objects that do not need a
 portable subset. Use HDF5.jl for bulk arrays, compression, extendible
 datasets, and later parallel I/O. Keep Episteme schema/provenance/revision

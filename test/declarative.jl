@@ -1,4 +1,4 @@
-OodiCore.check_validation_rule(::Val{:even}, value, parameters) = iseven(value)
+Episteme.check_validation_rule(::Val{:even}, value, parameters) = iseven(value)
 
 @testset "shared declarative schemas" begin
     positive_real = (
@@ -124,7 +124,7 @@ end
     @test !isvalid(validate(SemanticNode(:demo; count = 3), schema))
 end
 
-OodiCore.check_node_validation_rule(::Val{:even_sum}, node, parameters) =
+Episteme.check_node_validation_rule(::Val{:even_sum}, node, parameters) =
     iseven(attribute(node, :left) + attribute(node, :right))
 
 @testset "node-local cross-field rules" begin
@@ -209,6 +209,7 @@ end
         effects = (:network,),
     )
 
+    @test script.kind == Symbol("episteme/script")
     @test attribute(script, :language) == :julia
     @test attribute(script, :effects) == [:network]
     @test attribute(script, :inputs) == [NodeRef(:catalog_id)]

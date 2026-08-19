@@ -1,7 +1,9 @@
 # JLD2 / AH5 persistence spike
 
-Research fixture for [OodiCore.jl#47](https://github.com/ahojukka5/OodiCore.jl/issues/47).
-It does **not** add JLD2 or HDF5 to the OodiCore package.
+Research fixture for [issue #47](https://github.com/ahojukka5/OodiCore.jl/issues/47).
+It does **not** add JLD2 or HDF5 to the Episteme package. The generated
+`excerpts/` are historical evidence and may still mention the former
+`OodiCore` package name.
 
 ```bash
 julia --project=. -e 'using Pkg; Pkg.develop(path="../.."); Pkg.instantiate()'

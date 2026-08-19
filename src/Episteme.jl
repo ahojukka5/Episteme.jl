@@ -1,4 +1,4 @@
-module OodiCore
+module Episteme
 
 include("introspection.jl")
 include("semantic_tree.jl")
@@ -6,7 +6,7 @@ include("declarative.jl")
 include("archive_envelope.jl")
 
 export report, validate, readiness
-export AbstractOodiReport, AbstractValidationReport, AbstractReadinessReport
+export AbstractEpistemeReport, AbstractValidationReport, AbstractReadinessReport
 export AbstractDiagnostic, AbstractPipelineTarget
 export DiagnosticMessage, ValidationReport, ReadinessReport, ObjectReport
 export PipelineTarget, ArtifactRef
@@ -25,4 +25,4 @@ export ArchiveObject, WorkflowHead, ArchiveGraph, ArchiveCatalog
 export ordered_objects, ordered_references, ordered_heads
 export find_object, find_objects, find_revisions
 
-end # module OodiCore
+end # module Episteme
