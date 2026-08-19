@@ -133,7 +133,8 @@ Selected concrete types:
 - `SemanticNode` / `NodeRef` — shared semantic-tree nodes and references.
 - `ValidationRule` / `AttributeSchema` / `NodeSchema` /
   `NodeValidationRule` — local declarative schema vocabulary.
-- `ObjectId` / `RevisionId` / `ContentId` / `WorkflowHeadId` — distinct
+- `ObjectId` / `RevisionId` / `ContentId` / `WorkflowHeadId` /
+  `DocumentId` / `PlanId` / `ActivityId` / `AgentId` — distinct
   archive identities.
 - `ArchiveObject` / `ArchiveReference` / `SchemaRef` / `ArchiveGraph` —
   shared logical archive-envelope records.

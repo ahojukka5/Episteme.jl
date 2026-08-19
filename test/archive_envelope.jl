@@ -51,23 +51,87 @@ end
     revision = RevisionId("same-bytes")
     content = ContentId("same-bytes")
     head = WorkflowHeadId("same-bytes")
+    run = RunId("same-bytes")
+    document = DocumentId("same-bytes")
+    plan = PlanId("same-bytes")
+    activity = ActivityId("same-bytes")
+    agent = AgentId("same-bytes")
 
     @test object isa AbstractArchiveId
+    @test document isa AbstractArchiveId
+    @test plan isa AbstractArchiveId
+    @test activity isa AbstractArchiveId
+    @test agent isa AbstractArchiveId
     @test object != revision
     @test object != content
     @test revision != content
     @test object != head
+    @test document != plan
+    @test plan != run
+    @test plan != activity
+    @test activity != run
+    @test activity != revision
+    @test document != object
+    @test document != content
+    @test document != revision
+    @test agent != run
+    @test agent != activity
     @test object.value == content.value
+    @test plan.value == activity.value
     @test string(object) == "same-bytes"
     @test ObjectId("same-bytes") == object
+    @test PlanId("same-bytes") == plan
     @test isless(ObjectId("a"), ObjectId("b"))
+    @test isless(PlanId("a"), PlanId("b"))
 
     @test_throws ArgumentError ObjectId("")
     @test_throws ArgumentError ObjectId("   ")
     @test_throws ArgumentError RevisionId("")
     @test_throws ArgumentError ContentId("")
+    @test_throws ArgumentError DocumentId("")
+    @test_throws ArgumentError PlanId("   ")
+    @test_throws ArgumentError ActivityId("")
+    @test_throws ArgumentError AgentId("  ")
     @test_throws ArgumentError SchemaRef(:oodi, "", "1.0.0")
     @test_throws ArgumentError SchemaRef(:oodi, "field", "  ")
+end
+
+@testset "plan/document/activity/agent ids hash, show, and serialize" begin
+    value = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    document = DocumentId(value)
+    plan = PlanId(value)
+    activity = ActivityId(value)
+    agent = AgentId(value)
+
+    @test isdefined(Episteme, :DocumentId)
+    @test isdefined(Episteme, :PlanId)
+    @test isdefined(Episteme, :ActivityId)
+    @test isdefined(Episteme, :AgentId)
+    @test :DocumentId in names(Episteme)
+    @test :PlanId in names(Episteme)
+    @test :ActivityId in names(Episteme)
+    @test :AgentId in names(Episteme)
+    @test document isa DocumentId
+    @test plan isa PlanId
+
+    @test hash(DocumentId(value)) == hash(document)
+    @test hash(plan) != hash(activity)
+    @test hash(plan) != hash(RunId(value))
+
+    keyed = Dict{AbstractArchiveId,Symbol}(plan => :plan, activity => :activity)
+    @test keyed[PlanId(value)] === :plan
+    @test keyed[ActivityId(value)] === :activity
+    @test length(Set([document, plan, activity, agent, ObjectId(value)])) == 5
+
+    @test sprint(show, document) == "DocumentId(\"$value\")"
+    @test sprint(show, plan) == "PlanId(\"$value\")"
+    @test sprint(show, activity) == "ActivityId(\"$value\")"
+    @test sprint(show, agent) == "AgentId(\"$value\")"
+
+    @test to_namedtuple(document) == (kind = :DocumentId, value = value)
+    @test to_namedtuple(plan) == (kind = :PlanId, value = value)
+    @test to_namedtuple(activity) == (kind = :ActivityId, value = value)
+    @test to_namedtuple(agent) == (kind = :AgentId, value = value)
 end
 
 @testset "logical scalar and array conventions" begin

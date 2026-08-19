@@ -9,10 +9,14 @@ JLD2-backed AH5 profile inside Episteme; see
 The envelope lets independently owned package payloads share one archive
 without depending on each other or on package-native runtime handles.
 
-## Four identities
+## Identities
 
 These are different types on purpose. Equal byte strings do not make them
 the same kind of identity.
+
+```text
+DocumentId != PlanId != RunId != ActivityId != RevisionId != ObjectId != ContentId
+```
 
 | Type | Meaning |
 | --- | --- |
@@ -20,16 +24,27 @@ the same kind of identity.
 | `RevisionId` | One global workflow revision. Several objects may be materialized in it. |
 | `ContentId` | Logical content identity. Layout/chunking/compression do not belong here; hash rules are #42. |
 | `WorkflowHeadId` | Movable bookmark pointing at a `RevisionId`. |
+| `RunId` | One execution of a plan (or of an ad-hoc operation sequence). |
+| `DocumentId` | Authored semantic document object. Not a revision or content hash. |
+| `PlanId` | Resolved executable plan. Distinct from the source document and from a run. |
+| `ActivityId` | One operation instance inside a run. Bookkeeping only; never an idempotency key. |
+| `AgentId` | Human, software, or LLM actor when provenance needs attribution. Not authn/authz. |
+| `SoftwareEnvironmentId` | Reference to a software-environment record (#37). |
+| `ExecutionContextId` | Reference to an execution-context fingerprint (#43). |
 
-`RunId`, `SoftwareEnvironmentId`, and `ExecutionContextId` are additional
-reference ids. This package stores the ids only. Software manifests are
-#37 and execution fingerprints are #43.
+This package stores the ids only. Document/plan/run *records*, orchestration,
+and `.ah5` persistence are later PRs.
 
 ```julia
 object = ObjectId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 content = ContentId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 object != content          # distinct types
 object.value == content.value
+
+plan = PlanId("same-bytes")
+activity = ActivityId("same-bytes")
+plan != activity
+plan != RunId("same-bytes")
 ```
 
 ### `ObjectId` is archive-global
