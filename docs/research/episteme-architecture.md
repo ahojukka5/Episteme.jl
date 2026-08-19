@@ -24,7 +24,17 @@ The working mission is:
 
 This study pressure-tests that mission against primary documentation of data-versioning, experiment-tracking, workflow, provenance, schema, and migration systems, against the current Oodi ownership split (`docs/archive-ownership.md`, `docs/archive-envelope.md`), and against the JLD2 spike (`research/jld2-ah5-spike/FINDINGS.md`). #25 and #47 decided *mechanisms* (logical envelope vs physical encoding; JLD2-creates-file). They did not demonstrate that those mechanisms need three Julia packages.
 
-**Decision: REVISE the package topology; ACCEPT the mission and conceptual model.** Prefer **end state (A)**: rename/re-scope this repository to `Episteme.jl` and grow it into the long-lived scientific backbone — semantics, runtime, and AH5 storage/profile. Reject **end state (B)** as the locked architecture: a permanently minimal `OodiCore.jl` plus a separate `Episteme.jl` runtime plus a standalone `AH5.jl`. `execute!` records a run and, with the storage subsystem loaded, persists that run log immediately; `commit!` is the only head-mover. Domain packages keep their payloads, schemas, codecs, and operations. “Eventually autonomous” is a destination, not a v1 feature. Whether `using Episteme` eagerly loads HDF5/JLD2 is an implementation choice, not a reason for a third package.
+**Decision: REVISE the package topology; ACCEPT the mission and conceptual model.** Prefer **end state (A)** with this **v1 dependency model**:
+
+```text
+Episteme.jl = semantics + schemas + history/provenance
+            + orchestration protocol
+            + JLD2-backed AH5 persistence
+```
+
+This repository is renamed/re-scoped to `Episteme.jl`. No separate `OodiCore.jl` remains. AH5 is Episteme’s canonical archive/profile, not a Julia package. **JLD2 is a normal hard dependency of Episteme v1** — persistence is first-class, not an optional add-on. **HDF5.jl is not in the initial story**; add it later as `EpistemeHDF5Ext` when we need bulk dataset control or MPI/parallel-HDF5 writes. Do not design `EpistemeJLD2Ext`, an `AbstractStore` hierarchy, or Mongo/Postgres backends now.
+
+Reject **end state (B)** as the locked architecture: a permanently minimal `OodiCore.jl` plus a separate `Episteme.jl` runtime plus a standalone `AH5.jl`. `execute!` records a run and persists that run log immediately; `commit!` is the only head-mover. Domain packages keep their payloads, schemas, codecs, and operations. “Eventually autonomous” is a destination, not a v1 feature.
 
 ---
 
@@ -52,7 +62,7 @@ Issue #24 already describes the long-term scientific archive: append-only revisi
 2. **Envelope is identity, not history.** `ArchiveObject.revision_id` names a workflow revision; parent/input edges are deferred to #30. There is no `Plan` vs `Run`, no activity record, no event stream, no reuse key.
 3. **Two persistence capabilities are still conflated in conversation.** #12 allows arbitrary Julia values in the live tree. #34 wants a portable subset. #47 showed JLD2 can persist the rich tree *and* that JLD2 type metadata is not a scientific schema.
 4. **Agents have generics but no lifecycle.** `report` / `validate` / `readiness` are read-only questions. There is no discover / plan / execute / inspect / branch / rerun / explain surface, and `script_node` still has no trusted runner.
-5. **Domain packages must stay independent of each other.** Monge, Delone, Oodi, Stinespring, Lieb, and Chappe must not depend on one another merely to compose or to read identities. Provider-free cores should not be forced to load CAD, mesh, FEM, or a vendor SDK. Whether they load HDF5 on `using Episteme` is a *loading* choice (weakdeps vs hard deps), not a reason to split the backbone into three packages.
+5. **Domain packages must stay independent of each other.** Monge, Delone, Oodi, Stinespring, Lieb, and Chappe must not depend on one another merely to compose or to read identities. Provider-free cores should not be forced to load CAD, mesh, FEM, MPI, or a vendor SDK. `using Episteme` **does** load JLD2 in v1 (persistence is first-class). HDF5.jl stays out until a later extension needs it. That loading fact is not a reason to split the backbone into three packages.
 
 ### Why study other systems first
 
@@ -68,8 +78,8 @@ The tempting failure modes are well-represented in adjacent ecosystems: treat sc
 - Adopt a conceptual model that distinguishes authored intent, resolved plan, materialized domain objects, measured evidence, and derived analysis.
 - Keep scientific objects (mesh, field, posterior, Hubbard sector, checkpoint) first-class, not as files produced by a shell stage.
 - Make every committed execution inspectable history without turning every solver iteration into a revision.
-- Treat HDF5/JLD2/MPI/XML/vendor-SDK *loading* as an implementation choice. Prefer a light default `using Episteme` via weakdeps if that stays simple; do not make HDF5-free loading a package-topology invariant.
-- Align persistence with the #47 recommendation: JLD2 creates the `.ah5` file; HDF5.jl owns `/data`; Episteme schemas stay independent of JLD2 `_types`. AH5 is the format/profile, not necessarily a Julia package.
+- Make the v1 dependency model explicit: JLD2 is a hard dependency; persistence is first-class; HDF5.jl / MPI / XML / vendor SDKs stay out of the default path until a real need.
+- Align persistence with #47: JLD2 creates the `.ah5` file and is the v1 writer; Episteme schemas stay independent of JLD2 `_types`. HDF5.jl `/data` and parallel writes are a later `EpistemeHDF5Ext`. AH5 is the format/profile, not a Julia package.
 - Define a minimum agent API and a publication boundary (live archive / capsule / FAIR export).
 - Produce an agent-sized PR epic that does **not** start a rename before this document is accepted, and that *does* start the rename once it is.
 
@@ -81,7 +91,7 @@ The tempting failure modes are well-represented in adjacent ecosystems: treat sc
 - Make RDF, JSON-LD, or RO-Crate the internal runtime representation.
 - Copy ML-specific concepts (`Experiment`, `Model Registry` stages, `autolog`) when a general scientific concept exists.
 - Force file-oriented DAG semantics onto semantic-object domains.
-- Over-design secondary storage backends. The `.ah5` HDF5/JLD2 profile is the production persistence path. A small storage abstraction may exist so a later backend is not a rewrite; do not design Mongo/Postgres now.
+- Over-design secondary storage backends. No `AbstractStore` hierarchy, no Mongo/Postgres, no `EpistemeJLD2Ext`. Keep logical identities and layout storage-independent enough that another hierarchical backend is possible later; postpone that abstraction until there is a real second backend. The `.ah5` JLD2-backed profile is the v1 persistence path.
 - Execute user script source, sandbox arbitrary code, or ship a constraint solver.
 - Qualify parallel HDF5/MPI in this document (that remains #29).
 - Decide hash algorithms, exact HDF5 paths, or chunking (those remain #38 / #40 / #42).
@@ -95,23 +105,23 @@ These are the decisions this document commits to. Rationale and use cases follow
 | ID | Decision | Statement |
 | --- | --- | --- |
 | D1 | **REVISE** topology, not the model | Accept the mission and conceptual model (D6–D11, D13–D19). Revise “minimal OodiCore forever” and “standalone AH5.jl”. Prefer end state **(A)** over **(B)**. Reject a separate Loom. |
-| D2 | Name | This repository is renamed/re-scoped to **`Episteme.jl`**. `OodiCore.jl` is not a long-lived product name. Registration has not landed. De-Oodify `AbstractOodiReport`, `oodicore/*` schema namespaces, and related vocabulary during that refactor. |
-| D3 | Topology | **Prefer (A):** one grown `Episteme.jl` owns semantics + runtime + AH5 storage/profile. Domain packages own payloads and operations. No process-global document root. **(B)** (OodiCore + Episteme + AH5 as three packages) is documented below and is **not** the locked end state. |
+| D2 | Name | This repository is renamed/re-scoped to **`Episteme.jl`**. No separate `OodiCore.jl` remains in the end state. Registration has not landed. De-Oodify `AbstractOodiReport`, `oodicore/*` schema namespaces, and related vocabulary during that refactor. |
+| D3 | Topology | **Prefer (A):** one grown `Episteme.jl` owns semantics + runtime + JLD2-backed AH5 persistence. Domain packages own payloads and operations. No process-global document root. **(B)** (OodiCore + Episteme + AH5 as three packages) is documented below and is **not** the locked end state. |
 | D4 | Loom | Issue #5 option 3 (dedicated composition package) is **superseded**. Episteme *is* that package, and it also owns the orchestration *protocol*. Domain execution semantics stay in domain packages. Option 1 (structural/portable document types) is **kept** as types inside Episteme, kinds `episteme/document` and `episteme/plan`. |
-| D5 | Loading ≠ ownership | Conceptual ownership of persistence is Episteme. Whether `using Episteme` eagerly loads HDF5/JLD2 is an **implementation choice**: weakdeps `EpistemeHDF5Ext` / `EpistemeJLD2Ext` if a light default path is worth it; ordinary dependencies if that is simpler. HDF5-free loading is **not** a fundamental architectural invariant and is **not** a reason for a third package. There is no `EpistemeAH5Ext` *package* merely to keep the base path light, and no forever-minimal `OodiCore` to park record types. Domain logic, script execution of untrusted source, and CAD/mesh/FEM/QPU semantics still do not live here. |
+| D5 | v1 dependencies | **JLD2 is a hard dependency of Episteme v1.** Persistence is a first-class capability, not an optional add-on; do not design `EpistemeJLD2Ext` to preserve a minimal base package. **HDF5.jl is not needed for the initial story**; add it later as weakdep `EpistemeHDF5Ext` only for capabilities JLD2 does not provide well (direct bulk dataset control, MPI/parallel-HDF5). MPI, XML, HTTP, and vendor SDKs stay out of `using Episteme` unless requested. There is no standalone `AH5.jl`, no `EpistemeAH5Ext` package, and no forever-minimal `OodiCore`. Domain logic, untrusted script execution, and CAD/mesh/FEM/QPU semantics still do not live here. |
 | D6 | Dual graph | History is **both** an immutable *state-snapshot* graph (`RevisionRecord`) **and** an *activity* graph (`RunRecord` / `ActivityRecord`), linked by generation/usage edges. Both live on `ArchiveGraph` (see D19). |
 | D7 | Spec ≠ materialization | Authored `SemanticDocument` / `Plan` is a first-class object, distinct from resolved defaults, materialized domain objects, runtime evidence, and derived analysis. |
 | D8 | Objects first | The unit of reuse and lineage is a scientific object (`ArchiveObject` + domain payload), not a task or a file path. |
 | D9 | Revisions vs events | A `Revision` is a committed, checkout-able snapshot. Fine-grained solver steps, heartbeats, and logs are `Event`s inside a `Run`, not revisions. |
 | D10 | Reuse is policy | Content identity + declared inputs + code/plan identity + *domain reuse policy* decide cache hits. Blind memoization is forbidden. Reuse **mints a new `ArchiveObject` row** (same `ObjectId` + `ContentId` + payload pointer, new `RevisionId`) on `commit!`; it must not alias the prior envelope row. Domain-owned `idempotency_key` (optional) is the only key for no-double-submit; match is archive-global `(kind, idempotency_key)`, never `WorkflowHeadId`. A missing key means “not idempotent”. |
 | D11 | Two persistences | **Julia-native persistent** (JLD2, default for rich leaves) and **portable declarative** (#34, required for interchange/replay without the owning package). |
-| D12 | Persistence stack | Adopt JLD2 **with constraints** from #47. JLD2 creates the file and owns `/_types`. HDF5.jl writes `/data`. Episteme schemas are independent of JLD2 type metadata. **AH5 is Episteme’s storage/profile subsystem**: `.ah5` is the canonical HDF5/JLD2 format and the first/default hierarchical backend. A small storage abstraction may preserve future extensibility; do not design Mongo/Postgres now. #47 established the codec, not a third package boundary. |
+| D12 | Persistence stack | **AH5 is Episteme’s canonical archive/profile**, implemented on JLD2 / HDF5-*format* semantics, not a Julia package. v1 writer is JLD2: it creates the `.ah5` file and owns `/_types`. Episteme schemas are independent of JLD2 type metadata. **Do not introduce `AbstractStore` or speculative Mongo/Postgres now.** Keep identities and group layout storage-independent enough that another hierarchical backend is possible later; postpone that abstraction until there is a real second backend. HDF5.jl `/data` (chunked, compressed, extendible, collective) is a later `EpistemeHDF5Ext` concern; when it lands, #47 still applies: JLD2 must create the file. #47 established the codec, not a third package boundary. |
 | D13 | Provenance collection | Kedro/Sacred-style hooks collect events without domain-dependency inversion. Domain packages declare *which* events are worth recording. |
 | D14 | Export, not runtime | Internal model is Julia structs. RO-Crate and W3C PROV are export/import profiles, not the store. |
-| D15 | Agent API | Read-only: `discover`, `report`, `validate`, `readiness`, `plan`, `inspect`, `explain`. Mutating: `execute!`, `commit!`, `branch!`, `rerun!`. `inspect` is a lazy in-memory/manifest API (no file I/O required). Payload `checkout` and forensic file inspect live in Episteme’s storage/profile (possibly behind `EpistemeHDF5Ext` / `EpistemeJLD2Ext`). |
+| D15 | Agent API | Read-only: `discover`, `report`, `validate`, `readiness`, `plan`, `inspect`, `explain`. Mutating: `execute!`, `commit!`, `branch!`, `rerun!`. `inspect` is a lazy in-memory/manifest API (no file I/O required). Payload `checkout` and forensic file inspect live in Episteme’s JLD2-backed AH5 profile. Later `EpistemeHDF5Ext` may serve bulk `/data` checkout. |
 | D16 | Publication | Three products: live working archive (`.ah5`), reproduction capsule (#35), FAIR research-object export (RO-Crate + PROV). Capsules that need Julia-native `/packages` declare `:trusted_code_required` in `readiness`. |
 | D17 | Autonomous is later | “Eventually autonomous” does not authorize implicit script execution, unconstrained tool use, or an agent that commits revisions without a human- or policy-gated head. |
-| D18 | Execute vs commit | `execute!` records a `Run` + `Activity`s + `Event`s and never moves a head. `commit!(head, run)` is the only head-mover and the only creator of a `RevisionRecord`. Default `CommitPolicy` is `:explicit` (agents/interactive); `:auto` is an opt-in for batch. Failed runs never create a revision unless an explicit failed-commit policy is set. **Persist is split:** with the storage/profile loaded, `execute!` appends the run log (runs, activities, events, idempotency index, optional run-attached evidence bytes) to the live `.ah5` immediately. `commit!` promotes staged snapshot payloads into `graph.objects` as new envelope rows and moves the head. A live archive may contain runs with `revision_id === nothing`. Without the storage backend loaded, the same facts exist only in the in-memory `ArchiveGraph`. |
+| D18 | Execute vs commit | `execute!` records a `Run` + `Activity`s + `Event`s and never moves a head. `commit!(head, run)` is the only head-mover and the only creator of a `RevisionRecord`. Default `CommitPolicy` is `:explicit` (agents/interactive); `:auto` is an opt-in for batch. Failed runs never create a revision unless an explicit failed-commit policy is set. **Persist is split, and persistence is first-class in v1:** `execute!` appends the run log (runs, activities, events, idempotency index, optional run-attached evidence bytes) to the live `.ah5` immediately via JLD2. `commit!` promotes staged snapshot payloads into `graph.objects` as new envelope rows and moves the head. A live archive may contain runs with `revision_id === nothing`. Tests may still construct an in-memory `ArchiveGraph` without opening a file. |
 | D19 | ArchiveGraph is the container | `ArchiveGraph` gains `revisions`, `runs`, and `events` vectors next to `objects` and `heads`. Object-set of a revision is derived (`find_objects`); `RunRecord.revision_id` may be `nothing`. The same `ObjectId` may appear under many `RevisionId`s as distinct `ArchiveObject` rows that share a `ContentId`. Plans and portable documents are ordinary `ArchiveObject`s under namespace `:episteme` / kinds `episteme/document` and `episteme/plan`. |
 | D20 | Axis-2 writer | Shared envelope/plan/run schema *transforms* are written in Episteme (storage/profile for physical-adjacent records) and run by Episteme’s migration runner. `SchemaRef` + compatibility + migration identifiers live next to those transforms. Namespace for those schemas is `:episteme`. |
 
@@ -127,7 +137,7 @@ Working statement, kept:
 
 Refined operational reading:
 
-> Episteme.jl is the long-lived scientific backbone: it owns the shared semantic contracts, composes independently owned scientific packages into one inspectable research document, records immutable revisions of what was intended and what was realized, persists that history in the `.ah5` profile, and exposes a trusted execution protocol that agents can drive. It does not own CAD, mesh, FEM, QPU, Hubbard, or LLM semantics. Opening HDF5/JLD2 files is a storage-subsystem concern and may be optional at load time; it is not a reason to split the backbone.
+> Episteme.jl is the long-lived scientific backbone: it owns the shared semantic contracts, composes independently owned scientific packages into one inspectable research document, records immutable revisions of what was intended and what was realized, persists that history in a JLD2-backed `.ah5` profile, and exposes a trusted execution protocol that agents can drive. It does not own CAD, mesh, FEM, QPU, Hubbard, or LLM semantics. Persistence is first-class in v1 (JLD2 is a hard dependency). HDF5.jl is a later extension, not a reason to split the backbone.
 
 “Autonomous” means: an agent can discover capabilities, propose a plan, execute allowed operations, inspect evidence, and branch history *using the same contracts a human uses*. It does not mean Episteme executes untrusted source or invents domain operations.
 
@@ -137,13 +147,13 @@ Issue #48 exists to reconsider package ownership, not to freeze #25. Two end sta
 
 #### End state (A) — preferred: grown `Episteme.jl`
 
-This repository is renamed/re-scoped to `Episteme.jl`. One package owns:
+This repository is renamed/re-scoped to `Episteme.jl`. No separate `OodiCore.jl` remains. One package owns:
 
 - shared generics, semantic tree, local schemas, script contract, archive envelope;
 - live composition, `NodeRef` resolution, orchestration protocol, agent API;
-- the AH5 storage/profile (`.ah5` format, JLD2 + HDF5.jl encoding, inspect / verify / migrate / checkout).
+- the AH5 archive/profile, **JLD2-backed in v1** (`.ah5` format, inspect / verify / migrate / checkout).
 
-Domain packages own payloads, operations, reuse policy, and `idempotency_key`. They depend on Episteme (hard or weak). They register operations and codecs by push from `*EpistemeExt` (and, if storage is a weakdep, when the HDF5/JLD2 extensions are loaded).
+Domain packages own payloads, operations, reuse policy, and `idempotency_key`. They depend on Episteme (hard or weak). They register operations and codecs by push from `*EpistemeExt`.
 
 ```mermaid
 flowchart TB
@@ -163,8 +173,8 @@ flowchart TB
             A["Agent API"]
             H["Hook dispatcher"]
         end
-        subgraph io["AH5 storage / profile subsystem"]
-            F[".ah5 profile, JLD2 + HDF5.jl"]
+        subgraph io["AH5 archive / profile (v1: JLD2)"]
+            F[".ah5 profile, JLD2 hard dep"]
             I["forensic inspect / verify / migrate / checkout"]
         end
     end
@@ -190,17 +200,17 @@ flowchart TB
     St -.->|"*EpistemeExt"| runtime
     L -.->|"*EpistemeExt"| runtime
     C -.->|"*EpistemeExt"| runtime
-    io -.->|"optional EpistemeHDF5Ext / EpistemeJLD2Ext"| F
+    io -.->|"later EpistemeHDF5Ext"| F
 ```
 
 Allowed edges:
 
 ```text
 domain            -> Episteme           (hard or weak; package choice)
-EpistemeHDF5Ext   -> Episteme + HDF5.jl (optional; load choice)
-EpistemeJLD2Ext   -> Episteme + JLD2    (optional; load choice)
+Episteme          -> JLD2               (hard, v1)
+EpistemeHDF5Ext   -> Episteme + HDF5.jl (later; bulk /data, MPI/parallel-HDF5)
 EpistemeXDMFExt   -> Episteme + XML     (optional view layer)
-EpistemeMPIExt    -> Episteme + MPI     (optional parallel I/O)
+EpistemeMPIExt    -> Episteme + MPI     (optional; typically with HDF5Ext)
 domain *Ext       -> Episteme           (operations, codecs, projections)
 ```
 
@@ -210,9 +220,10 @@ Forbidden edges:
 Episteme          -> any domain package
 domain A          -> domain B           merely to compose or read identities
 domain package    -> HDF5.jl            as a private archive framework
+Episteme v1       -> HDF5.jl            (defer to EpistemeHDF5Ext)
 ```
 
-`using Episteme` **may** stay free of HDF5/JLD2 if those are weakdeps. It **need not**, if a hard dependency is the simpler design. Either way, persistence *belongs* to Episteme. There is no standalone `AH5.jl` and no `EpistemeAH5Ext` package whose only job is to re-create the #25 split.
+`using Episteme` loads JLD2. That is the v1 product, not a defect. There is no `EpistemeJLD2Ext`, no standalone `AH5.jl`, and no `EpistemeAH5Ext` package whose only job is to re-create the #25 split.
 
 #### End state (B) — not locked: OodiCore + Episteme + AH5
 
@@ -226,9 +237,9 @@ This matches the letter of #25 and of issue #5 option 3. It keeps `using OodiCor
 | --- | --- | --- |
 | Long-lived product name | `Episteme.jl`; de-Oodify now, registration has not landed | `OodiCore` remains the shared name forever |
 | Where the model lives | One backbone: document → plan → run → commit | Record types in OodiCore, runtime in Episteme, bytes in AH5 |
-| AH5 | Format/profile *inside* Episteme | Third package because HDF5 is heavy |
-| Loading HDF5/JLD2 | Implementation choice (weakdeps vs deps) | Used as the *reason* for AH5.jl |
-| Provider-free Chappe/Lieb | Possible via weakdeps, or via not using storage | Guaranteed `using OodiCore` is light; two extra packages to learn |
+| AH5 | Canonical archive/profile *inside* Episteme | Third package because HDF5 is heavy |
+| v1 writer | JLD2 hard dep; HDF5.jl later as `EpistemeHDF5Ext` | Used as the *reason* for AH5.jl |
+| Provider-free Chappe/Lieb | `using Episteme` loads JLD2; still no CAD/mesh/FEM/MPI/vendor SDK | Guaranteed `using OodiCore` is light; two extra packages to learn |
 | Loom (#5 option 3) | Absorbed | Reappears as “Episteme the runtime” |
 | User expectation | Large refactor is expected now | Avoids rename churn that has not actually started |
 | Survey evidence | Neutral on package count; strong on one object model | Not supported by the survey; inherited from #25 |
@@ -237,7 +248,7 @@ This matches the letter of #25 and of issue #5 option 3. It keeps `using OodiCor
 
 **What this keeps from issue #5 option 1.** A narrowly structural, serializable document envelope (`DocumentId`, `PortableSemanticDocument`, fail-closed capture) still exists. It has no resolution, no execution order, and no process-global root. It lives in Episteme under `episteme/*`, not in a forever-separate OodiCore. Git-diffable form is the portable document (and its S-expr view). JLD2 persist is not Git-diffable and is not the interchange contract.
 
-**What remains true of `AGENTS.md` until the rename lands.** Today this repository is still called OodiCore and is still stdlib-only. After acceptance, `AGENTS.md` is rewritten for Episteme: domain-neutral, no CAD/mesh/FEM, no untrusted script execution. File-format backends become Episteme’s storage/profile, optionally behind extensions. Downstream packages extend `report` / `validate` / `readiness` on the Episteme generics (compat shims for `OodiCore` may exist for one migration window).
+**What remains true of `AGENTS.md` until the rename lands.** Today this repository is still called OodiCore and is still stdlib-only. After acceptance, `AGENTS.md` is rewritten for Episteme: domain-neutral, no CAD/mesh/FEM, no untrusted script execution, **JLD2 as a hard dependency**, AH5 as the in-package profile. Downstream packages extend `report` / `validate` / `readiness` on the Episteme generics (compat shims for `OodiCore` may exist for one migration window).
 
 ### 3. Conceptual model and vocabulary
 
@@ -360,7 +371,7 @@ struct ArchiveGraph
 end
 ```
 
-There is no separate `ArchiveSession`. Episteme holds an in-memory `ArchiveGraph` and optionally persists it through its AH5 storage/profile (possibly `EpistemeHDF5Ext` / `EpistemeJLD2Ext`). The storage subsystem does not grow a second graph.
+There is no separate `ArchiveSession`. Episteme holds an in-memory `ArchiveGraph` and persists it through its JLD2-backed AH5 profile. The profile does not grow a second graph.
 
 **Invariants** (`validate(graph)` must report violations):
 
@@ -369,7 +380,7 @@ There is no separate `ArchiveSession`. Episteme holds an in-memory `ArchiveGraph
 | Revision exists | Every `ArchiveObject.revision_id` names a `RevisionRecord` in `graph.revisions`. |
 | Object set is derived | The object set of a revision *is* `find_objects(graph, revision_id)`. `RevisionRecord` does **not** store a duplicated object-id list. Dual bookkeeping is forbidden. |
 | Head target | Every `WorkflowHead.revision_id` names a `RevisionRecord`. |
-| Run without snapshot | A `RunRecord.revision_id` may be `nothing` (failed, still running, or not-yet-committed). That run and its events remain in the graph **and**, when the storage/profile is loaded, in the live `.ah5`. Uncommitted history is not process-local. |
+| Run without snapshot | A `RunRecord.revision_id` may be `nothing` (failed, still running, or not-yet-committed). That run and its events remain in the graph **and** in the live `.ah5`. Uncommitted history is not process-local. |
 | Run with snapshot | If `revision_id` is set, that `RevisionRecord.run_id` is this run (or a listed producing run). |
 | Parent DAG | `RevisionRecord.parents` is a list of `RevisionId`s present in `graph.revisions`. Cycles and dangling parents fail (`:cycle`, `:dangling_parent`). Parents are revision edges, not object edges. |
 | Activity belongs to a run | Every `ActivityRecord.run_id` names a `RunRecord`. Events optionally name an activity. |
@@ -444,8 +455,8 @@ A Stinespring raw shot record is **evidence**. A posterior update is a **new arc
 Linkage:
 
 - `execute!` never produces a `Revision`. A later `commit!(head, run)` *may* create one and move the head (D18).
-- A failed run stays in `graph.runs` with `revision_id === nothing` unless an explicit failed-commit policy is set. With the storage/profile loaded, that row is appended to the live `.ah5` at `execute!` time (lakeFS uncommitted staging vs committed snapshot, **both durable**).
-- `ArchiveObject.revision_id` is the snapshot that contains that object version (already specified). Uncommitted *snapshot payloads* produced by a run that has not been committed are **not** in `graph.objects` yet. They sit in a run-local staging set that `commit!` promotes into new `ArchiveObject` rows. Staging is not a second archive schema; with the `.ah5` backend, run-attached evidence bytes (e.g. Stinespring shots that must survive a crash) may be stored under a run-scoped path, still without a `RevisionId`.
+- A failed run stays in `graph.runs` with `revision_id === nothing` unless an explicit failed-commit policy is set. That row is appended to the live `.ah5` at `execute!` time (lakeFS uncommitted staging vs committed snapshot, **both durable**).
+- `ArchiveObject.revision_id` is the snapshot that contains that object version (already specified). Uncommitted *snapshot payloads* produced by a run that has not been committed are **not** in `graph.objects` yet. They sit in a run-local staging set that `commit!` promotes into new `ArchiveObject` rows. Staging is not a second archive schema; run-attached evidence bytes (e.g. Stinespring shots that must survive a crash) may be stored under a run-scoped path, still without a `RevisionId`.
 - Reuse / idempotent replay copies `ObjectId` + `ContentId` + payload pointer into that staging set. It does **not** attach the prior `ArchiveObject` (that row’s `revision_id` is the old snapshot). `commit!` writes a new envelope row so `find_objects(graph, new_revision)` includes the reused object.
 - `ArchiveObject.run_id` (already optional on the envelope) points at the producing run. On a reuse row it may point at the run that *reused* it; the activity’s `generated` refs may still name the prior version as the reuse source.
 - `Activity` records the generating operation, used object versions, and optional `idempotency_key`.
@@ -460,7 +471,7 @@ sequenceDiagram
     participant H as Human or agent
     participant E as Episteme
     participant D as Domain package
-    participant AH as AH5 storage (optional)
+    participant AH as AH5 profile (JLD2)
     participant X as Export
 
     H->>E: author / load SemanticDocument
@@ -483,19 +494,15 @@ sequenceDiagram
         E->>E: append Events (not revisions)
     end
     Note over E: Run + Events in ArchiveGraph; head unchanged
-    opt storage/profile loaded
-        E->>AH: append runs / events / idempotency index / run-attached evidence
-        Note over AH: still no RevisionRecord; objects not promoted
-    end
+    E->>AH: append runs / events / idempotency index / run-attached evidence
+    Note over AH: still no RevisionRecord; objects not promoted
     alt CommitPolicy :explicit (default)
         H->>E: commit!(head, run)
     else CommitPolicy :auto (batch opt-in)
         E->>E: commit!(head, run)
     end
     E->>E: create RevisionRecord; mint new ArchiveObject rows; move WorkflowHead
-    opt storage/profile loaded
-        E->>AH: append objects / revision / head
-    end
+    E->>AH: append objects / revision / head
     opt publish
         E->>X: capsule and/or RO-Crate + PROV
     end
@@ -511,7 +518,7 @@ Stages that must remain distinguishable (acceptance criterion):
 | Measured evidence | evidence-kind objects, immutable | Stinespring shots, Chappe latency table |
 | Derived analysis | new objects, new revision, pinned inputs | postprocessed flux; Lieb sweep plot |
 
-Checkout/debug/replay: `branch!(head, from::RevisionId)` does not need the storage backend (it only writes a `WorkflowHead` pointer). Payload `checkout` is the AH5 storage/profile. A failed run keeps its `Run` + `Event`s with `revision_id === nothing` **in the graph and, if storage is loaded, on disk**; the operator can `branch!` from the last good revision and `rerun!` from a named activity, Metaflow-style, without inventing a revision per event. `rerun!` is `execute!` from an activity; it still does not move the head until `commit!`. Idempotency still matches archive-global `(kind, idempotency_key)` after `branch!`.
+Checkout/debug/replay: `branch!(head, from::RevisionId)` only writes a `WorkflowHead` pointer. Payload `checkout` is the AH5 profile. A failed run keeps its `Run` + `Event`s with `revision_id === nothing` **in the graph and on disk**; the operator can `branch!` from the last good revision and `rerun!` from a named activity, Metaflow-style, without inventing a revision per event. `rerun!` is `execute!` from an activity; it still does not move the head until `commit!`. Idempotency still matches archive-global `(kind, idempotency_key)` after `branch!`.
 
 ### 7. What Episteme owns vs what domains own (architecture question 3)
 
@@ -520,7 +527,7 @@ Under end state (A) there is no third ownership column for a standalone AH5 pack
 | Episteme semantics + runtime | Episteme AH5 storage/profile | Domain-owned |
 | --- | --- | --- |
 | Generic functions, tree, local schemas, id types | `.ah5` profile, HDF5 encoding | Payload types and scientific meaning |
-| `DocumentId`, `PortableSemanticDocument`, Plan/Run/Activity/Event/Revision records | JLD2/HDF5 writers, `/data` | Operation implementations + `register_operation!` |
+| `DocumentId`, `PortableSemanticDocument`, Plan/Run/Activity/Event/Revision records | JLD2 v1 writer; later HDF5.jl `/data` | Operation implementations + `register_operation!` |
 | Live document composition, `NodeRef` resolution | Migration *runner* | Domain constraints / equations; payload migration *functions* |
 | Orchestration protocol, trusted script runner | Integrity hash compute (#42) | Which events are worth recording |
 | Hook dispatch, event schema, content-hash *rules* as data | Codec registry, forensic file inspect, payload `checkout` | Reuse *policy* and `idempotency_key` |
@@ -611,24 +618,24 @@ before_object_store / after_object_store
 | Local declarative nodes (`NodeSchema` trees) | kind + attributes | Yes (`NodeSchema`) | Portable if leaves are portable |
 | Domain scientific payloads | package `kind` + `SchemaRef` | **Yes** — this is the scientific contract | Julia-native by default; portable codec optional |
 | Rich live leaves (duals, custom structs) | Julia type | No Episteme schema | JLD2; reject handles/ptrs/comms |
-| Bulk arrays | `ContentId` + `LogicalArraySpec` | Logical spec yes; physical layout no | HDF5.jl `/data` |
+| Bulk arrays | `ContentId` + `LogicalArraySpec` | Logical spec yes; physical layout no | JLD2 in v1; later HDF5.jl `/data` via `EpistemeHDF5Ext` |
 | Unsafe (MPI comm, IO, GPU array, closure, task, provider client) | — | — | **Reject at codec boundary** (#47) |
 
 JLD2 `Upgrade` / `typemap` reconstructs a Julia struct. It does not answer “did `lieb/hubbard-sector` change meaning?” That remains `SchemaRef` + #41.
 
 ### 11. `using Episteme` vs extensions (architecture question 10)
 
-Loading is an implementation choice (D5), not ownership. A *reasonable default* if Chappe/Lieb provider-free CI still matters:
+v1 is explicit (D5). Persistence is in the package, not behind a JLD2 extension.
 
-| Always in `using Episteme` | Optional extension / backend |
+| Always in `using Episteme` (v1) | Later / optional |
 | --- | --- |
-| Generics, tree, schemas, envelope, Plan/Run/Activity/Event/Revision records | `EpistemeHDF5Ext` / `EpistemeJLD2Ext` — persist run log on `execute!`; persist objects/revision/head on `commit!`; forensic inspect; payload `checkout` |
-| Plan compile, in-memory `ArchiveGraph`, live composition | `EpistemeMPIExt` — parallel I/O if any |
-| Hook dispatcher, agent API (in-memory) | `EpistemeXDMFExt` — XML view layer |
-| Trusted runner *protocol* (no default eval of untrusted source) | RO-Crate/PROV exporter (optional dep) |
-| Revision graph in RAM | Language runners (`JuliaRunner` may live here but must be explicit); heavy plot/report renderers |
+| Generics, tree, schemas, envelope, Plan/Run/Activity/Event/Revision records | `EpistemeHDF5Ext` — bulk `/data`, chunk/compress/extendible, MPI/parallel-HDF5 when JLD2 is not enough |
+| **JLD2** (hard dependency) | `EpistemeMPIExt` — typically with HDF5Ext |
+| JLD2-backed AH5 persist on `execute!` / `commit!`; forensic inspect; payload `checkout` | `EpistemeXDMFExt` — XML view layer |
+| Plan compile, in-memory `ArchiveGraph`, live composition | RO-Crate/PROV exporter (optional dep) |
+| Hook dispatcher, agent API, trusted runner *protocol* | Language runners (`JuliaRunner` may live here but must be explicit); heavy plot/report renderers |
 
-If that extension maze is worse than a hard HDF5/JLD2 dependency, **use the hard dependency**. Do not invent a second contracts package or a standalone `AH5.jl` to recover a light `using` path. Do not load CAD, mesh, FEM, MPI, XML, HTTP, or a vendor SDK unless that backend is requested.
+Do not design `EpistemeJLD2Ext`. Do not invent a second contracts package or a standalone `AH5.jl`. Do not load CAD, mesh, FEM, MPI, XML, HTTP, or a vendor SDK unless that backend is requested.
 
 ### 12. Publication / reproduction boundary (architecture question 11)
 
@@ -903,17 +910,21 @@ Recommendation: **adopt with constraints.**
 
 Confirmed: lossless round-trip of `SemanticNode` with custom structs, duals, graphs/cycles, envelope types, sparse matrices; HDF5.jl can read numeric datasets; mixed path “JLD2 metadata + HDF5.jl `/data`” works **only if JLD2 creates the file**. HDF5.jl-first files do not persist JLD2 writes. `/_types` is reserved. JLD2 `Upgrade` reconstructs structs; it is not a scientific schema. Forensic process without original modules yields `ReconstructedStatic` / `plain` NamedTuples. Unsafe: `Ptr` reloads as null — silent loss. Parallel HDF5 **not qualified** (serial analogue only).
 
-Implications for Episteme are D11–D12 above. Layout to keep (pressure-tested, not re-specified here):
+Implications for Episteme are D11–D12 above. **v1 layout is JLD2 throughout.** The mixed path remains the rule for a later `EpistemeHDF5Ext`, not the v1 writer:
 
 ```text
+v1 (JLD2 owns the file):
 /episteme/     JLD2   profile
 /schemas/      JLD2   semantic schemas
 /revisions/    JLD2   workflow history
 /objects/      JLD2   envelope index
-/events/       JLD2 or HDF5.jl extendible
+/events/       JLD2
 /packages/     JLD2   domain Julia-native objects
 /_types/       JLD2 only
-/data/         HDF5.jl only
+
+later EpistemeHDF5Ext (JLD2 must still create the file):
+/events/       may become HDF5.jl extendible
+/data/         HDF5.jl only — bulk arrays, chunk/compress/MPI
 ```
 
 ---
@@ -985,7 +996,7 @@ end
 discover(x)                              # capabilities, operations, schemas, heads
 # report, validate, readiness            # existing generics; add document/plan/run methods
 plan(document)                           # -> Plan + ValidationReport; optional head is context only
-execute!(plan; policy)                   # records Run + Events; persists run log if storage loaded; does NOT move a head
+execute!(plan; policy)                   # records Run + Events; persists run log to .ah5; does NOT move a head
 commit!(head, run; policy)               # only head-mover; new ArchiveObject rows + RevisionRecord
 inspect(rev_or_run)                      # lazy in-memory manifest; no file I/O required
 branch!(head, from::RevisionId; name)    # pointer only; no storage backend required
@@ -993,14 +1004,14 @@ rerun!(from::ActivityId; policy)         # execute! from an activity; still need
 explain(x)                               # structured provenance narrative for agents
 ```
 
-Storage/profile (same package; may require HDF5/JLD2 extensions):
+AH5 profile (same package; JLD2 in v1):
 
 ```julia
 inspect_archive(path)                    # forensic file inspect; no domain package
 checkout(path, revision_id)              # may load payloads from /data
 ```
 
-`discover` / `inspect` / `explain` / `plan` are read-only. `execute!` mutates the run/event log (RAM always; live `.ah5` when the storage/profile is loaded) and never moves a head. `commit!` and `branch!` mutate heads, never historical revisions. `rerun!` is `execute!` + optional `commit!` according to `CommitPolicy`.
+`discover` / `inspect` / `explain` / `plan` are read-only. `execute!` mutates the run/event log (RAM and live `.ah5`) and never moves a head. `commit!` and `branch!` mutate heads, never historical revisions. `rerun!` is `execute!` + optional `commit!` according to `CommitPolicy`.
 
 `script_node` execution: Episteme’s trusted runner binds declared `inputs`/`outputs`, checks `effects` (`:network`, `:filesystem`), and still does not eval unsanctioned source. This is the AGENTS.md §9 boundary, now with an owner. Documents containing `script_node` cannot `execute!` until the runner protocol is present.
 
@@ -1087,17 +1098,17 @@ Alembic-style **schema** branches are allowed (two heads on `oodi/field` while a
 
 ## Storage / persistence conclusions (informed by #47)
 
-1. **Do not design a second production backend.** No Postgres-for-metadata, no Mongo-for-runs. If we ever need a service index, it is a *projection* of the archive, not the source of truth. A small storage abstraction inside Episteme is enough to keep a later backend from being a rewrite.
-2. **The `.ah5` HDF5/JLD2 profile is the working archive.** JLD2 is a codec inside Episteme’s AH5 storage/profile, not a reason for a third package. #47 established the mechanism.
-3. **File creation constraint is architectural.** The `.ah5` writer must create files with JLD2. Documented interop failure (HDF5.jl-first) is a hard rule, not a footnote.
+1. **Do not design a second production backend.** No Postgres-for-metadata, no Mongo-for-runs, no `AbstractStore` hierarchy. If we ever need a service index, it is a *projection* of the archive, not the source of truth. Keep identities and group layout storage-independent enough that another hierarchical backend is possible later; postpone that abstraction until there is a real second backend.
+2. **The `.ah5` profile is the working archive.** v1 is JLD2-backed, in Episteme, not a third package. #47 established the codec.
+3. **File creation constraint is architectural.** The `.ah5` writer must create files with JLD2. Documented interop failure (HDF5.jl-first) is a hard rule for the later mixed path, not a reason to take HDF5.jl in v1.
 4. **`/_types` is JLD2-owned.** Reserved root is `/episteme` (or `/ah5` — pick in #40; do not bike-shed here). `#47` preferred `/episteme`.
-5. **Heavy arrays in `/data` via HDF5.jl**, chunked/compressed/extendible. Logical identity in JLD2 points at a dataset path + `ContentId`, never a Julia pointer.
+5. **v1 stores arrays with JLD2.** Later `EpistemeHDF5Ext` may put heavy arrays in `/data` via HDF5.jl (chunked/compressed/extendible/collective). Logical identity points at a dataset path + `ContentId`, never a Julia pointer.
 6. **Reject unsafe types at the codec boundary.** MPI communicators, IO, GPU arrays, closures, tasks, provider clients, `Ptr`. JLD2 will otherwise silently null pointers.
-7. **Forensic read:** file inspect uses HDF5 names + portable envelope first; JLD2 `plain` is fallback; missing package → `:type_unavailable`; missing `/schemas` → `:missing_schema`. Full JLD2 load is trusted replay only, after #42 hashes and a package allow-list.
-8. **Parallel I/O:** rank 0 JLD2 create/close; all ranks HDF5.jl collective on `/data`; rank 0 JLD2 reread. Not qualified until #29.
-9. **Events** may be an extendible HDF5 table so heartbeats do not rewrite JLD2 compounds.
+7. **Forensic read:** file inspect uses portable envelope first; JLD2 `plain` is fallback; missing package → `:type_unavailable`; missing `/schemas` → `:missing_schema`. Full JLD2 load is trusted replay only, after #42 hashes and a package allow-list.
+8. **Parallel I/O** is a later `EpistemeHDF5Ext` + MPI concern, not v1. Rank-0 JLD2 create/close + collective `/data` is the sketch when it lands. Not qualified until #29.
+9. **Events** may later become an extendible HDF5 table so heartbeats do not rewrite JLD2 compounds. v1 events are JLD2.
 10. **External artifacts** (DataLad lesson): giant Chappe checkpoints stay outside with a `ContentId` and an availability bit. The archive is still the source of *identity and provenance*.
-11. **Split persist points (D18).** `execute!` through the storage/profile appends `graph.runs` / activities / `events` / the idempotency index (and optional run-attached evidence) without a `RevisionRecord`. `commit!` appends new `ArchiveObject` rows, the revision, and the moved head. Uncommitted runs are first-class rows in a live `.ah5`. Whether `using Episteme` opens files is a load-time choice (D5), not ownership.
+11. **Split persist points (D18).** `execute!` appends `graph.runs` / activities / `events` / the idempotency index (and optional run-attached evidence) without a `RevisionRecord`. `commit!` appends new `ArchiveObject` rows, the revision, and the moved head. Uncommitted runs are first-class rows in a live `.ah5`. Persistence is first-class in v1 because JLD2 is a hard dependency.
 
 Expected scale (order-of-magnitude, not a benchmark):
 
@@ -1141,7 +1152,7 @@ flowchart LR
 | `validate(x)` | no | `ValidationReport` (`DiagnosticMessage.code` + `context`) | “is it well-formed?” |
 | `readiness(x, target)` | no | `ReadinessReport` | “can I solve / acquire / publish?” |
 | `plan(document)` | no | `Plan` + diagnostics | “what would run?” |
-| `execute!(plan; policy)` | run/event log (RAM; `.ah5` if storage loaded) | `RunRecord` (`revision_id === nothing`) | “do it, don’t publish yet” |
+| `execute!(plan; policy)` | run/event log (RAM and `.ah5`) | `RunRecord` (`revision_id === nothing`) | “do it, don’t publish yet” |
 | `commit!(head, run; policy)` | head + new `RevisionRecord` + new `ArchiveObject` rows | `RevisionId` | “publish this run to the head” |
 | `inspect(id)` | no | lazy in-memory manifest (no file I/O required) | “show me revision/run/activity” |
 | `inspect_archive(path)` | no | forensic file view | “open this `.ah5` without the domain” |
@@ -1179,8 +1190,8 @@ Follow Pydantic and the existing diagnostic types: every failure is a `Diagnosti
 ### Alt 1 — End state (A): rename/re-scope OodiCore → Episteme and grow it (preferred)
 
 - **Pros:** one long-lived scientific backbone; one name to teach; de-Oodify `AbstractOodiReport` / `oodicore/*` while registration has not landed; AH5 is a format/profile rather than a third ontology; #47’s codec does not force a package boundary; matches the user’s expectation of a large refactor now.
-- **Cons:** the package grows; `using Episteme` may load more than today’s `using OodiCore`; dependents update imports. Loading cost is mitigated by weakdeps if we want it (D5), not by keeping a forever-minimal contracts package.
-- **Accepted as the end state.** Not “naive ACCEPT”: domain semantics still stay out; untrusted script execution still stays out; `.ah5` remains the first backend; Mongo/Postgres are still not designed here.
+- **Cons:** the package grows; `using Episteme` loads JLD2; dependents update imports. That is the intended v1 product, not a defect to paper over with `EpistemeJLD2Ext`.
+- **Accepted as the end state.** Not “naive ACCEPT”: domain semantics still stay out; untrusted script execution still stays out; JLD2-backed `.ah5` is the v1 archive; HDF5.jl / Mongo / Postgres / `AbstractStore` are still not designed here.
 
 ### Alt 2 — REJECT Episteme; keep OodiCore + Loom + AH5 forever
 
@@ -1261,13 +1272,13 @@ Logging is structured events, not captured stdout as the archive (Sacred 16 MB l
 2. Rename/re-scope this repository `OodiCore.jl` → `Episteme.jl`. De-Oodify `AbstractOodiReport` and adopt `episteme/*` namespaces. A short `OodiCore` compat shim is allowed for one migration window.
 3. Land record types, `ArchiveGraph` additive fields, and portable-document types in Episteme (does not close #30/#34/#44 as products).
 4. Grow composition, hook stub, and script-runner *protocol* in the same package. Protocol lands before `execute!` of documents that contain `script_node`.
-5. Land the AH5 storage/profile **in Episteme** (not a new repository): encode the JLD2-creates-file constraint, behind `EpistemeHDF5Ext` / `EpistemeJLD2Ext` or as ordinary deps (D5). Exact HDF5 paths, profile signature, and hash algorithms remain #38/#40/#42 and are **not** closed here. Preferred root group `/episteme` is a suggestion for #40.
+5. Land the AH5 profile **in Episteme** with **JLD2 as a hard dependency**. Encode the JLD2-creates-file constraint. Do not add HDF5.jl until `EpistemeHDF5Ext` is justified. Exact HDF5 paths, profile signature, and hash algorithms remain #38/#40/#42 and are **not** closed here. Preferred root group `/episteme` is a suggestion for #40.
 6. Domain `*EpistemeExt` one package at a time (Monge first for documents, Oodi for runs, Stinespring for evidence immutability). Codecs register with Episteme’s storage registry, not with a standalone AH5 package.
 7. Export profile last (RO-Crate/PROV), after a real revision exists to export.
 
 Rollback: the rename is the one hard cut. Record types remain useful even if composition is later ripped out. Heads and revisions are inspectable as data without executing a plan.
 
-Feature flags: none required. Storage features are “are HDF5/JLD2 loaded?” Domain composition features are “did this domain register?” `using Oodi` must not load other domains. Whether it loads HDF5 follows D5.
+Feature flags: none required. Persistence is always present in v1 (JLD2). Domain composition features are “did this domain register?” `using Oodi` must not load other domains. HDF5.jl stays out until `EpistemeHDF5Ext`.
 
 ---
 
@@ -1281,7 +1292,7 @@ Feature flags: none required. Storage features are “are HDF5/JLD2 loaded?” D
 - The name **Episteme.jl** for the long-lived scientific backbone (this repository, renamed/re-scoped).
 - Ideas **A–H** as qualified in the table (policy-gated reuse; export-not-runtime PROV/RO-Crate; hooks; dual persistences; objects first; spec ≠ run; inspectable runs; immutable revisions + heads).
 - The conceptual lifecycle: `SemanticDocument → Plan → Run/Activity/Event → commit → Revision`, dual history graph, object-centric lineage, explicit `execute!` vs `commit!`, domain-owned operations/reuse, Julia-native vs portable persistence, PROV/RO-Crate export.
-- `.ah5` + constrained JLD2 as the persistence *mechanism* (#47).
+- JLD2-backed `.ah5` as the v1 persistence *mechanism* (#47). HDF5.jl later as `EpistemeHDF5Ext`.
 - Agent API and three-tier publication.
 
 ### End states compared
@@ -1291,9 +1302,9 @@ Feature flags: none required. Storage features are “are HDF5/JLD2 loaded?” D
 | Packages | One backbone | Three |
 | Semantics | Episteme | OodiCore |
 | Runtime | Episteme | Episteme |
-| Storage/profile | Episteme subsystem (optional extensions) | Standalone `AH5.jl` |
+| Storage/profile | Episteme AH5 profile, JLD2 hard dep | Standalone `AH5.jl` |
 | Namespaces | `episteme/*` | `oodicore/*` |
-| Why HDF5 is optional | Load-time choice (D5) | Package boundary |
+| v1 writer | JLD2; HDF5.jl later (`EpistemeHDF5Ext`) | Package boundary for I/O |
 | Survey support | Neutral on count; strong on one model | Inherited from #25, not from the survey |
 
 ### What is revised relative to a naive reading *and* relative to the first draft of this note
@@ -1301,13 +1312,14 @@ Feature flags: none required. Storage features are “are HDF5/JLD2 loaded?” D
 | Reading | Revision |
 | --- | --- |
 | Keep OodiCore forever-minimal; add Episteme on top | **Rename/re-scope OodiCore → Episteme** and grow it. Registration has not landed. |
-| Standalone `AH5.jl` because HDF5 is heavy | **AH5 is Episteme’s storage/profile.** `.ah5` stays the format. Weakdeps if useful; not a third package. |
-| HDF5-free `using` as an architectural invariant | **Implementation choice (D5).** Do not invent OodiCore or AH5.jl to protect it. |
+| Standalone `AH5.jl` because HDF5 is heavy | **AH5 is Episteme’s canonical archive/profile.** `.ah5` stays the format. Not a third package. |
+| Optional JLD2 / `EpistemeJLD2Ext` to keep a minimal base | **JLD2 is a hard dependency of v1.** Persistence is first-class. HDF5.jl waits for `EpistemeHDF5Ext`. |
+| `AbstractStore` / Mongo / Postgres “for generality” | **No.** Keep identities storage-independent; postpone the abstraction until a real second backend exists. |
 | Long-lived `oodicore/*` kinds | **`episteme/document`, `episteme/plan`, namespace `:episteme`.** De-Oodify `AbstractOodiReport` on rename. |
 | Separate Loom package (#5 option 3) | **Superseded.** Episteme owns live composition + orchestration *protocol*. |
 | Issue #5 option 1 (structural document) | **Kept as types inside Episteme**, not as a second package (Alt 7). |
 | Episteme owns domain execution | **No.** Operations stay in Monge/Delone/Oodi/Stinespring/Lieb/Chappe. |
-| `execute!` publishes a revision | **No.** `execute!` records a run (and persists the run log if storage is loaded); `commit!` mints envelope rows and moves the head (D18). |
+| `execute!` publishes a revision | **No.** `execute!` records a run and persists the run log; `commit!` mints envelope rows and moves the head (D18). |
 | Autonomous agents in v1 | Destination only (D17). |
 | Internal RDF or ML Experiment taxonomy | **No.** |
 
@@ -1318,7 +1330,7 @@ A demonstration that the existing OodiCore + per-domain scripts already satisfy 
 ### “Minimal OodiCore forever” and standalone AH5.jl — explicit verdict
 
 - **Superseded as the locked topology:** OodiCore as a permanently minimal contracts package; AH5.jl as a required third package; `oodicore/*` as the long-lived namespace.
-- **Kept as discipline:** Episteme does not own CAD/mesh/FEM/QPU/Hubbard/LLM meaning; it does not execute untrusted source; domain packages keep payloads, operations, and reuse policy; `.ah5` is the first/default hierarchical backend.
+- **Kept as discipline:** Episteme does not own CAD/mesh/FEM/QPU/Hubbard/LLM meaning; it does not execute untrusted source; domain packages keep payloads, operations, and reuse policy; JLD2-backed `.ah5` is the v1 hierarchical backend.
 - **Superseded:** the assumption that whole-model composition lives in a package named Loom.
 
 ---
@@ -1334,8 +1346,8 @@ These do not block accepting the topology-(A) decision. Commit/execute (former Q
 5. **Name of reuse policy attachment.** On the operation, the plan, or the domain type? Recommendation: domain default on the operation kind (`OperationSpec.default_reuse`), overridable on the Plan.
 6. **Multi-archive / federated ObjectId.** Out of scope; ids stay archive-global within one `.ah5`.
 7. **Whether `discover` belongs beside `report` as a generic.** Lean yes once Episteme is the backbone; it does not need a second package to live next to `report`.
-8. **Run-local staging representation** for *snapshot payloads* produced by `execute!` before `commit!`. Settled: they are not `graph.objects` until `commit!` writes new `ArchiveObject` rows. Run/event/idempotency rows **are** durable at `execute!` when storage is loaded (D18). Remaining detail for the execute/persist PRs: exact run-scoped HDF5/JLD2 path for optional evidence bytes (not `#40` profile work).
-9. **Hard dep vs weakdep for HDF5/JLD2.** D5 leaves this open. Recommendation: start with `EpistemeHDF5Ext` / `EpistemeJLD2Ext`. Collapse to ordinary deps if the maze costs more than it saves. Do not revive OodiCore or AH5.jl to resolve it.
+8. **Run-local staging representation** for *snapshot payloads* produced by `execute!` before `commit!`. Settled: they are not `graph.objects` until `commit!` writes new `ArchiveObject` rows. Run/event/idempotency rows **are** durable at `execute!` (D18). Remaining detail for the execute/persist PRs: exact run-scoped JLD2 path for optional evidence bytes (not `#40` profile work).
+9. **When to add `EpistemeHDF5Ext`.** Not v1. Add when JLD2 is not enough for bulk dataset control or MPI/parallel-HDF5 writes. JLD2 must still create the file (#47). Do not revive OodiCore, AH5.jl, or `EpistemeJLD2Ext` to resolve it.
 
 ---
 
@@ -1351,7 +1363,7 @@ These do not block accepting the topology-(A) decision. Commit/execute (former Q
 | Premature rename churn | Medium | PR plan gate: no rename until this doc is accepted; then rename is PR 1 |
 | Dual graph implemented as two unlinked systems | Medium | D19: both graphs on `ArchiveGraph`; object set derived; `run_id` / generated-by required before claiming “history done” |
 | RO-Crate exporter drives internal types | Medium | Exporter is an extension; golden tests from Julia structs |
-| Weakdep maze recreates three packages in `ext/` | Medium | D5: collapse to hard deps rather than invent OodiCore/AH5.jl |
+| Weakdep maze recreates three packages in `ext/` | Medium | D5: JLD2 is already a hard dep; do not add `EpistemeJLD2Ext` |
 
 ---
 
@@ -1403,7 +1415,7 @@ PRs 3–6 are one conceptual envelope expansion (D19). They stay split only beca
 | --- | --- | --- | --- | --- | --- |
 | 0 | this repo | `docs(research): Episteme architecture decision (#48)` | This note; link from `docs/archive-ownership.md` and README | Docs only | — |
 | 1 | this repo | `chore: rename OodiCore.jl → Episteme.jl` | Package/module rename; `AbstractEpistemeReport`; `episteme/*` namespaces; optional `OodiCore` compat shim; rewrite `AGENTS.md` | Mechanical + tests | 0 accepted |
-| 2 | Episteme | `docs: supersede Loom and reopen #25 package boundary` | Addendum: composition lives here; AH5 is a subsystem; #5 option 1 types live here | Docs only | 1 |
+| 2 | Episteme | `docs: supersede Loom and reopen #25 package boundary` | Addendum: composition lives here; AH5 is the JLD2-backed profile; #5 option 1 types live here | Docs only | 1 |
 | 3 | Episteme | `feat(archive): PlanId ActivityId DocumentId AgentId` | New id subtypes + `to_namedtuple` + tests | Isolated types, no I/O | 1 |
 | 4 | Episteme | `feat(archive): Plan/Run/Activity/Event/Revision + ArchiveGraph fields` | `OperationSpec`, records, `ArchiveGraph.revisions/runs/events`; `validate` invariants (D19); kinds `episteme/document`, `episteme/plan` | Data + unit tests; no I/O | 3 |
 | 5 | Episteme | `feat(archive): revision parent validation (#30 types only)` | `:cycle` / `:dangling_parent`; does **not** close #30 | Types + validate | 4 |
@@ -1413,18 +1425,19 @@ PRs 3–6 are one conceptual envelope expansion (D19). They stay split only beca
 | 9 | Episteme | `feat: plan compile from document` | `plan(document)` → `Plan` + `ValidationReport`; authored doc retained | Pure; uses PR 4 types | 8, 7 |
 | 10 | Episteme | `feat: hook dispatcher stub` | Register/fire; worker warning documented. Lands **before** `execute!`. | Isolated | 6 |
 | 11 | Episteme | `feat: trusted script runner protocol` | Explicit opt-in; binds `script_node` I/O; effect deny. Lands **before** `execute!` of documents that contain `script_node`. | Security-sensitive, small | 1 |
-| 12 | Episteme | `feat: in-memory execute! / commit! / branch! / inspect` | RAM `ArchiveGraph`; dummy ops; D18 (execute does not move head); D9 events vs revisions; reuse stages `ObjectId`+`ContentId` copies | No file I/O required | 9, 10, 11, 5 |
+| 12 | Episteme | `feat: in-memory execute! / commit! / branch! / inspect` | RAM `ArchiveGraph`; dummy ops; D18 (execute does not move head); D9 events vs revisions; reuse stages `ObjectId`+`ContentId` copies | Tests may skip opening a file | 9, 10, 11, 5 |
 | 13 | Episteme | `feat: reuse key + archive-global idempotency_key` | Match `(kind, key)` never `WorkflowHeadId`; domain callback; missing key ⇒ not idempotent | Tests for `:forbid` / `:allow` / `:force` and `branch!` | 12 |
 | 14 | Episteme | `feat: agent API surface` | `discover`, `explain`, wrappers; MCP-shaped named tuples | Docs + tests; no server | 12, 13 |
-| 15 | Episteme | `feat(#25/#47): AH5 storage/profile + JLD2-creates-file` | Encode FINDINGS.md file-creation rule **in this package** (core or `EpistemeHDF5Ext`/`EpistemeJLD2Ext`); no domain codecs; does **not** close #40; does **not** create AH5.jl | Spike fixtures as tests | 1, #47 |
-| 16 | Episteme | `feat: persist envelope + revision graph` | Round-trip records via JLD2; `/data` via HDF5.jl | Follows FINDINGS.md | 15, 4 |
-| 17 | Episteme | `feat: forensic inspect_archive` | No domain package; `plain`/HDF5 names; diagnostic codes | Matches #47 §7 | 16 |
-| 18 | Episteme | `feat: checkout lazy payload load` | May read `/data`; distinct from in-memory `inspect` | Storage subsystem | 16 |
-| 19 | Episteme | `feat: persist on execute! / commit!` | **`execute!` appends run/event/idempotency rows**; `commit!` appends objects/revision/head. Uncommitted runs round-trip. Weakdep or hard dep per D5. | Extension or optional CI | 16, 12 |
+| 15 | Episteme | `feat(#25/#47): JLD2-backed AH5 profile` | Add **JLD2 as a hard dependency**; encode FINDINGS.md file-creation rule **in this package**; no HDF5.jl yet; no domain codecs; does **not** close #40; does **not** create AH5.jl or `EpistemeJLD2Ext` | Spike fixtures as tests | 1, #47 |
+| 16 | Episteme | `feat: persist envelope + revision graph` | Round-trip records via JLD2 | Follows FINDINGS.md v1 path | 15, 4 |
+| 17 | Episteme | `feat: forensic inspect_archive` | No domain package; JLD2 `plain`; diagnostic codes | Matches #47 forensic path | 16 |
+| 18 | Episteme | `feat: checkout lazy payload load` | May read JLD2 payloads; distinct from in-memory `inspect` | AH5 profile | 16 |
+| 19 | Episteme | `feat: persist on execute! / commit!` | **`execute!` appends run/event/idempotency rows**; `commit!` appends objects/revision/head. Uncommitted runs round-trip. JLD2 is already a hard dep. | Core tests | 16, 12 |
+| later | Episteme | `feat: EpistemeHDF5Ext bulk /data + MPI` | HDF5.jl only when JLD2 is not enough; JLD2 still creates the file | After a real bulk/parallel need | 16, #29 |
 | 20 | domain (Monge first) | `feat: MongeEpistemeExt register_operation!` | One real compile path; codecs register here too | Proves non-inversion | 9, 19 |
 | 21 | Episteme | `feat: RO-Crate + PROV export extension` | Map revision → crate; tests on a toy run | Optional dep | 19, 14 |
 | later | — | capsule (#35), migration runner (#41), parallel qualify (#29) | Still Episteme storage + domain transforms | After live archives exist | 16+ |
 
-**Out of this epic:** adding PostgreSQL; making RDF internal; implementing domain solvers in Episteme; creating a standalone `AH5.jl`; closing #30/#34/#40/#44 as complete products; choosing hash algorithms (#42). The rename *is* in this epic (PR 1), gated on acceptance.
+**Out of this epic:** adding PostgreSQL, Mongo, or `AbstractStore`; making RDF internal; implementing domain solvers in Episteme; creating a standalone `AH5.jl` or `EpistemeJLD2Ext`; taking HDF5.jl in v1; closing #30/#34/#40/#44 as complete products; choosing hash algorithms (#42). The rename *is* in this epic (PR 1), gated on acceptance.
 
 PR 0 is the only work that should proceed immediately after this study is drafted. Everything else waits on acceptance.
