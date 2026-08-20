@@ -202,12 +202,14 @@ end
 """
     StagedObject(object_id; namespace, kind, schema, origin=:generated,
                  content_id=nothing, source_revision_id=nothing,
-                 activity_id=nothing)
+                 activity_id=nothing, provenance=ProvenanceRefs(),
+                 references=())
 
 Run-local uncommitted snapshot envelope. Not an [`ArchiveObject`](@ref)
 until a later `commit!` promotes it under a new [`RevisionId`](@ref).
 `origin === :reused` copies identity from an existing committed version
-and requires `source_revision_id`.
+and requires `source_revision_id`. Provenance and named references are
+part of the envelope and must survive promotion.
 """
 struct StagedObject
     object_id::ObjectId
@@ -218,6 +220,8 @@ struct StagedObject
     origin::Symbol
     source_revision_id::Union{Nothing,RevisionId}
     activity_id::Union{Nothing,ActivityId}
+    provenance::ProvenanceRefs
+    references::Vector{ArchiveReference}
 end
 
 function StagedObject(
@@ -229,6 +233,8 @@ function StagedObject(
     content_id = nothing,
     source_revision_id = nothing,
     activity_id = nothing,
+    provenance::ProvenanceRefs = ProvenanceRefs(),
+    references = ArchiveReference[],
 )
     origin in STAGED_ORIGINS || throw(ArgumentError(
         "origin must be one of $STAGED_ORIGINS, got :$origin",
@@ -245,6 +251,8 @@ function StagedObject(
         origin,
         _optional_id(RevisionId, source_revision_id),
         _optional_id(ActivityId, activity_id),
+        provenance,
+        _archive_references(references),
     )
 end
 
@@ -608,6 +616,8 @@ function promote_staged(run::RunRecord, revision_id::RevisionId)
             namespace = staged.namespace,
             kind = staged.kind,
             schema = staged.schema,
+            provenance = staged.provenance,
+            references = staged.references,
         ))
     end
     return objects
@@ -789,6 +799,8 @@ to_namedtuple(staged::StagedObject) = (
     source_revision_id = staged.source_revision_id === nothing ? nothing :
         staged.source_revision_id.value,
     activity_id = staged.activity_id === nothing ? nothing : staged.activity_id.value,
+    provenance = to_namedtuple(staged.provenance),
+    references = Tuple(to_namedtuple.(staged.references)),
 )
 
 to_namedtuple(tx::WriteTransaction) = (
