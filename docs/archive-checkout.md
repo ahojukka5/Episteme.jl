@@ -18,9 +18,11 @@ envelope fields.
 ## Manifest
 
 `inspect` / `checkout` resolve a `RevisionId` (or a `WorkflowHead` /
-head name / committed `RunId`) to:
+unique head name / committed `RunId`) to:
 
-- envelope objects visible in that revision
+- envelope objects materialized in that revision
+- the transitive resolved reference closure visible from that revision
+  and its ancestors (not sibling or future branches)
 - named references, with dangling vs declared-external distinguished
 - producing run and plan, if recorded
 - parent/child/ancestor/descendant revision ids
@@ -42,11 +44,13 @@ Payload availability:
 
 `readiness(manifest, target)` uses:
 
-- `:inspect` — no `:missing` slots
-- `:replay` — inspectable, producing run recorded a software environment
+- `:inspect` — no `:missing` slots (declared externals are allowed)
+- `:replay` — inspectable, no unresolved externals, producing run
+  recorded a software environment
 - `:restart` — inspectable, and declared `RestartRequirement` checkpoints
-  exist in this snapshot
-- `:rerun` — inspectable, producing run has at least one activity
+  exist as `:envelope_only` slots in this snapshot
+- `:rerun` — inspectable, no unresolved externals, producing run has at
+  least one activity
 
 Episteme does not promise domain restart/replay; it reports missing
 dependencies. A completed producing run is expected for a committed

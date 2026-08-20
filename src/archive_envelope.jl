@@ -1129,6 +1129,7 @@ function _validate_archive_graph!(diagnostics, graph::ArchiveGraph)
     end
 
     seen_heads = String[]
+    seen_head_names = Symbol[]
     for head in ordered_heads(graph)
         if head.id.value in seen_heads
             push!(diagnostics, error_diagnostic(
@@ -1138,6 +1139,16 @@ function _validate_archive_graph!(diagnostics, graph::ArchiveGraph)
             ))
         else
             push!(seen_heads, head.id.value)
+        end
+        if head.name in seen_head_names
+            push!(diagnostics, error_diagnostic(
+                :duplicate_workflow_head_name,
+                "duplicate workflow head name :$(head.name)";
+                head_id = head.id.value,
+                name = head.name,
+            ))
+        else
+            push!(seen_head_names, head.name)
         end
         _head_revision_resolves(graph, head.revision_id) && continue
         push!(diagnostics, error_diagnostic(
