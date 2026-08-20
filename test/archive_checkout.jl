@@ -217,6 +217,41 @@ end
     @test any(d -> d.code === :dangling_parent, broken.diagnostics)
     @test !isvalid(validate(broken))
     @test !isready(readiness(broken, PipelineTarget(:inspect)))
+
+    ancestor = RevisionRecord(RevisionId(REV_1); parents = [RevisionId("missing-ancestor")])
+    child = RevisionRecord(RevisionId(REV_2); parents = [RevisionId(REV_1)])
+    child_obj = _obj(:example, "mesh", ID_MESH, REV_2; content = "hash-y")
+    chained = ArchiveGraph(
+        [child_obj];
+        revisions = [ancestor, child],
+    )
+    from_child = inspect(chained, RevisionId(REV_2))
+    @test any(d -> d.code === :dangling_parent && d.context.revision_id == REV_1,
+        from_child.diagnostics)
+    @test !isready(readiness(from_child, PipelineTarget(:inspect)))
+end
+
+@testset "select is revision-aware when one ObjectId has several versions" begin
+    r1 = RevisionId(REV_1)
+    r2 = RevisionId(REV_2)
+    g1 = _obj(:example, "geometry", ID_GEOM, REV_1; content = "hash-g1")
+    g2 = _obj(
+        :example, "geometry", ID_GEOM, REV_2;
+        content = "hash-g2",
+        references = [ArchiveReference(:prior, ObjectId(ID_GEOM); revision_id = r1)],
+    )
+    graph = ArchiveGraph(
+        [g1, g2];
+        revisions = [
+            RevisionRecord(r1),
+            RevisionRecord(r2; parents = [r1]),
+        ],
+    )
+    manifest = inspect(graph, r2)
+    @test select(manifest, ObjectId(ID_GEOM), r1).content_id == ContentId("hash-g1")
+    @test select(manifest, ObjectId(ID_GEOM), r2).content_id == ContentId("hash-g2")
+    @test select(manifest, ObjectRef(ObjectId(ID_GEOM), r1)).availability === :envelope_only
+    @test_throws ArgumentError select(manifest, ObjectId(ID_GEOM))
 end
 
 @testset "duplicate workflow head names are rejected" begin
