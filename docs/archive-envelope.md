@@ -98,7 +98,9 @@ Plans and authored documents are ordinary `ArchiveObject`s when persisted:
 
 When `graph.revisions` is empty, existing object/head graphs still
 validate as before. Once revision records are present, every object and
-head revision must name one of them.
+head revision must name one of them. `RunRecord.parent_run_id`, when
+set, must name another run in the graph and must not be the run itself.
+If a run and its revision both carry a `plan_id`, those ids must agree.
 
 ## Envelope
 

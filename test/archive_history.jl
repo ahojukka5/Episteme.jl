@@ -153,4 +153,40 @@ end
         runs = [run],
     ))
     @test any(d -> d.code === :dangling_workflow_head, orphan_head.diagnostics)
+
+    parent = RunRecord(RunId("run-parent"); status = :completed)
+    child = RunRecord(RunId("run-child"); parent_run_id = parent.id, status = :queued)
+    @test isvalid(validate(ArchiveGraph(ArchiveObject[]; runs = [parent, child])))
+
+    missing_parent = validate(ArchiveGraph(
+        ArchiveObject[];
+        runs = [RunRecord(RunId("run-child"); parent_run_id = RunId("missing"))],
+    ))
+    @test any(d -> d.code === :missing_parent_run, missing_parent.diagnostics)
+
+    self_parent = validate(ArchiveGraph(
+        ArchiveObject[];
+        runs = [RunRecord(RunId("run-self"); parent_run_id = RunId("run-self"))],
+    ))
+    @test any(d -> d.code === :self_parent_run, self_parent.diagnostics)
+
+    planned = RunRecord(
+        RunId("run-1");
+        plan_id = PlanId("plan-a"),
+        revision_id = RevisionId(REV_1),
+        status = :completed,
+    )
+    plan_mismatch = validate(ArchiveGraph(
+        [obj];
+        revisions = [RevisionRecord(RevisionId(REV_1); run_id = planned.id, plan_id = PlanId("plan-b"))],
+        runs = [planned],
+    ))
+    @test any(d -> d.code === :run_revision_plan_mismatch, plan_mismatch.diagnostics)
+
+    plan_one_sided = validate(ArchiveGraph(
+        [obj];
+        revisions = [RevisionRecord(RevisionId(REV_1); run_id = planned.id)],
+        runs = [planned],
+    ))
+    @test isvalid(plan_one_sided)
 end
