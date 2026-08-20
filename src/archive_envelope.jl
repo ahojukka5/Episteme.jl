@@ -949,6 +949,10 @@ function _validate_archive_graph!(diagnostics, graph::ArchiveGraph)
     return diagnostics
 end
 
+function _plan_ids_conflict(run::RunRecord, rec::RevisionRecord)
+    return run.plan_id !== nothing && rec.plan_id !== nothing && run.plan_id != rec.plan_id
+end
+
 function _head_revision_resolves(graph::ArchiveGraph, revision_id::RevisionId)
     if !isempty(graph.revisions)
         return find_revision(graph, revision_id) !== nothing
@@ -995,6 +999,23 @@ function _validate_history_records!(diagnostics, graph::ArchiveGraph)
             push!(seen_runs, run.id.value)
         end
 
+        if run.parent_run_id !== nothing
+            if run.parent_run_id == run.id
+                push!(diagnostics, error_diagnostic(
+                    :self_parent_run,
+                    "run $(run.id.value) lists itself as parent_run_id";
+                    run_id = run.id.value,
+                ))
+            elseif find_run(graph, run.parent_run_id) === nothing
+                push!(diagnostics, error_diagnostic(
+                    :missing_parent_run,
+                    "run $(run.id.value) names unknown parent run $(run.parent_run_id.value)";
+                    run_id = run.id.value,
+                    parent_run_id = run.parent_run_id.value,
+                ))
+            end
+        end
+
         if run.revision_id !== nothing
             rec = find_revision(graph, run.revision_id)
             if rec === nothing
@@ -1013,6 +1034,15 @@ function _validate_history_records!(diagnostics, graph::ArchiveGraph)
                     run_id = run.id.value,
                     revision_id = rec.id.value,
                     producing_run_id = rec.run_id.value,
+                ))
+            elseif _plan_ids_conflict(run, rec)
+                push!(diagnostics, error_diagnostic(
+                    :run_revision_plan_mismatch,
+                    "run $(run.id.value) plan $(run.plan_id.value) does not match revision $(rec.id.value) plan $(rec.plan_id.value)";
+                    run_id = run.id.value,
+                    revision_id = rec.id.value,
+                    run_plan_id = run.plan_id.value,
+                    revision_plan_id = rec.plan_id.value,
                 ))
             end
         end
@@ -1055,6 +1085,15 @@ function _validate_history_records!(diagnostics, graph::ArchiveGraph)
                 revision_id = rev.id.value,
                 run_id = run.id.value,
                 run_revision_id = run.revision_id.value,
+            ))
+        elseif _plan_ids_conflict(run, rev)
+            push!(diagnostics, error_diagnostic(
+                :run_revision_plan_mismatch,
+                "revision $(rev.id.value) plan $(rev.plan_id.value) does not match run $(run.id.value) plan $(run.plan_id.value)";
+                revision_id = rev.id.value,
+                run_id = run.id.value,
+                run_plan_id = run.plan_id.value,
+                revision_plan_id = rev.plan_id.value,
             ))
         end
     end
