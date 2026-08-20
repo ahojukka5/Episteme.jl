@@ -211,4 +211,5 @@ struct DummyObject end
     include("declarative.jl")
 
     include("archive_envelope.jl")
+    include("archive_history.jl")
 end

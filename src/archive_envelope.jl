@@ -517,34 +517,42 @@ struct WorkflowHead
     revision_id::RevisionId
 end
 
-"""
-    ArchiveGraph(objects; heads=())
+include("archive_history.jl")
 
-A logical collection of envelope objects and workflow heads.
+"""
+    ArchiveGraph(objects; heads=(), revisions=(), runs=(), events=())
+
+A logical collection of envelope objects, workflow heads, and dual-history
+records. Snapshot history lives in `revisions`; activity history lives in
+`runs` (activities) and `events`. There is no parallel session type.
 
 Object order in `objects` is insertion order and is not semantically
 authoritative. Use [`ordered_objects`](@ref) for a deterministic walk
-independent of HDF5 group traversal.
+independent of HDF5 group traversal. Object membership of a revision is
+[`find_objects`](@ref); [`RevisionRecord`](@ref) does not store that list.
 """
 struct ArchiveGraph
     objects::Vector{ArchiveObject}
     heads::Vector{WorkflowHead}
+    revisions::Vector{RevisionRecord}
+    runs::Vector{RunRecord}
+    events::Vector{EventRecord}
 end
 
-function ArchiveGraph(objects; heads = WorkflowHead[])
-    object_values = ArchiveObject[]
-    for object in objects
-        object isa ArchiveObject ||
-            throw(ArgumentError("graph objects must be ArchiveObject values"))
-        push!(object_values, object)
-    end
-    head_values = WorkflowHead[]
-    for head in heads
-        head isa WorkflowHead ||
-            throw(ArgumentError("graph heads must be WorkflowHead values"))
-        push!(head_values, head)
-    end
-    return ArchiveGraph(object_values, head_values)
+function ArchiveGraph(
+    objects;
+    heads = WorkflowHead[],
+    revisions = RevisionRecord[],
+    runs = RunRecord[],
+    events = EventRecord[],
+)
+    return ArchiveGraph(
+        _typed_vector(ArchiveObject, objects, "graph objects"),
+        _typed_vector(WorkflowHead, heads, "graph heads"),
+        _typed_vector(RevisionRecord, revisions, "graph revisions"),
+        _typed_vector(RunRecord, runs, "graph runs"),
+        _typed_vector(EventRecord, events, "graph events"),
+    )
 end
 
 """
@@ -622,6 +630,27 @@ ordered_references(object::ArchiveObject) =
 Workflow heads sorted by head id then name.
 """
 ordered_heads(graph::ArchiveGraph) = sort(graph.heads; by = _head_sort_key)
+
+ordered_revisions(graph::ArchiveGraph) =
+    sort(graph.revisions; by = rev -> rev.id.value)
+
+ordered_runs(graph::ArchiveGraph) = sort(graph.runs; by = run -> run.id.value)
+
+ordered_events(graph::ArchiveGraph) = graph.events
+
+function find_revision(graph::ArchiveGraph, revision_id::RevisionId)
+    for rev in graph.revisions
+        rev.id == revision_id && return rev
+    end
+    return nothing
+end
+
+function find_run(graph::ArchiveGraph, run_id::RunId)
+    for run in graph.runs
+        run.id == run_id && return run
+    end
+    return nothing
+end
 
 """
     find_revisions(graph, object_id) -> Vector{ArchiveObject}
@@ -906,13 +935,149 @@ function _validate_archive_graph!(diagnostics, graph::ArchiveGraph)
         else
             push!(seen_heads, head.id.value)
         end
-        any(object -> object.revision_id == head.revision_id, graph.objects) && continue
+        _head_revision_resolves(graph, head.revision_id) && continue
         push!(diagnostics, error_diagnostic(
             :dangling_workflow_head,
             "workflow head :$(head.name) points at missing revision $(head.revision_id.value)";
             head_id = head.id.value,
             name = head.name,
             revision_id = head.revision_id.value,
+        ))
+    end
+
+    _validate_history_records!(diagnostics, graph)
+    return diagnostics
+end
+
+function _head_revision_resolves(graph::ArchiveGraph, revision_id::RevisionId)
+    if !isempty(graph.revisions)
+        return find_revision(graph, revision_id) !== nothing
+    end
+    return any(object -> object.revision_id == revision_id, graph.objects)
+end
+
+function _validate_history_records!(diagnostics, graph::ArchiveGraph)
+    seen_revisions = String[]
+    for rev in graph.revisions
+        if rev.id.value in seen_revisions
+            push!(diagnostics, error_diagnostic(
+                :duplicate_revision,
+                "duplicate revision $(rev.id.value)";
+                revision_id = rev.id.value,
+            ))
+        else
+            push!(seen_revisions, rev.id.value)
+        end
+    end
+
+    if !isempty(graph.revisions)
+        for object in graph.objects
+            find_revision(graph, object.revision_id) === nothing || continue
+            push!(diagnostics, error_diagnostic(
+                :missing_revision_record,
+                "object $(object.object_id.value) names unknown revision $(object.revision_id.value)";
+                object_id = object.object_id.value,
+                revision_id = object.revision_id.value,
+            ))
+        end
+    end
+
+    seen_runs = String[]
+    seen_activities = String[]
+    for run in graph.runs
+        if run.id.value in seen_runs
+            push!(diagnostics, error_diagnostic(
+                :duplicate_run,
+                "duplicate run $(run.id.value)";
+                run_id = run.id.value,
+            ))
+        else
+            push!(seen_runs, run.id.value)
+        end
+
+        if run.revision_id !== nothing
+            rec = find_revision(graph, run.revision_id)
+            if rec === nothing
+                if !isempty(graph.revisions)
+                    push!(diagnostics, error_diagnostic(
+                        :missing_run_revision,
+                        "run $(run.id.value) names unknown revision $(run.revision_id.value)";
+                        run_id = run.id.value,
+                        revision_id = run.revision_id.value,
+                    ))
+                end
+            elseif rec.run_id !== nothing && rec.run_id != run.id
+                push!(diagnostics, error_diagnostic(
+                    :run_revision_mismatch,
+                    "run $(run.id.value) points at revision $(rec.id.value) produced by $(rec.run_id.value)";
+                    run_id = run.id.value,
+                    revision_id = rec.id.value,
+                    producing_run_id = rec.run_id.value,
+                ))
+            end
+        end
+
+        for activity in run.activities
+            if activity.id.value in seen_activities
+                push!(diagnostics, error_diagnostic(
+                    :duplicate_activity,
+                    "duplicate activity $(activity.id.value)";
+                    activity_id = activity.id.value,
+                ))
+            else
+                push!(seen_activities, activity.id.value)
+            end
+            activity.run_id == run.id && continue
+            push!(diagnostics, error_diagnostic(
+                :activity_run_mismatch,
+                "activity $(activity.id.value) belongs to run $(activity.run_id.value), not $(run.id.value)";
+                activity_id = activity.id.value,
+                run_id = activity.run_id.value,
+                expected_run_id = run.id.value,
+            ))
+        end
+    end
+
+    for rev in graph.revisions
+        rev.run_id === nothing && continue
+        run = find_run(graph, rev.run_id)
+        if run === nothing
+            push!(diagnostics, error_diagnostic(
+                :missing_revision_run,
+                "revision $(rev.id.value) names unknown run $(rev.run_id.value)";
+                revision_id = rev.id.value,
+                run_id = rev.run_id.value,
+            ))
+        elseif run.revision_id !== nothing && run.revision_id != rev.id
+            push!(diagnostics, error_diagnostic(
+                :run_revision_mismatch,
+                "revision $(rev.id.value) names run $(run.id.value) which commits $(run.revision_id.value)";
+                revision_id = rev.id.value,
+                run_id = run.id.value,
+                run_revision_id = run.revision_id.value,
+            ))
+        end
+    end
+
+    for event in graph.events
+        run = find_run(graph, event.run_id)
+        if run === nothing
+            push!(diagnostics, error_diagnostic(
+                :missing_event_run,
+                "event :$(event.kind) names unknown run $(event.run_id.value)";
+                kind = event.kind,
+                run_id = event.run_id.value,
+            ))
+            continue
+        end
+        event.activity_id === nothing && continue
+        any(activity -> activity.id == event.activity_id, run.activities) && continue
+        push!(diagnostics, error_diagnostic(
+            :missing_event_activity,
+            "event :$(event.kind) names unknown activity $(event.activity_id.value)";
+            kind = event.kind,
+            run_id = event.run_id.value,
+            activity_id = event.activity_id.value,
         ))
     end
     return diagnostics
@@ -942,6 +1107,9 @@ function report(graph::ArchiveGraph)
         (;
             objects = length(graph.objects),
             heads = length(graph.heads),
+            revisions = length(graph.revisions),
+            runs = length(graph.runs),
+            events = length(graph.events),
             namespaces = Tuple(unique(obj.namespace.id for obj in ordered_objects(graph))),
         ),
         DiagnosticMessage[],
@@ -1028,6 +1196,9 @@ function to_namedtuple(graph::ArchiveGraph)
     return (
         objects = Tuple(to_namedtuple.(ordered_objects(graph))),
         heads = Tuple(to_namedtuple.(ordered_heads(graph))),
+        revisions = Tuple(to_namedtuple.(ordered_revisions(graph))),
+        runs = Tuple(to_namedtuple.(ordered_runs(graph))),
+        events = Tuple(to_namedtuple.(ordered_events(graph))),
     )
 end
 
@@ -1059,6 +1230,12 @@ function Base.show(io::IO, graph::ArchiveGraph)
         length(graph.objects),
         ", heads=",
         length(graph.heads),
+        ", revisions=",
+        length(graph.revisions),
+        ", runs=",
+        length(graph.runs),
+        ", events=",
+        length(graph.events),
         ")",
     )
 end

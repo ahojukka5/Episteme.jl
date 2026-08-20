@@ -32,8 +32,10 @@ DocumentId != PlanId != RunId != ActivityId != RevisionId != ObjectId != Content
 | `SoftwareEnvironmentId` | Reference to a software-environment record (#37). |
 | `ExecutionContextId` | Reference to an execution-context fingerprint (#43). |
 
-This package stores the ids only. Document/plan/run *records*, orchestration,
-and `.ah5` persistence are later PRs.
+Shared *record* types (`Plan`, `RunRecord`, `ActivityRecord`,
+`EventRecord`, `RevisionRecord`) live on `ArchiveGraph` as data.
+Orchestration (`execute!` / `commit!`) and `.ah5` persistence are later
+PRs.
 
 ```julia
 object = ObjectId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
@@ -66,6 +68,37 @@ together. Parent and input revision edges belong to issue #30; they are
 not a second `producer_revision` field on the envelope.
 
 `WorkflowHead` points at a `RevisionId`, not at a single object snapshot.
+
+## Dual history
+
+`ArchiveGraph` holds both a snapshot graph and an activity graph:
+
+| Collection | Node | Answers |
+| --- | --- | --- |
+| `revisions` | `RevisionRecord` | What was the committed world at this checkout? |
+| `runs` / activities / `events` | `RunRecord`, `ActivityRecord`, `EventRecord` | What happened, with which plan and env? |
+
+Activities live on `RunRecord`, not in a second graph-wide store. A run
+may have `revision_id === nothing` (failed, still running, or not yet
+committed). Events are not revisions.
+
+Object membership of a revision is `find_objects(graph, revision_id)`.
+`RevisionRecord` stores `id`, `parents`, optional `run_id`, and optional
+`plan_id`. It does not duplicate an object-id list. Parent-cycle checks
+are issue #30.
+
+Plans and authored documents are ordinary `ArchiveObject`s when persisted:
+
+| Kind | Namespace | Schema |
+| --- | --- | --- |
+| `episteme/document` | `:episteme` | `episteme_document_schema(version)` |
+| `episteme/plan` | `:episteme` | `episteme_plan_schema(version)` |
+
+`Plan` is the resolved recipe; `ActivityId` is never the idempotency key.
+
+When `graph.revisions` is empty, existing object/head graphs still
+validate as before. Once revision records are present, every object and
+head revision must name one of them.
 
 ## Envelope
 

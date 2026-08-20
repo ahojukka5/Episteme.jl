@@ -273,7 +273,8 @@ end
     rep = report(field)
     @test rep.subject === Symbol("oodi/field")
     @test occursin(ID_FIELD, rep.summary)
-    @test sprint(show, graph) == "ArchiveGraph(objects=8, heads=1)"
+    @test sprint(show, graph) ==
+        "ArchiveGraph(objects=8, heads=1, revisions=0, runs=0, events=0)"
 end
 
 @testset "ObjectId is archive-global and unpinned refs are logical links" begin
