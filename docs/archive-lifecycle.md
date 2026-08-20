@@ -49,10 +49,11 @@ sit on `RunRecord.staged` as `StagedObject` rows:
   `source_revision_id` is required and must resolve
 
 `promote_staged(run, revision_id)` is a pure mapping to `ArchiveObject`
-rows. Later `commit!` uses that mapping: it creates exactly one new
-immutable `RevisionRecord`, inserts the promoted rows, and moves only
-the selected `WorkflowHead`. It must not alias a prior envelope row and
-must not rewrite committed objects or revisions.
+rows, including `ProvenanceRefs` and named `ArchiveReference`s. Later
+`commit!` uses that mapping: it creates exactly one new immutable
+`RevisionRecord`, inserts the promoted rows, and moves only the selected
+`WorkflowHead`. It must not alias a prior envelope row and must not
+rewrite committed objects or revisions.
 
 After a run is committed, each staged object must appear under that
 revision (`:staged_not_promoted` / `:committed_content_mismatch` if not).
@@ -88,8 +89,10 @@ incomplete write as a committed revision.
 
 v1 is **single-writer per archive**. An in-flight `:archive` transaction
 needs a `writer_token`. A second in-flight archive writer fails
-`:multiple_archive_writers`. Run-scoped transactions record which run is
-appending without implying a second archive file writer.
+`:multiple_archive_writers`. An in-flight or `:uncertain` archive-scope
+transaction, including one with `run_id === nothing`, blocks
+`readiness(..., PipelineTarget(:commit))`. Run-scoped transactions record
+which run is appending without implying a second archive file writer.
 
 This is compatible with a later parallel bulk-data path: ranks may buffer
 source-locally and publish through the same logical phases. Parallel
@@ -106,8 +109,10 @@ requirement is missing (`:restart_not_declared`).
 `readiness(graph, PipelineTarget(:restart; run_id = ...))` resolves those
 refs against committed objects and run-local staging. Missing identity
 is `:missing_restart_checkpoint`. Present object with the wrong
-`ContentId` is `:incompatible_restart_content`. Domain packages own what
-the checkpoint bytes mean.
+`ContentId` is `:incompatible_restart_content`. A required `ContentId`
+against a found object that has no content id is
+`:unverified_restart_content` (fail-closed; do not guess). Domain
+packages own what the checkpoint bytes mean.
 
 Restartable statuses are `:failed`, `:interrupted`, `:cancelled`, and
 `:uncertain`. A committed run is not restarted; that is a later `rerun!`.

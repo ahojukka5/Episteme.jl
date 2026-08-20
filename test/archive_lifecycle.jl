@@ -8,6 +8,8 @@ function _staged(
     source = nothing,
     activity = nothing,
     namespace = :example,
+    provenance = ProvenanceRefs(),
+    references = ArchiveReference[],
 )
     ns = _ns(namespace; display = String(namespace) * ".jl")
     kind = schema_kind(namespace, schema_id)
@@ -20,6 +22,8 @@ function _staged(
         content_id = content === nothing ? nothing : ContentId(content),
         source_revision_id = source === nothing ? nothing : RevisionId(source),
         activity_id = activity === nothing ? nothing : ActivityId(activity),
+        provenance = provenance,
+        references = references,
     )
 end
 
@@ -260,6 +264,28 @@ end
     undeclared = RunRecord(RunId("run-none"); status = :interrupted)
     @test any(d -> d.code === :restart_not_declared,
         readiness(undeclared, PipelineTarget(:restart)).diagnostics)
+
+    unverifiable = _obj(:example, "model-state", ID_SECTOR, REV_1)
+    @test unverifiable.content_id === nothing
+    unknown = RunRecord(
+        RunId("run-unknown");
+        status = :interrupted,
+        restart = RestartRequirement(;
+            checkpoints = [CheckpointRef(
+                ObjectId(ID_SECTOR);
+                content_id = ContentId("hash-ckpt"),
+                revision_id = RevisionId(REV_1),
+            )],
+        ),
+    )
+    unknown_graph = ArchiveGraph(
+        [unverifiable];
+        revisions = [RevisionRecord(RevisionId(REV_1))],
+        runs = [unknown],
+    )
+    unknown_ready = readiness(unknown_graph, PipelineTarget(:restart; run_id = unknown.id))
+    @test !isready(unknown_ready)
+    @test any(d -> d.code === :unverified_restart_content, unknown_ready.diagnostics)
 end
 
 @testset "incomplete status cannot masquerade as a committed revision" begin
@@ -374,6 +400,24 @@ end
         )],
     ))
     @test any(d -> d.code === :in_flight_write_has_revision, bad.diagnostics)
+
+    ready_run = RunRecord(RunId("run-ok"); status = :completed)
+    global_writer = WriteTransaction(;
+        scope = :archive,
+        phase = :appending,
+        sequence = 7,
+        writer_token = "other",
+    )
+    blocked = ArchiveGraph(
+        ArchiveObject[];
+        runs = [ready_run],
+        writes = [global_writer],
+    )
+    @test isvalid(validate(blocked))
+    @test isready(readiness(ready_run, PipelineTarget(:commit)))
+    blocked_ready = readiness(blocked, PipelineTarget(:commit; run_id = ready_run.id))
+    @test !isready(blocked_ready)
+    @test any(d -> d.code === :in_flight_write, blocked_ready.diagnostics)
 end
 
 @testset "source-local event sequence is the causal order" begin
@@ -397,6 +441,32 @@ end
         ],
     ))
     @test any(d -> d.code === :duplicate_event_sequence, dup.diagnostics)
+end
+
+@testset "promote_staged preserves envelope provenance and references" begin
+    parent_id = ObjectId(ID_GEOM)
+    staged = _staged(
+        ID_MESH,
+        "mesh";
+        content = "hash-mesh",
+        provenance = ProvenanceRefs(;
+            software_environment = SoftwareEnvironmentId("env-1"),
+            execution_context = ExecutionContextId("ctx-1"),
+        ),
+        references = [ArchiveReference(:geometry, parent_id; revision_id = RevisionId(REV_1))],
+    )
+    run = RunRecord(RunId("run-env"); status = :completed, staged = [staged])
+    promoted = promote_staged(run, RevisionId(REV_2))
+    @test length(promoted) == 1
+    obj = promoted[1]
+    @test obj.provenance.software_environment == SoftwareEnvironmentId("env-1")
+    @test obj.provenance.execution_context == ExecutionContextId("ctx-1")
+    @test length(obj.references) == 1
+    @test obj.references[1].name === :geometry
+    @test obj.references[1].target.object_id == parent_id
+    @test obj.references[1].target.revision_id == RevisionId(REV_1)
+    @test obj.run_id == run.id
+    @test to_namedtuple(staged).references[1].name === :geometry
 end
 
 @testset "lifecycle records serialize and do not overwrite committed history" begin

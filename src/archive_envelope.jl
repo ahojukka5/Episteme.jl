@@ -1591,24 +1591,24 @@ function _graph_commit_readiness(graph::ArchiveGraph, target::PipelineTarget)
     end
     local_report = readiness(run, PipelineTarget(:commit))
     diagnostics = DiagnosticMessage[local_report.diagnostics...]
-    tx = find_write(graph; scope = :run, run_id = run.id)
-    archive_tx = find_write(graph; scope = :archive, run_id = run.id)
-    for write in (tx, archive_tx)
-        write === nothing && continue
+    for write in graph.writes
+        _write_blocks_commit(write, run) || continue
         if write.phase in IN_FLIGHT_WRITE_PHASES
             push!(diagnostics, error_diagnostic(
                 :in_flight_write,
-                "run $(run.id.value) still has an in-flight :$(write.phase) write";
+                _in_flight_commit_message(write, run);
                 run_id = run.id.value,
                 scope = write.scope,
                 phase = write.phase,
+                writer_run_id = write.run_id === nothing ? nothing : write.run_id.value,
             ))
         elseif write.phase === :uncertain
             push!(diagnostics, error_diagnostic(
                 :uncertain_side_effect,
-                "run $(run.id.value) write is :uncertain; commit is fail-closed";
+                "archive write is :uncertain; commit is fail-closed";
                 run_id = run.id.value,
                 scope = write.scope,
+                writer_run_id = write.run_id === nothing ? nothing : write.run_id.value,
             ))
         end
     end
@@ -1619,6 +1619,22 @@ function _graph_commit_readiness(graph::ArchiveGraph, target::PipelineTarget)
         diagnostics,
         (; run_id = run.id.value, status = run.status, staged = length(run.staged)),
     )
+end
+
+function _write_blocks_commit(write::WriteTransaction, run::RunRecord)
+    if write.scope === :archive
+        return write.phase in IN_FLIGHT_WRITE_PHASES || write.phase === :uncertain
+    end
+    write.scope === :run || return false
+    write.run_id == run.id || return false
+    return write.phase in IN_FLIGHT_WRITE_PHASES || write.phase === :uncertain
+end
+
+function _in_flight_commit_message(write::WriteTransaction, run::RunRecord)
+    if write.scope === :archive && write.run_id != run.id
+        return "archive has an in-flight :$(write.phase) writer; v1 is single-writer"
+    end
+    return "run $(run.id.value) still has an in-flight :$(write.phase) write"
 end
 
 function _graph_restart_readiness(graph::ArchiveGraph, target::PipelineTarget)
@@ -1676,8 +1692,8 @@ function _graph_restart_readiness(graph::ArchiveGraph, target::PipelineTarget)
 end
 
 function _append_checkpoint_diagnostics!(diagnostics, graph, run, parent, checkpoint::CheckpointRef)
-    found, found_content = _locate_checkpoint(graph, run, parent, checkpoint)
-    if found === nothing
+    candidates = _checkpoint_candidates(graph, run, parent, checkpoint)
+    if isempty(candidates)
         push!(diagnostics, error_diagnostic(
             :missing_restart_checkpoint,
             "restart checkpoint $(checkpoint.object_id.value) is not in the archive";
@@ -1691,17 +1707,32 @@ function _append_checkpoint_diagnostics!(diagnostics, graph, run, parent, checkp
         ))
         return diagnostics
     end
-    if checkpoint.content_id !== nothing && found_content !== nothing &&
-            checkpoint.content_id != found_content
+    checkpoint.content_id === nothing && return diagnostics
+    for found in candidates
+        found_content = _checkpoint_content(found)
+        found_content == checkpoint.content_id && return diagnostics
+    end
+    for found in candidates
+        _checkpoint_content(found) === nothing || continue
         push!(diagnostics, error_diagnostic(
-            :incompatible_restart_content,
-            "restart checkpoint $(checkpoint.object_id.value) content does not match";
+            :unverified_restart_content,
+            "restart checkpoint $(checkpoint.object_id.value) is present but has no content id to verify";
             run_id = run.id.value,
             object_id = checkpoint.object_id.value,
             required_content_id = checkpoint.content_id.value,
-            found_content_id = found_content.value,
+            kind = checkpoint.kind,
         ))
+        return diagnostics
     end
+    found_content = _checkpoint_content(candidates[1])
+    push!(diagnostics, error_diagnostic(
+        :incompatible_restart_content,
+        "restart checkpoint $(checkpoint.object_id.value) content does not match";
+        run_id = run.id.value,
+        object_id = checkpoint.object_id.value,
+        required_content_id = checkpoint.content_id.value,
+        found_content_id = found_content === nothing ? nothing : found_content.value,
+    ))
     return diagnostics
 end
 
@@ -1711,35 +1742,22 @@ function _checkpoint_content(found)
     return nothing
 end
 
-function _content_matches(checkpoint::CheckpointRef, found)
-    checkpoint.content_id === nothing && return true
-    found_content = _checkpoint_content(found)
-    found_content === nothing && return true
-    return checkpoint.content_id == found_content
-end
-
-function _locate_checkpoint(graph, run, parent, checkpoint::CheckpointRef)
+function _checkpoint_candidates(graph, run, parent, checkpoint::CheckpointRef)
     candidates = Union{ArchiveObject,StagedObject}[]
     if checkpoint.revision_id !== nothing
         object = find_object(graph, checkpoint.object_id, checkpoint.revision_id)
         object === nothing || push!(candidates, object)
-    else
-        append!(candidates, find_revisions(graph, checkpoint.object_id))
-        for staged in run.staged
-            staged.object_id == checkpoint.object_id && push!(candidates, staged)
-        end
-        if parent !== nothing
-            for staged in parent.staged
-                staged.object_id == checkpoint.object_id && push!(candidates, staged)
-            end
-        end
+        return candidates
     end
-    isempty(candidates) && return nothing, nothing
-    for found in candidates
-        _content_matches(checkpoint, found) && return found, _checkpoint_content(found)
+    append!(candidates, find_revisions(graph, checkpoint.object_id))
+    for staged in run.staged
+        staged.object_id == checkpoint.object_id && push!(candidates, staged)
     end
-    found = candidates[1]
-    return found, _checkpoint_content(found)
+    parent === nothing && return candidates
+    for staged in parent.staged
+        staged.object_id == checkpoint.object_id && push!(candidates, staged)
+    end
+    return candidates
 end
 
 # ---------------------------------------------------------------------------
