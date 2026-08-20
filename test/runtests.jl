@@ -217,4 +217,5 @@ struct DummyObject end
     include("archive_events.jl")
     include("portable_document.jl")
     include("archive_checkout.jl")
+    include("archive_purge.jl")
 end

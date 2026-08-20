@@ -5,6 +5,7 @@ include("semantic_tree.jl")
 include("declarative.jl")
 include("archive_envelope.jl")
 include("archive_checkout.jl")
+include("archive_purge.jl")
 include("portable_document.jl")
 
 export report, validate, readiness
@@ -41,6 +42,8 @@ export promote_staged
 export revision_parents, revision_children, revision_ancestors, revision_descendants
 export ExternalRequirement, ManifestEntry, RevisionManifest
 export inspect, checkout, select, branch_from
+export RetentionPolicy, RetentionRoot, PurgeClassification, PurgePlan, PurgeResult
+export plan_purge, compact_archive
 export PortableEncoded, PortableNode, PortableSemanticDocument
 export portable_encode, portable_decode, is_portable_value
 export validate_portable, capture_portable, restore_semantic
