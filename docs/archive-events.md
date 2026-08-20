@@ -29,9 +29,10 @@ revision, objects, producer, and execution context.
 | `payload` | extra structured facts, still not scientific state |
 
 Default retention for structured events is `:forensic`. Wall-clock
-timestamps are never the only ordering primitive.
+timestamps are never used as an ordering primitive.
 `ordered_run_events` and `event_timeline` sort by run, source, then
-sequence.
+sequence. Unsequenced events keep insertion order as a presentation
+tie-break.
 
 `event_timeline(graph; run_id=...)` returns rows with time / scope /
 severity / kind / message / reference columns and does not load domain

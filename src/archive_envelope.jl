@@ -666,7 +666,7 @@ function ordered_run_events(graph::ArchiveGraph, run_id::RunId)
     for event in graph.events
         event.run_id == run_id && push!(matches, event)
     end
-    return sort(matches; by = _event_sequence_key)
+    return _events_in_timeline_order(matches)
 end
 
 ordered_log_streams(graph::ArchiveGraph) =
@@ -678,13 +678,18 @@ _log_stream_sort_key(stream::LogStreamRecord) = (
     stream.source === nothing ? "" : stream.source,
 )
 
-_event_sequence_key(event::EventRecord) = (
-    event.run_id.value,
-    event.source === nothing ? "" : event.source,
-    event.sequence === nothing ? typemax(Int) : event.sequence,
-    event.timestamp === nothing ? "" : event.timestamp,
-    String(event.kind),
-)
+function _events_in_timeline_order(events::Vector{EventRecord})
+    n = length(events)
+    n < 2 && return copy(events)
+    idxs = collect(1:n)
+    sort!(idxs; by = i -> (
+        events[i].run_id.value,
+        events[i].source === nothing ? "" : events[i].source,
+        events[i].sequence === nothing ? typemax(Int) : events[i].sequence,
+        i,
+    ))
+    return events[idxs]
+end
 
 """
     event_timeline(graph; run_id=nothing) -> Vector{NamedTuple}
@@ -701,7 +706,7 @@ function event_timeline(graph::ArchiveGraph; run_id = nothing)
         rid === nothing || event.run_id == rid || continue
         push!(events, event)
     end
-    for event in sort(events; by = _event_sequence_key)
+    for event in _events_in_timeline_order(events)
         push!(rows, (
             timestamp = event.timestamp,
             scope = event.scope,
@@ -1437,25 +1442,7 @@ function _validate_log_streams!(diagnostics, graph::ArchiveGraph)
 end
 
 function _validate_event_sequences!(diagnostics, graph::ArchiveGraph)
-    seen = Dict{Tuple{String,String,Int},Symbol}()
-    for event in graph.events
-        event.sequence === nothing && continue
-        source = event.source === nothing ? "" : event.source
-        key = (event.run_id.value, source, event.sequence)
-        if haskey(seen, key)
-            push!(diagnostics, error_diagnostic(
-                :duplicate_event_sequence,
-                "run $(event.run_id.value) has two events with sequence $(event.sequence)";
-                run_id = event.run_id.value,
-                source = event.source,
-                sequence = event.sequence,
-                kind = event.kind,
-            ))
-        else
-            seen[key] = event.kind
-        end
-    end
-    return diagnostics
+    return _validate_event_sequence_uniqueness!(diagnostics, graph.events)
 end
 
 function _validate_run_lifecycle!(diagnostics, graph::ArchiveGraph)
