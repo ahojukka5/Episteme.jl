@@ -44,7 +44,9 @@ It also owns shared, domain-neutral supporting types and protocols:
   `ValidationRule`, `NodeValidationRule`),
 - opaque scripting contracts (`script_node`),
 - scientific-archive identities, references, schema-version vocabulary,
-  portable document envelopes, and provenance/history records.
+  portable document envelopes, provenance/history records, and the
+  durable run/commit/restart contract (status, staging, write phases,
+  restart refs).
 
 Shared infrastructure kinds use the `:episteme` / `episteme/*` namespace.
 Domain kinds stay in the namespace of the domain package that owns them.
@@ -216,7 +218,8 @@ runtime operation using them has not landed yet.
 
 Also out of scope in the current implementation:
 
-- higher-level Plan/Run/Activity/Event/Revision behavior not yet implemented,
+- `execute!` / `commit!` / `branch!` / `rerun!` runtime (lifecycle *records*
+  and `validate` / `readiness` for them are in scope),
 - orchestration execution paths not yet implemented,
 - optional parallel/bulk archive I/O extensions not yet implemented,
 - speculative multi-backend storage abstractions without a real second backend,

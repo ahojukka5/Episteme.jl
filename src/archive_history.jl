@@ -1,7 +1,8 @@
 # ---------------------------------------------------------------------------
 # Dual-history records: plan, run, activity, event, revision
 #
-# Structural types only. No execute!/commit!, no file I/O.
+# Structural types and the durable run/commit/restart contract (#27).
+# No execute!/commit! runtime and no file I/O.
 # ---------------------------------------------------------------------------
 
 const EPISTEME_DOCUMENT_KIND = Symbol("episteme/document")
@@ -9,7 +10,28 @@ const EPISTEME_PLAN_KIND = Symbol("episteme/plan")
 
 const OPERATION_REUSE_POLICIES = (:forbid, :allow_if_domain_says, :force_recompute)
 const ACTIVITY_REUSE_STATES = (:computed, :reused, :forced)
-const RUN_STATUSES = (:queued, :running, :completed, :failed, :interrupted)
+const RUN_STATUSES = (
+    :queued,
+    :running,
+    :completed,
+    :failed,
+    :interrupted,
+    :cancelled,
+    :uncertain,
+)
+const INCOMPLETE_RUN_STATUSES = (
+    :queued,
+    :running,
+    :failed,
+    :interrupted,
+    :cancelled,
+    :uncertain,
+)
+const RESTARTABLE_RUN_STATUSES = (:failed, :interrupted, :cancelled, :uncertain)
+const STAGED_ORIGINS = (:generated, :reused)
+const WRITE_PHASES = (:begin, :appending, :committing, :committed, :aborted, :uncertain)
+const IN_FLIGHT_WRITE_PHASES = (:begin, :appending, :committing)
+const WRITE_SCOPES = (:archive, :run)
 
 episteme_document_schema(version::AbstractString = "1.0.0") =
     SchemaRef(:episteme, "document", version)
@@ -124,6 +146,152 @@ function RevisionRecord(
 end
 
 """
+    CheckpointRef(object_id; content_id=nothing, revision_id=nothing, kind=:checkpoint)
+
+Exact scientific state required to restart. Domain packages decide what
+the checkpoint *contains*; Episteme records which object/content/revision
+must be present. Missing or mismatched identity fails closed.
+"""
+struct CheckpointRef
+    object_id::ObjectId
+    content_id::Union{Nothing,ContentId}
+    revision_id::Union{Nothing,RevisionId}
+    kind::Symbol
+end
+
+function CheckpointRef(
+    object_id::ObjectId;
+    content_id = nothing,
+    revision_id = nothing,
+    kind::Symbol = :checkpoint,
+)
+    return CheckpointRef(
+        object_id,
+        _optional_id(ContentId, content_id),
+        _optional_id(RevisionId, revision_id),
+        kind,
+    )
+end
+
+"""
+    RestartRequirement(; checkpoints=(), execution_context=nothing,
+                       from_activity_id=nothing)
+
+Declared restart contract for a run. Identifies the object/content and
+optional execution context a later restart needs. Episteme does not guess
+a checkpoint when this is absent.
+"""
+struct RestartRequirement
+    checkpoints::Vector{CheckpointRef}
+    execution_context::Union{Nothing,ExecutionContextId}
+    from_activity_id::Union{Nothing,ActivityId}
+end
+
+function RestartRequirement(;
+    checkpoints = CheckpointRef[],
+    execution_context = nothing,
+    from_activity_id = nothing,
+)
+    return RestartRequirement(
+        _typed_vector(CheckpointRef, checkpoints, "checkpoints"),
+        _optional_id(ExecutionContextId, execution_context),
+        _optional_id(ActivityId, from_activity_id),
+    )
+end
+
+"""
+    StagedObject(object_id; namespace, kind, schema, origin=:generated,
+                 content_id=nothing, source_revision_id=nothing,
+                 activity_id=nothing)
+
+Run-local uncommitted snapshot envelope. Not an [`ArchiveObject`](@ref)
+until a later `commit!` promotes it under a new [`RevisionId`](@ref).
+`origin === :reused` copies identity from an existing committed version
+and requires `source_revision_id`.
+"""
+struct StagedObject
+    object_id::ObjectId
+    content_id::Union{Nothing,ContentId}
+    namespace::ArchiveNamespace
+    kind::Symbol
+    schema::SchemaRef
+    origin::Symbol
+    source_revision_id::Union{Nothing,RevisionId}
+    activity_id::Union{Nothing,ActivityId}
+end
+
+function StagedObject(
+    object_id::ObjectId;
+    namespace::ArchiveNamespace,
+    kind::Symbol,
+    schema::SchemaRef,
+    origin::Symbol = :generated,
+    content_id = nothing,
+    source_revision_id = nothing,
+    activity_id = nothing,
+)
+    origin in STAGED_ORIGINS || throw(ArgumentError(
+        "origin must be one of $STAGED_ORIGINS, got :$origin",
+    ))
+    origin === :reused && source_revision_id === nothing && throw(ArgumentError(
+        "reused staged objects require source_revision_id",
+    ))
+    return StagedObject(
+        object_id,
+        _optional_id(ContentId, content_id),
+        namespace,
+        kind,
+        schema,
+        origin,
+        _optional_id(RevisionId, source_revision_id),
+        _optional_id(ActivityId, activity_id),
+    )
+end
+
+"""
+    WriteTransaction(; scope, phase, sequence, run_id=nothing, writer_token=nothing)
+
+Logical begin/append/commit marker for durable history writes. This is
+not a file handle and not an HDF5 transaction. v1 JLD2 persistence is
+single-writer: at most one in-flight `:archive` transaction at a time.
+`phase === :uncertain` is fail-closed (do not treat the write as
+committed).
+"""
+struct WriteTransaction
+    scope::Symbol
+    phase::Symbol
+    sequence::Int
+    run_id::Union{Nothing,RunId}
+    writer_token::Union{Nothing,String}
+end
+
+function WriteTransaction(;
+    scope::Symbol,
+    phase::Symbol,
+    sequence::Integer,
+    run_id = nothing,
+    writer_token = nothing,
+)
+    scope in WRITE_SCOPES || throw(ArgumentError(
+        "scope must be one of $WRITE_SCOPES, got :$scope",
+    ))
+    phase in WRITE_PHASES || throw(ArgumentError(
+        "phase must be one of $WRITE_PHASES, got :$phase",
+    ))
+    Int(sequence) < 0 && throw(ArgumentError("write sequence must be non-negative"))
+    scope === :run && run_id === nothing && throw(ArgumentError(
+        "run-scoped write transactions require run_id",
+    ))
+    return WriteTransaction(
+        scope,
+        phase,
+        Int(sequence),
+        _optional_id(RunId, run_id),
+        _optional_nonempty_string(writer_token),
+    )
+end
+
+"""
     ActivityRecord(id, run_id, operation; idempotency_key=nothing, used=(),
                    generated=(), reuse=:computed)
 
@@ -166,10 +334,13 @@ end
 """
     RunRecord(id; plan_id=nothing, parent_run_id=nothing, revision_id=nothing,
               status=:queued, software_environment=nothing,
-              execution_context=nothing, agent_id=nothing, activities=())
+              execution_context=nothing, agent_id=nothing, activities=(),
+              staged=(), restart=nothing)
 
 One execution of a plan. `revision_id` is `nothing` until a later `commit!`.
-Activities live here; they are not duplicated on [`ArchiveGraph`](@ref).
+Activities and staged snapshot envelopes live here; they are not
+duplicated on [`ArchiveGraph`](@ref). Incomplete statuses never name a
+committed revision.
 """
 struct RunRecord
     id::RunId
@@ -181,6 +352,8 @@ struct RunRecord
     execution_context::Union{Nothing,ExecutionContextId}
     agent_id::Union{Nothing,AgentId}
     activities::Vector{ActivityRecord}
+    staged::Vector{StagedObject}
+    restart::Union{Nothing,RestartRequirement}
 end
 
 function RunRecord(
@@ -193,9 +366,14 @@ function RunRecord(
     execution_context = nothing,
     agent_id = nothing,
     activities = ActivityRecord[],
+    staged = StagedObject[],
+    restart = nothing,
 )
     status in RUN_STATUSES || throw(ArgumentError(
         "status must be one of $RUN_STATUSES, got :$status",
+    ))
+    restart === nothing || restart isa RestartRequirement || throw(ArgumentError(
+        "restart must be RestartRequirement or nothing, got $(typeof(restart))",
     ))
     return RunRecord(
         id,
@@ -207,18 +385,25 @@ function RunRecord(
         _optional_id(ExecutionContextId, execution_context),
         _optional_id(AgentId, agent_id),
         _typed_vector(ActivityRecord, activities, "activities"),
+        _typed_vector(StagedObject, staged, "staged"),
+        restart,
     )
 end
 
 """
-    EventRecord(kind, run_id; activity_id=nothing, payload=(;))
+    EventRecord(kind, run_id; activity_id=nothing, sequence=nothing,
+                source=nothing, payload=(;))
 
 Append-only timeline fact inside a run. Not a [`RevisionRecord`](@ref).
+`sequence` is a source-local monotonic identity; wall-clock timestamps in
+`payload` are metadata and never the only causal order.
 """
 struct EventRecord
     kind::Symbol
     run_id::RunId
     activity_id::Union{Nothing,ActivityId}
+    sequence::Union{Nothing,Int}
+    source::Union{Nothing,String}
     payload::NamedTuple
 end
 
@@ -226,9 +411,28 @@ function EventRecord(
     kind::Symbol,
     run_id::RunId;
     activity_id = nothing,
+    sequence = nothing,
+    source = nothing,
     payload::NamedTuple = (;),
 )
-    return EventRecord(kind, run_id, _optional_id(ActivityId, activity_id), payload)
+    seq = _optional_sequence(sequence)
+    return EventRecord(
+        kind,
+        run_id,
+        _optional_id(ActivityId, activity_id),
+        seq,
+        _optional_nonempty_string(source),
+        payload,
+    )
+end
+
+function _optional_sequence(value)
+    value === nothing && return nothing
+    value isa Integer || throw(ArgumentError(
+        "sequence must be an integer or nothing, got $(typeof(value))",
+    ))
+    Int(value) < 0 && throw(ArgumentError("event sequence must be non-negative"))
+    return Int(value)
 end
 
 function validate(plan::Plan)
@@ -247,6 +451,283 @@ function validate(plan::Plan)
         isempty(diagnostics),
         diagnostics,
         (; plan_id = plan.id.value, operations = length(plan.operations)),
+    )
+end
+
+function validate(staged::StagedObject)
+    diagnostics = DiagnosticMessage[]
+    _validate_staged_object!(diagnostics, staged)
+    return ValidationReport(
+        staged.kind,
+        isempty(diagnostics),
+        diagnostics,
+        (; object_id = staged.object_id.value, origin = staged.origin),
+    )
+end
+
+function validate(run::RunRecord)
+    diagnostics = DiagnosticMessage[]
+    _validate_run_record!(diagnostics, run)
+    return ValidationReport(
+        :run,
+        isempty(diagnostics),
+        diagnostics,
+        (;
+            run_id = run.id.value,
+            status = run.status,
+            revision_id = run.revision_id === nothing ? nothing : run.revision_id.value,
+            staged = length(run.staged),
+        ),
+    )
+end
+
+function validate(tx::WriteTransaction)
+    diagnostics = DiagnosticMessage[]
+    _validate_write_transaction!(diagnostics, tx)
+    return ValidationReport(
+        :write_transaction,
+        isempty(diagnostics),
+        diagnostics,
+        (; scope = tx.scope, phase = tx.phase, sequence = tx.sequence),
+    )
+end
+
+function _validate_staged_object!(diagnostics, staged::StagedObject)
+    prefix = String(staged.namespace.id) * "/"
+    startswith(String(staged.kind), prefix) || push!(diagnostics, error_diagnostic(
+        :kind_namespace_mismatch,
+        "kind $(staged.kind) is not owned by namespace :$(staged.namespace.id)";
+        object_id = staged.object_id.value,
+        kind = staged.kind,
+        namespace = staged.namespace.id,
+    ))
+    staged.schema.namespace_id == staged.namespace.id || push!(
+        diagnostics,
+        error_diagnostic(
+            :schema_namespace_mismatch,
+            "schema namespace :$(staged.schema.namespace_id) does not match object namespace :$(staged.namespace.id)";
+            object_id = staged.object_id.value,
+            schema_namespace = staged.schema.namespace_id,
+            namespace = staged.namespace.id,
+        ),
+    )
+    schema_kind(staged.schema) == staged.kind || push!(diagnostics, error_diagnostic(
+        :schema_kind_mismatch,
+        "schema $(schema_kind(staged.schema)) does not match kind $(staged.kind)";
+        object_id = staged.object_id.value,
+        schema_kind = schema_kind(staged.schema),
+        kind = staged.kind,
+    ))
+    if staged.origin === :reused && staged.source_revision_id === nothing
+        push!(diagnostics, error_diagnostic(
+            :reused_without_source,
+            "reused staged object $(staged.object_id.value) has no source_revision_id";
+            object_id = staged.object_id.value,
+        ))
+    end
+    return diagnostics
+end
+
+function _validate_run_record!(diagnostics, run::RunRecord)
+    if run.revision_id !== nothing && run.status in INCOMPLETE_RUN_STATUSES
+        code = run.status === :uncertain ? :uncertain_run_has_revision :
+            :incomplete_run_has_revision
+        push!(diagnostics, error_diagnostic(
+            code,
+            "run $(run.id.value) status :$(run.status) must not name a committed revision";
+            run_id = run.id.value,
+            status = run.status,
+            revision_id = run.revision_id.value,
+        ))
+    end
+    seen_staged = String[]
+    for staged in run.staged
+        _validate_staged_object!(diagnostics, staged)
+        if staged.object_id.value in seen_staged
+            push!(diagnostics, error_diagnostic(
+                :duplicate_staged_object,
+                "run $(run.id.value) stages object $(staged.object_id.value) more than once";
+                run_id = run.id.value,
+                object_id = staged.object_id.value,
+            ))
+        else
+            push!(seen_staged, staged.object_id.value)
+        end
+        staged.activity_id === nothing && continue
+        any(activity -> activity.id == staged.activity_id, run.activities) && continue
+        push!(diagnostics, error_diagnostic(
+            :missing_staged_activity,
+            "staged object $(staged.object_id.value) names unknown activity $(staged.activity_id.value)";
+            run_id = run.id.value,
+            object_id = staged.object_id.value,
+            activity_id = staged.activity_id.value,
+        ))
+    end
+    req = run.restart
+    if req !== nothing && req.from_activity_id !== nothing
+        if !any(activity -> activity.id == req.from_activity_id, run.activities)
+            push!(diagnostics, error_diagnostic(
+                :missing_restart_activity,
+                "run $(run.id.value) restart names unknown activity $(req.from_activity_id.value)";
+                run_id = run.id.value,
+                activity_id = req.from_activity_id.value,
+            ))
+        end
+    end
+    return diagnostics
+end
+
+function _validate_write_transaction!(diagnostics, tx::WriteTransaction)
+    if tx.phase in IN_FLIGHT_WRITE_PHASES && tx.writer_token === nothing
+        push!(diagnostics, error_diagnostic(
+            :missing_writer_token,
+            "$(tx.scope) write sequence $(tx.sequence) is in flight without a writer token";
+            scope = tx.scope,
+            phase = tx.phase,
+            sequence = tx.sequence,
+        ))
+    end
+    return diagnostics
+end
+
+"""
+    promote_staged(run, revision_id) -> Vector{ArchiveObject}
+
+Pure mapping of a run's staging set into envelope rows for `revision_id`.
+Does not mutate the run, move a head, or write a file. Later `commit!`
+uses this promotion; this helper exists so the contract is testable now.
+"""
+function promote_staged(run::RunRecord, revision_id::RevisionId)
+    objects = ArchiveObject[]
+    for staged in run.staged
+        push!(objects, ArchiveObject(
+            staged.object_id,
+            revision_id;
+            content_id = staged.content_id,
+            run_id = run.id,
+            namespace = staged.namespace,
+            kind = staged.kind,
+            schema = staged.schema,
+        ))
+    end
+    return objects
+end
+
+function report(run::RunRecord)
+    committed = run.revision_id !== nothing
+    return ObjectReport(
+        :run,
+        "Run $(run.id.value) status=:$(run.status) committed=$committed.",
+        (;
+            run_id = run.id.value,
+            status = run.status,
+            revision_id = run.revision_id === nothing ? nothing : run.revision_id.value,
+            staged = length(run.staged),
+            activities = length(run.activities),
+            committed = committed,
+        ),
+        DiagnosticMessage[],
+        ArtifactRef[],
+    )
+end
+
+function readiness(run::RunRecord, target::PipelineTarget)
+    if target.name === :commit
+        return _run_commit_readiness(run)
+    elseif target.name === :restart
+        return _run_restart_readiness(run)
+    end
+    return ReadinessReport(
+        :run,
+        target,
+        false,
+        [error_diagnostic(
+            :unsupported_target,
+            "run readiness target :$(target.name) is not :commit or :restart";
+            run_id = run.id.value,
+            target = target.name,
+        )],
+        (; run_id = run.id.value, status = run.status),
+    )
+end
+
+function _run_commit_readiness(run::RunRecord)
+    target = PipelineTarget(:commit)
+    diagnostics = DiagnosticMessage[]
+    if run.status !== :completed
+        push!(diagnostics, error_diagnostic(
+            :run_not_completed,
+            "run $(run.id.value) status :$(run.status) is not ready to commit";
+            run_id = run.id.value,
+            status = run.status,
+        ))
+    end
+    if run.revision_id !== nothing
+        push!(diagnostics, error_diagnostic(
+            :run_already_committed,
+            "run $(run.id.value) already names revision $(run.revision_id.value)";
+            run_id = run.id.value,
+            revision_id = run.revision_id.value,
+        ))
+    end
+    if run.status === :uncertain
+        push!(diagnostics, error_diagnostic(
+            :uncertain_side_effect,
+            "run $(run.id.value) has uncertain durable side effects; commit is fail-closed";
+            run_id = run.id.value,
+        ))
+    end
+    return ReadinessReport(
+        :run,
+        target,
+        isempty(diagnostics),
+        diagnostics,
+        (; run_id = run.id.value, status = run.status, staged = length(run.staged)),
+    )
+end
+
+function _run_restart_readiness(run::RunRecord)
+    target = PipelineTarget(:restart)
+    diagnostics = DiagnosticMessage[]
+    if run.revision_id !== nothing
+        push!(diagnostics, error_diagnostic(
+            :run_already_committed,
+            "run $(run.id.value) already committed revision $(run.revision_id.value)";
+            run_id = run.id.value,
+            revision_id = run.revision_id.value,
+        ))
+    end
+    if !(run.status in RESTARTABLE_RUN_STATUSES)
+        push!(diagnostics, error_diagnostic(
+            :run_not_restartable,
+            "run $(run.id.value) status :$(run.status) is not a restartable incomplete state";
+            run_id = run.id.value,
+            status = run.status,
+        ))
+    end
+    if run.restart === nothing
+        push!(diagnostics, error_diagnostic(
+            :restart_not_declared,
+            "run $(run.id.value) does not declare a restart requirement";
+            run_id = run.id.value,
+        ))
+    elseif isempty(run.restart.checkpoints)
+        push!(diagnostics, error_diagnostic(
+            :restart_not_declared,
+            "run $(run.id.value) restart requirement lists no checkpoints";
+            run_id = run.id.value,
+        ))
+    end
+    return ReadinessReport(
+        :run,
+        target,
+        isempty(diagnostics),
+        diagnostics,
+        (;
+            run_id = run.id.value,
+            status = run.status,
+            checkpoints = run.restart === nothing ? 0 : length(run.restart.checkpoints),
+        ),
     )
 end
 
@@ -283,6 +764,41 @@ to_namedtuple(activity::ActivityRecord) = (
     reuse = activity.reuse,
 )
 
+to_namedtuple(checkpoint::CheckpointRef) = (
+    object_id = checkpoint.object_id.value,
+    content_id = checkpoint.content_id === nothing ? nothing : checkpoint.content_id.value,
+    revision_id = checkpoint.revision_id === nothing ? nothing : checkpoint.revision_id.value,
+    kind = checkpoint.kind,
+)
+
+to_namedtuple(req::RestartRequirement) = (
+    checkpoints = Tuple(to_namedtuple.(req.checkpoints)),
+    execution_context = req.execution_context === nothing ? nothing :
+        req.execution_context.value,
+    from_activity_id = req.from_activity_id === nothing ? nothing :
+        req.from_activity_id.value,
+)
+
+to_namedtuple(staged::StagedObject) = (
+    object_id = staged.object_id.value,
+    content_id = staged.content_id === nothing ? nothing : staged.content_id.value,
+    namespace = to_namedtuple(staged.namespace),
+    kind = staged.kind,
+    schema = to_namedtuple(staged.schema),
+    origin = staged.origin,
+    source_revision_id = staged.source_revision_id === nothing ? nothing :
+        staged.source_revision_id.value,
+    activity_id = staged.activity_id === nothing ? nothing : staged.activity_id.value,
+)
+
+to_namedtuple(tx::WriteTransaction) = (
+    scope = tx.scope,
+    phase = tx.phase,
+    sequence = tx.sequence,
+    run_id = tx.run_id === nothing ? nothing : tx.run_id.value,
+    writer_token = tx.writer_token,
+)
+
 to_namedtuple(run::RunRecord) = (
     id = run.id.value,
     plan_id = run.plan_id === nothing ? nothing : run.plan_id.value,
@@ -295,11 +811,15 @@ to_namedtuple(run::RunRecord) = (
         run.execution_context.value,
     agent_id = run.agent_id === nothing ? nothing : run.agent_id.value,
     activities = Tuple(to_namedtuple.(run.activities)),
+    staged = Tuple(to_namedtuple.(run.staged)),
+    restart = run.restart === nothing ? nothing : to_namedtuple(run.restart),
 )
 
 to_namedtuple(event::EventRecord) = (
     kind = event.kind,
     run_id = event.run_id.value,
     activity_id = event.activity_id === nothing ? nothing : event.activity_id.value,
+    sequence = event.sequence,
+    source = event.source,
     payload = event.payload,
 )

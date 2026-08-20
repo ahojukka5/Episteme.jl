@@ -45,8 +45,9 @@ parallel HDF5 access. See
 [`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md),
 [`docs/archive-ownership.md`](docs/archive-ownership.md),
 [`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md),
-[`docs/declarative-contracts.md`](docs/declarative-contracts.md), and
-[`docs/archive-envelope.md`](docs/archive-envelope.md).
+[`docs/declarative-contracts.md`](docs/declarative-contracts.md),
+[`docs/archive-envelope.md`](docs/archive-envelope.md), and
+[`docs/archive-lifecycle.md`](docs/archive-lifecycle.md).
 
 ## Why shared generic functions avoid name conflicts
 
@@ -141,8 +142,12 @@ Selected concrete types:
 - `OperationSpec` / `Plan` / `RunRecord` / `ActivityRecord` /
   `EventRecord` / `RevisionRecord` — dual-history records on
   `ArchiveGraph` (snapshot revisions vs run/activity/event history).
+- `StagedObject` / `WriteTransaction` / `CheckpointRef` /
+  `RestartRequirement` — durable run/commit/restart contract: staging
+  before `commit!`, interrupted-write phases, and exact restart refs.
 - `revision_parents` / `revision_children` / `revision_ancestors` /
   `revision_descendants` — in-memory revision DAG walks.
+- `promote_staged` — pure mapping of a run's staging set to envelope rows.
 
 Tree operations:
 
