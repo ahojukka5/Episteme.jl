@@ -64,6 +64,34 @@
     @test :event_timeline in names(Episteme)
 end
 
+@testset "unsequenced events are not ordered by wall-clock" begin
+    run = RunRecord(RunId("run-clock"); status = :running)
+    later = EventRecord(
+        :late_input,
+        run.id;
+        source = "rank-0",
+        message = "inserted first",
+        timestamp = "2026-08-20T12:00:09Z",
+    )
+    earlier = EventRecord(
+        :early_input,
+        run.id;
+        source = "rank-0",
+        message = "inserted second",
+        timestamp = "2026-08-20T12:00:01Z",
+    )
+    @test later.sequence === nothing
+    @test earlier.sequence === nothing
+    graph = ArchiveGraph(ArchiveObject[]; runs = [run], events = [later, earlier])
+    @test isvalid(validate(graph))
+    ordered = ordered_run_events(graph, run.id)
+    @test [e.kind for e in ordered] == [:late_input, :early_input]
+    rows = event_timeline(graph; run_id = run.id)
+    @test [row.kind for row in rows] == [:late_input, :early_input]
+    @test rows[1].timestamp == "2026-08-20T12:00:09Z"
+    @test rows[2].timestamp == "2026-08-20T12:00:01Z"
+end
+
 @testset "failed uncommitted run keeps events without a revision" begin
     run = RunRecord(RunId("run-fail"); status = :failed)
     events = [
@@ -107,6 +135,22 @@ end
     @test isvalid(validate(graph))
     @test length(graph.writes) == 1
     @test length(event_timeline(graph; run_id = run.id)) == 1000
+
+    dup = EventBatch([
+        EventRecord(:a, run.id; sequence = 1, source = "rank-0"),
+        EventRecord(:b, run.id; sequence = 1, source = "rank-0"),
+    ])
+    dup_report = validate(dup)
+    @test !isvalid(dup_report)
+    @test any(d -> d.code === :duplicate_event_sequence, dup_report.diagnostics)
+
+    bad_write = EventBatch(
+        [EventRecord(:tick, run.id; sequence = 0, source = "rank-0")];
+        write = WriteTransaction(; scope = :run, phase = :appending, sequence = 1, run_id = run.id),
+    )
+    write_report = validate(bad_write)
+    @test !isvalid(write_report)
+    @test any(d -> d.code === :missing_writer_token, write_report.diagnostics)
 end
 
 @testset "optional log streams are independent of revisions" begin

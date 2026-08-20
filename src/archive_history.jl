@@ -642,13 +642,37 @@ function validate(event::EventRecord)
     )
 end
 
+function _validate_event_sequence_uniqueness!(diagnostics, events)
+    seen = Dict{Tuple{String,String,Int},Symbol}()
+    for event in events
+        event.sequence === nothing && continue
+        source = event.source === nothing ? "" : event.source
+        key = (event.run_id.value, source, event.sequence)
+        if haskey(seen, key)
+            push!(diagnostics, error_diagnostic(
+                :duplicate_event_sequence,
+                "run $(event.run_id.value) has two events with sequence $(event.sequence)";
+                run_id = event.run_id.value,
+                source = event.source,
+                sequence = event.sequence,
+                kind = event.kind,
+            ))
+        else
+            seen[key] = event.kind
+        end
+    end
+    return diagnostics
+end
+
 function validate(batch::EventBatch)
     diagnostics = DiagnosticMessage[]
+    write = batch.write
+    write === nothing || _validate_write_transaction!(diagnostics, write)
     isempty(batch.events) && return ValidationReport(
         :event_batch,
-        true,
+        isempty(diagnostics),
         diagnostics,
-        (; count = 0),
+        (; count = 0, write_sequence = write === nothing ? nothing : write.sequence),
     )
     run_id = batch.events[1].run_id
     for event in batch.events
@@ -662,7 +686,7 @@ function validate(batch::EventBatch)
             kind = event.kind,
         ))
     end
-    write = batch.write
+    _validate_event_sequence_uniqueness!(diagnostics, batch.events)
     if write !== nothing
         if write.scope !== :run
             push!(diagnostics, error_diagnostic(
