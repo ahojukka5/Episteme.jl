@@ -181,7 +181,7 @@ function _revision_has_parent_cycle(graph::ArchiveGraph, rec::RevisionRecord)
     return false
 end
 
-function _append_selected_revision_diagnostics!(diagnostics, graph::ArchiveGraph, rec::RevisionRecord)
+function _append_revision_record_diagnostics!(diagnostics, graph::ArchiveGraph, rec::RevisionRecord)
     if _revision_has_parent_cycle(graph, rec)
         push!(diagnostics, error_diagnostic(
             :cycle,
@@ -198,6 +198,44 @@ function _append_selected_revision_diagnostics!(diagnostics, graph::ArchiveGraph
             revision_id = rec.id.value,
             parent_id = parent_id.value,
         ))
+    end
+    rec.run_id === nothing && return diagnostics
+    run = find_run(graph, rec.run_id)
+    if run === nothing
+        push!(diagnostics, error_diagnostic(
+            :missing_revision_run,
+            "revision $(rec.id.value) names unknown run $(rec.run_id.value)";
+            revision_id = rec.id.value,
+            run_id = rec.run_id.value,
+        ))
+        return diagnostics
+    end
+    if run.revision_id !== nothing && run.revision_id != rec.id
+        push!(diagnostics, error_diagnostic(
+            :run_revision_mismatch,
+            "revision $(rec.id.value) names run $(run.id.value) which commits $(run.revision_id.value)";
+            revision_id = rec.id.value,
+            run_id = run.id.value,
+            run_revision_id = run.revision_id.value,
+        ))
+    elseif _plan_ids_conflict(run, rec)
+        push!(diagnostics, error_diagnostic(
+            :run_revision_plan_mismatch,
+            "revision $(rec.id.value) plan $(rec.plan_id.value) does not match run $(run.id.value) plan $(run.plan_id.value)";
+            revision_id = rec.id.value,
+            run_id = run.id.value,
+            run_plan_id = run.plan_id.value,
+            revision_plan_id = rec.plan_id.value,
+        ))
+    end
+    return diagnostics
+end
+
+function _append_visible_revision_diagnostics!(diagnostics, graph::ArchiveGraph, visible)
+    for id in visible
+        rec = find_revision(graph, id)
+        rec === nothing && continue
+        _append_revision_record_diagnostics!(diagnostics, graph, rec)
     end
     return diagnostics
 end
@@ -250,8 +288,8 @@ function _revision_manifest(
     ))
     reqs = _externals_vector(externals)
     diagnostics = DiagnosticMessage[]
-    _append_selected_revision_diagnostics!(diagnostics, graph, rec)
     visible = _visible_revision_order(graph, revision_id)
+    _append_visible_revision_diagnostics!(diagnostics, graph, visible)
     queue = find_objects(graph, revision_id)
     seen = Set{String}()
     entries = ManifestEntry[]
@@ -290,14 +328,6 @@ function _revision_manifest(
         head.revision_id == revision_id && push!(heads, head)
     end
     run = rec.run_id === nothing ? nothing : find_run(graph, rec.run_id)
-    if rec.run_id !== nothing && run === nothing
-        push!(diagnostics, error_diagnostic(
-            :missing_revision_run,
-            "revision $(revision_id.value) names unknown run $(rec.run_id.value)";
-            revision_id = revision_id.value,
-            run_id = rec.run_id.value,
-        ))
-    end
     return RevisionManifest(
         mode,
         rec,
@@ -367,14 +397,35 @@ end
 
 """
     select(manifest, object_id) -> Union{ManifestEntry,Nothing}
+    select(manifest, object_id, revision_id)
+    select(manifest, object_ref)
 
-Return one lazy slot. Does not load payload bytes.
+Return one lazy slot. Does not load payload bytes. If `object_id` alone
+matches several versions in the closure, this throws; pin a
+[`RevisionId`](@ref) or [`ObjectRef`](@ref).
 """
 function select(manifest::RevisionManifest, object_id::ObjectId)
+    matches = ManifestEntry[]
     for entry in manifest.entries
-        entry.object_id == object_id && return entry
+        entry.object_id == object_id && push!(matches, entry)
+    end
+    isempty(matches) && return nothing
+    length(matches) > 1 && throw(ArgumentError(
+        "object $(object_id.value) has multiple versions in this manifest; select by revision",
+    ))
+    return matches[1]
+end
+
+function select(manifest::RevisionManifest, object_id::ObjectId, revision_id::RevisionId)
+    for entry in manifest.entries
+        entry.object_id == object_id && entry.revision_id == revision_id && return entry
     end
     return nothing
+end
+
+function select(manifest::RevisionManifest, ref::ObjectRef)
+    ref.revision_id === nothing && return select(manifest, ref.object_id)
+    return select(manifest, ref.object_id, ref.revision_id)
 end
 
 """

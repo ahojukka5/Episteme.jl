@@ -29,8 +29,10 @@ unique head name / committed `RunId`) to:
 - workflow heads currently pointing at the revision (bookmarks, not
   identity)
 
-`select(manifest, object_id)` returns one lazy slot. It never
-materializes payload arrays.
+`select(manifest, object_id)` returns one lazy slot when that id is
+unique in the closure. If the same `ObjectId` appears at more than one
+revision, pin `select(manifest, object_id, revision_id)` or
+`select(manifest, ObjectRef(...))`. It never materializes payload arrays.
 
 Payload availability:
 
