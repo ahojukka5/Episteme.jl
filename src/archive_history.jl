@@ -99,7 +99,8 @@ end
 
 Committed snapshot node. Object membership is derived via
 [`find_objects`](@ref); this record does not store an object-id list.
-Parent-cycle checks belong to issue #30.
+`parents` may be empty (root), one parent (linear history), or several
+(merge). Dangling parents and cycles fail `validate`.
 """
 struct RevisionRecord
     id::RevisionId

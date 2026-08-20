@@ -652,6 +652,109 @@ function find_run(graph::ArchiveGraph, run_id::RunId)
     return nothing
 end
 
+function _unique_parents(rev::RevisionRecord)
+    parents = RevisionId[]
+    seen = String[]
+    for parent in rev.parents
+        parent.value in seen && continue
+        push!(seen, parent.value)
+        push!(parents, parent)
+    end
+    return parents
+end
+
+function _revision_children_map(graph::ArchiveGraph)
+    children = Dict{String,Vector{RevisionRecord}}()
+    for rev in graph.revisions
+        children[rev.id.value] = RevisionRecord[]
+    end
+    for rev in graph.revisions
+        for parent in _unique_parents(rev)
+            list = get(children, parent.value, nothing)
+            list === nothing && continue
+            push!(list, rev)
+        end
+    end
+    return children
+end
+
+"""
+    revision_parents(graph, revision_id) -> Vector{RevisionRecord}
+
+Direct parents of `revision_id` that exist in the graph, in record order.
+Missing parent ids are omitted; `validate` reports them as `:dangling_parent`.
+"""
+function revision_parents(graph::ArchiveGraph, revision_id::RevisionId)
+    rec = find_revision(graph, revision_id)
+    rec === nothing && return RevisionRecord[]
+    parents = RevisionRecord[]
+    for parent_id in _unique_parents(rec)
+        parent = find_revision(graph, parent_id)
+        parent === nothing || push!(parents, parent)
+    end
+    return parents
+end
+
+"""
+    revision_children(graph, revision_id) -> Vector{RevisionRecord}
+
+Direct children: revisions that list `revision_id` as a parent.
+"""
+function revision_children(graph::ArchiveGraph, revision_id::RevisionId)
+    children = RevisionRecord[]
+    for rev in ordered_revisions(graph)
+        any(parent -> parent == revision_id, rev.parents) || continue
+        push!(children, rev)
+    end
+    return children
+end
+
+"""
+    revision_ancestors(graph, revision_id) -> Vector{RevisionRecord}
+
+All proper ancestors, excluding `revision_id`. Order is stable by
+[`RevisionId`](@ref) value. Does not load payloads or open files.
+"""
+function revision_ancestors(graph::ArchiveGraph, revision_id::RevisionId)
+    rec = find_revision(graph, revision_id)
+    rec === nothing && return RevisionRecord[]
+    seen = Set{String}([revision_id.value])
+    stack = RevisionId[_unique_parents(rec)...]
+    found = Dict{String,RevisionRecord}()
+    while !isempty(stack)
+        parent_id = pop!(stack)
+        parent_id.value in seen && continue
+        push!(seen, parent_id.value)
+        parent = find_revision(graph, parent_id)
+        parent === nothing && continue
+        found[parent.id.value] = parent
+        append!(stack, _unique_parents(parent))
+    end
+    return sort!(collect(values(found)); by = rev -> rev.id.value)
+end
+
+"""
+    revision_descendants(graph, revision_id) -> Vector{RevisionRecord}
+
+All proper descendants, excluding `revision_id`. Order is stable by
+[`RevisionId`](@ref) value. Does not load payloads or open files.
+"""
+function revision_descendants(graph::ArchiveGraph, revision_id::RevisionId)
+    find_revision(graph, revision_id) === nothing && return RevisionRecord[]
+    children = _revision_children_map(graph)
+    seen = Set{String}([revision_id.value])
+    stack = copy(get(children, revision_id.value, RevisionRecord[]))
+    found = Dict{String,RevisionRecord}()
+    while !isempty(stack)
+        child = pop!(stack)
+        child.id.value in seen && continue
+        push!(seen, child.id.value)
+        found[child.id.value] = child
+        append!(stack, get(children, child.id.value, RevisionRecord[]))
+    end
+    return sort!(collect(values(found)); by = rev -> rev.id.value)
+end
+
 """
     find_revisions(graph, object_id) -> Vector{ArchiveObject}
 
@@ -949,6 +1052,59 @@ function _validate_archive_graph!(diagnostics, graph::ArchiveGraph)
     return diagnostics
 end
 
+function _validate_revision_parent_dag!(diagnostics, graph::ArchiveGraph)
+    n = 0
+    indeg = Dict{String,Int}()
+    children = Dict{String,Vector{String}}()
+    for rev in graph.revisions
+        n += 1
+        indeg[rev.id.value] = 0
+        children[rev.id.value] = String[]
+    end
+    for rev in graph.revisions
+        for parent_id in _unique_parents(rev)
+            if find_revision(graph, parent_id) === nothing
+                push!(diagnostics, error_diagnostic(
+                    :dangling_parent,
+                    "revision $(rev.id.value) names unknown parent $(parent_id.value)";
+                    revision_id = rev.id.value,
+                    parent_id = parent_id.value,
+                ))
+                continue
+            end
+            indeg[rev.id.value] += 1
+            push!(children[parent_id.value], rev.id.value)
+        end
+    end
+    n == 0 && return diagnostics
+
+    queue = String[]
+    for (id, deg) in indeg
+        deg == 0 && push!(queue, id)
+    end
+    processed = 0
+    while !isempty(queue)
+        id = pop!(queue)
+        processed += 1
+        for child in children[id]
+            indeg[child] -= 1
+            indeg[child] == 0 && push!(queue, child)
+        end
+    end
+    processed >= n && return diagnostics
+
+    for (id, deg) in indeg
+        deg == 0 && continue
+        push!(diagnostics, error_diagnostic(
+            :cycle,
+            "revision parent graph contains a cycle including $(id)";
+            revision_id = id,
+        ))
+        break
+    end
+    return diagnostics
+end
+
 function _plan_ids_conflict(run::RunRecord, rec::RevisionRecord)
     return run.plan_id !== nothing && rec.plan_id !== nothing && run.plan_id != rec.plan_id
 end
@@ -973,6 +1129,8 @@ function _validate_history_records!(diagnostics, graph::ArchiveGraph)
             push!(seen_revisions, rev.id.value)
         end
     end
+
+    _validate_revision_parent_dag!(diagnostics, graph)
 
     if !isempty(graph.revisions)
         for object in graph.objects

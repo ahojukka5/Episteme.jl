@@ -29,5 +29,6 @@ export episteme_document_schema, episteme_plan_schema
 export ordered_objects, ordered_references, ordered_heads
 export ordered_revisions, ordered_runs, ordered_events
 export find_object, find_objects, find_revisions, find_revision, find_run
+export revision_parents, revision_children, revision_ancestors, revision_descendants
 
 end # module Episteme

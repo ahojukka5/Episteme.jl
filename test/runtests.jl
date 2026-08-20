@@ -212,4 +212,5 @@ struct DummyObject end
 
     include("archive_envelope.jl")
     include("archive_history.jl")
+    include("archive_revision_dag.jl")
 end
