@@ -99,6 +99,8 @@ resolve in the graph (`:dangling_parent`). Cycles fail (`:cycle`).
 Multiple parents are a merge. Ancestry helpers `revision_parents`,
 `revision_children`, `revision_ancestors`, and `revision_descendants`
 walk records only; they do not open files or load payloads.
+`inspect` / `checkout` return a lazy `RevisionManifest` for one
+committed revision; see [`archive-checkout.md`](archive-checkout.md).
 
 Committed revisions are immutable. A `WorkflowHead` is movable metadata:
 replacing `head.revision_id` does not change historical revision or
