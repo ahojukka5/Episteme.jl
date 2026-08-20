@@ -37,7 +37,10 @@ interrupted runs keep already-durable events by default and do not mint a
 revision.
 
 `readiness(run, PipelineTarget(:commit))` is true only when status is
-`:completed` and `revision_id === nothing`.
+`:completed` and `revision_id === nothing`. Graph-level
+`readiness(graph, PipelineTarget(:commit; run_id = ...))` also requires
+the target run's staging to be valid against the graph (reuse source and
+content identity) and that no in-flight archive writer is present.
 
 ## Staging and promotion
 
@@ -46,7 +49,9 @@ sit on `RunRecord.staged` as `StagedObject` rows:
 
 - `:generated` — produced by this run
 - `:reused` — identity copied from an existing committed version;
-  `source_revision_id` is required and must resolve
+  `source_revision_id` is required and must resolve. If the source has a
+  `ContentId`, the staged row must keep that exact id
+  (`:reused_content_missing` / `:reused_content_mismatch` otherwise).
 
 `promote_staged(run, revision_id)` is a pure mapping to `ArchiveObject`
 rows, including `ProvenanceRefs` and named `ArchiveReference`s. Later

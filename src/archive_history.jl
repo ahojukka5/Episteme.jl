@@ -208,8 +208,9 @@ end
 Run-local uncommitted snapshot envelope. Not an [`ArchiveObject`](@ref)
 until a later `commit!` promotes it under a new [`RevisionId`](@ref).
 `origin === :reused` copies identity from an existing committed version
-and requires `source_revision_id`. Provenance and named references are
-part of the envelope and must survive promotion.
+and requires `source_revision_id`. If that source has a `ContentId`,
+the staged row must keep the same id. Provenance and named references
+are part of the envelope and must survive promotion.
 """
 struct StagedObject
     object_id::ObjectId

@@ -345,6 +345,33 @@ end
         runs = [RunRecord(RunId("run-c"); status = :completed, staged = [content_mismatch])],
     ))
     @test any(d -> d.code === :reused_content_mismatch, mismatch.diagnostics)
+
+    dropped = _staged(ID_SECTOR, "model-state"; origin = :reused, source = REV_1)
+    @test dropped.content_id === nothing
+    dropped_run = RunRecord(RunId("run-drop"); status = :completed, staged = [dropped])
+    dropped_graph = ArchiveGraph(
+        [parent];
+        revisions = [RevisionRecord(RevisionId(REV_1))],
+        runs = [dropped_run],
+    )
+    dropped_report = validate(dropped_graph)
+    @test !isvalid(dropped_report)
+    @test any(d -> d.code === :reused_content_missing, dropped_report.diagnostics)
+    dropped_ready = readiness(dropped_graph, PipelineTarget(:commit; run_id = dropped_run.id))
+    @test isready(readiness(dropped_run, PipelineTarget(:commit)))
+    @test !isready(dropped_ready)
+    @test any(d -> d.code === :reused_content_missing, dropped_ready.diagnostics)
+
+    dangling_ready = readiness(
+        ArchiveGraph(
+            [parent];
+            revisions = [RevisionRecord(RevisionId(REV_1))],
+            runs = [RunRecord(RunId("run-re"); status = :completed, staged = [wrong_source])],
+        ),
+        PipelineTarget(:commit; run_id = RunId("run-re")),
+    )
+    @test !isready(dangling_ready)
+    @test any(d -> d.code === :reused_source_missing, dangling_ready.diagnostics)
 end
 
 @testset "write transactions, single-writer, and fail-closed uncertain outcome" begin

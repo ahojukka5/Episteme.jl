@@ -1366,9 +1366,14 @@ function _validate_run_lifecycle!(diagnostics, graph::ArchiveGraph)
                 ))
             end
         end
-        for staged in run.staged
-            _validate_staged_against_graph!(diagnostics, graph, run, staged)
-        end
+        _validate_run_staging!(diagnostics, graph, run)
+    end
+    return diagnostics
+end
+
+function _validate_run_staging!(diagnostics, graph::ArchiveGraph, run::RunRecord)
+    for staged in run.staged
+        _validate_staged_against_graph!(diagnostics, graph, run, staged)
     end
     return diagnostics
 end
@@ -1387,6 +1392,14 @@ function _validate_staged_against_graph!(diagnostics, graph, run::RunRecord, sta
                 run_id = run.id.value,
                 object_id = staged.object_id.value,
                 source_revision_id = source_rev.value,
+            ))
+        elseif source.content_id !== nothing && staged.content_id === nothing
+            push!(diagnostics, error_diagnostic(
+                :reused_content_missing,
+                "reused object $(staged.object_id.value) dropped source content $(source.content_id.value)";
+                run_id = run.id.value,
+                object_id = staged.object_id.value,
+                source_content_id = source.content_id.value,
             ))
         elseif staged.content_id !== nothing && source.content_id !== nothing &&
                 staged.content_id != source.content_id
@@ -1591,6 +1604,8 @@ function _graph_commit_readiness(graph::ArchiveGraph, target::PipelineTarget)
     end
     local_report = readiness(run, PipelineTarget(:commit))
     diagnostics = DiagnosticMessage[local_report.diagnostics...]
+    _validate_run_record!(diagnostics, run)
+    _validate_run_staging!(diagnostics, graph, run)
     for write in graph.writes
         _write_blocks_commit(write, run) || continue
         if write.phase in IN_FLIGHT_WRITE_PHASES
