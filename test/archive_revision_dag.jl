@@ -96,4 +96,11 @@ end
         ArchiveGraph(ArchiveObject[]; revisions = [RevisionRecord(r0)]),
         r1,
     ) == RevisionRecord[]
+
+    dup = validate(ArchiveGraph(
+        ArchiveObject[];
+        revisions = [RevisionRecord(r0), RevisionRecord(r0)],
+    ))
+    @test any(d -> d.code === :duplicate_revision, dup.diagnostics)
+    @test !any(d -> d.code === :cycle, dup.diagnostics)
 end
