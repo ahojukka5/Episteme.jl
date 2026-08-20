@@ -126,11 +126,10 @@ Restartable statuses are `:failed`, `:interrupted`, `:cancelled`, and
 
 `EventRecord.sequence` is an optional source-local monotonic identity.
 `source` names the rank/thread/process that assigned it. Wall-clock
-values in `payload` are metadata and are never the causal order.
-`ordered_run_events` sorts by source then sequence.
+`timestamp` is metadata and is never the causal order.
+`ordered_run_events` and `event_timeline` sort by source then sequence.
 Duplicate `(run, source, sequence)` fails `:duplicate_event_sequence`.
-
-The richer event timeline product remains issue #44.
+See [`archive-events.md`](archive-events.md).
 
 ## Fail-closed external effects
 
@@ -146,4 +145,5 @@ and do not resume as if the effect completed.
 - JLD2 or HDF5 file I/O, begin/commit markers on disk, or OS file locks
 - domain checkpoint contents or solver-iteration revisions
 - parallel HDF5 or multi-writer bulk I/O
-- the full event/log stream product (#44)
+- on-disk event append layout (logical timeline is in
+  [`archive-events.md`](archive-events.md))

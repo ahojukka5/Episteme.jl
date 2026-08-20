@@ -520,12 +520,14 @@ end
 include("archive_history.jl")
 
 """
-    ArchiveGraph(objects; heads=(), revisions=(), runs=(), events=(), writes=())
+    ArchiveGraph(objects; heads=(), revisions=(), runs=(), events=(), writes=(),
+                 log_streams=())
 
 A logical collection of envelope objects, workflow heads, and dual-history
 records. Snapshot history lives in `revisions`; activity history lives in
 `runs` (activities) and `events`. Logical write transactions live in
-`writes`. There is no parallel session type.
+`writes`. Optional raw log streams live in `log_streams`. There is no
+parallel session type.
 
 Object order in `objects` is insertion order and is not semantically
 authoritative. Use [`ordered_objects`](@ref) for a deterministic walk
@@ -539,6 +541,7 @@ struct ArchiveGraph
     runs::Vector{RunRecord}
     events::Vector{EventRecord}
     writes::Vector{WriteTransaction}
+    log_streams::Vector{LogStreamRecord}
 end
 
 function ArchiveGraph(
@@ -548,6 +551,7 @@ function ArchiveGraph(
     runs = RunRecord[],
     events = EventRecord[],
     writes = WriteTransaction[],
+    log_streams = LogStreamRecord[],
 )
     return ArchiveGraph(
         _typed_vector(ArchiveObject, objects, "graph objects"),
@@ -556,6 +560,7 @@ function ArchiveGraph(
         _typed_vector(RunRecord, runs, "graph runs"),
         _typed_vector(EventRecord, events, "graph events"),
         _typed_vector(WriteTransaction, writes, "graph writes"),
+        _typed_vector(LogStreamRecord, log_streams, "graph log streams"),
     )
 end
 
@@ -654,7 +659,7 @@ _write_sort_key(tx::WriteTransaction) = (
     ordered_run_events(graph, run_id) -> Vector{EventRecord}
 
 Events for `run_id`, ordered by source then source-local sequence.
-Events without a sequence sort last. Wall-clock payload is ignored.
+Events without a sequence sort last. Wall-clock timestamps are ignored.
 """
 function ordered_run_events(graph::ArchiveGraph, run_id::RunId)
     matches = EventRecord[]
@@ -664,11 +669,56 @@ function ordered_run_events(graph::ArchiveGraph, run_id::RunId)
     return sort(matches; by = _event_sequence_key)
 end
 
+ordered_log_streams(graph::ArchiveGraph) =
+    sort(graph.log_streams; by = _log_stream_sort_key)
+
+_log_stream_sort_key(stream::LogStreamRecord) = (
+    stream.run_id.value,
+    String(stream.kind),
+    stream.source === nothing ? "" : stream.source,
+)
+
 _event_sequence_key(event::EventRecord) = (
+    event.run_id.value,
     event.source === nothing ? "" : event.source,
     event.sequence === nothing ? typemax(Int) : event.sequence,
+    event.timestamp === nothing ? "" : event.timestamp,
     String(event.kind),
 )
+
+"""
+    event_timeline(graph; run_id=nothing) -> Vector{NamedTuple}
+
+Generic inspection rows: time, scope, severity, kind, message, and
+run/activity/revision/object/source/sequence references. No domain
+payload is loaded. Sequence is the causal order; timestamp is metadata.
+"""
+function event_timeline(graph::ArchiveGraph; run_id = nothing)
+    rid = _optional_id(RunId, run_id)
+    rows = NamedTuple[]
+    events = EventRecord[]
+    for event in graph.events
+        rid === nothing || event.run_id == rid || continue
+        push!(events, event)
+    end
+    for event in sort(events; by = _event_sequence_key)
+        push!(rows, (
+            timestamp = event.timestamp,
+            scope = event.scope,
+            severity = event.severity,
+            kind = event.kind,
+            message = event.message,
+            run_id = event.run_id.value,
+            activity_id = event.activity_id === nothing ? nothing : event.activity_id.value,
+            revision_id = event.revision_id === nothing ? nothing : event.revision_id.value,
+            object_ids = Tuple(ref.object_id.value for ref in event.object_refs),
+            source = event.source,
+            sequence = event.sequence,
+            retention = event.retention,
+        ))
+    end
+    return rows
+end
 
 function find_revision(graph::ArchiveGraph, revision_id::RevisionId)
     for rev in graph.revisions
@@ -1301,7 +1351,16 @@ function _validate_history_records!(diagnostics, graph::ArchiveGraph)
         end
     end
 
+    _validate_event_timeline!(diagnostics, graph)
+    _validate_log_streams!(diagnostics, graph)
+    _validate_run_lifecycle!(diagnostics, graph)
+    _validate_write_transactions!(diagnostics, graph)
+    return diagnostics
+end
+
+function _validate_event_timeline!(diagnostics, graph::ArchiveGraph)
     for event in graph.events
+        _validate_event_record!(diagnostics, event)
         run = find_run(graph, event.run_id)
         if run === nothing
             push!(diagnostics, error_diagnostic(
@@ -1310,22 +1369,70 @@ function _validate_history_records!(diagnostics, graph::ArchiveGraph)
                 kind = event.kind,
                 run_id = event.run_id.value,
             ))
+        elseif event.activity_id !== nothing &&
+                !any(activity -> activity.id == event.activity_id, run.activities)
+            push!(diagnostics, error_diagnostic(
+                :missing_event_activity,
+                "event :$(event.kind) names unknown activity $(event.activity_id.value)";
+                kind = event.kind,
+                run_id = event.run_id.value,
+                activity_id = event.activity_id.value,
+            ))
+        end
+        if event.revision_id !== nothing && !isempty(graph.revisions) &&
+                find_revision(graph, event.revision_id) === nothing
+            push!(diagnostics, error_diagnostic(
+                :missing_event_revision,
+                "event :$(event.kind) names unknown revision $(event.revision_id.value)";
+                kind = event.kind,
+                run_id = event.run_id.value,
+                revision_id = event.revision_id.value,
+            ))
+        end
+        for ref in event.object_refs
+            _reference_resolves(graph, ref) && continue
+            push!(diagnostics, error_diagnostic(
+                :dangling_event_object,
+                "event :$(event.kind) names unknown object $(ref.object_id.value)";
+                kind = event.kind,
+                run_id = event.run_id.value,
+                object_id = ref.object_id.value,
+                target_revision_id = ref.revision_id === nothing ? nothing :
+                    ref.revision_id.value,
+            ))
+        end
+    end
+    _validate_event_sequences!(diagnostics, graph)
+    return diagnostics
+end
+
+function _validate_log_streams!(diagnostics, graph::ArchiveGraph)
+    for stream in graph.log_streams
+        _credential_like_diagnostics!(
+            diagnostics,
+            stream.summary,
+            (; kind = stream.kind, run_id = stream.run_id.value, field = :summary),
+        )
+        run = find_run(graph, stream.run_id)
+        if run === nothing
+            push!(diagnostics, error_diagnostic(
+                :missing_log_stream_run,
+                "log stream :$(stream.kind) names unknown run $(stream.run_id.value)";
+                kind = stream.kind,
+                run_id = stream.run_id.value,
+            ))
             continue
         end
-        event.activity_id === nothing && continue
-        any(activity -> activity.id == event.activity_id, run.activities) && continue
+        stream.activity_id === nothing && continue
+        any(activity -> activity.id == stream.activity_id, run.activities) && continue
         push!(diagnostics, error_diagnostic(
-            :missing_event_activity,
-            "event :$(event.kind) names unknown activity $(event.activity_id.value)";
-            kind = event.kind,
-            run_id = event.run_id.value,
-            activity_id = event.activity_id.value,
+            :missing_log_stream_activity,
+            "log stream :$(stream.kind) names unknown activity $(stream.activity_id.value)";
+            kind = stream.kind,
+            run_id = stream.run_id.value,
+            activity_id = stream.activity_id.value,
         ))
     end
-
-    _validate_event_sequences!(diagnostics, graph)
-    _validate_run_lifecycle!(diagnostics, graph)
-    _validate_write_transactions!(diagnostics, graph)
     return diagnostics
 end
 
@@ -1555,6 +1662,7 @@ function report(graph::ArchiveGraph)
             runs = length(graph.runs),
             events = length(graph.events),
             writes = length(graph.writes),
+            log_streams = length(graph.log_streams),
             namespaces = Tuple(unique(obj.namespace.id for obj in ordered_objects(graph))),
         ),
         DiagnosticMessage[],
@@ -1858,6 +1966,7 @@ function to_namedtuple(graph::ArchiveGraph)
         runs = Tuple(to_namedtuple.(ordered_runs(graph))),
         events = Tuple(to_namedtuple.(ordered_events(graph))),
         writes = Tuple(to_namedtuple.(ordered_writes(graph))),
+        log_streams = Tuple(to_namedtuple.(ordered_log_streams(graph))),
     )
 end
 
@@ -1897,6 +2006,8 @@ function Base.show(io::IO, graph::ArchiveGraph)
         length(graph.events),
         ", writes=",
         length(graph.writes),
+        ", log_streams=",
+        length(graph.log_streams),
         ")",
     )
 end
