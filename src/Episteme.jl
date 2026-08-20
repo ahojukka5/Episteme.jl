@@ -4,6 +4,7 @@ include("introspection.jl")
 include("semantic_tree.jl")
 include("declarative.jl")
 include("archive_envelope.jl")
+include("portable_document.jl")
 
 export report, validate, readiness
 export AbstractEpistemeReport, AbstractValidationReport, AbstractReadinessReport
@@ -36,5 +37,9 @@ export ordered_run_events, ordered_log_streams, event_timeline
 export find_object, find_objects, find_revisions, find_revision, find_run, find_write
 export promote_staged
 export revision_parents, revision_children, revision_ancestors, revision_descendants
+export PortableEncoded, PortableNode, PortableSemanticDocument
+export portable_encode, portable_decode, is_portable_value
+export validate_portable, capture_portable, restore_semantic
+export from_namedtuple, portable_sexpr
 
 end # module Episteme

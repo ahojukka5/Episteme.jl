@@ -55,9 +55,10 @@ Display uses ordinary Julia `show`. Leaf values print with their own `show`
 methods. Episteme does not define a serialization or interchange format for
 arbitrary runtime objects, and `to_namedtuple` has no method for
 `SemanticNode` or `NodeRef`. Portable declarative documents (issue #34) are
-a strict subset of this tree and may be persisted through the shared
-archive vocabulary. Physical `.ah5` encoding is the later JLD2-backed AH5 profile inside Episteme.
-See [`archive-ownership.md`](archive-ownership.md). Domain packages still
+a strict subset of this tree; see
+[`portable-documents.md`](portable-documents.md). Physical `.ah5` encoding
+is the later JLD2-backed AH5 profile inside Episteme. See
+[`archive-ownership.md`](archive-ownership.md). Domain packages still
 own codecs for their custom portable value types.
 
 Episteme does not depend on an AD library and does not store reverse-mode
@@ -83,7 +84,9 @@ source.
 
 Episteme still does **not** own:
 
-- a serialization or interchange protocol for arbitrary runtime objects,
+- a serialization protocol for arbitrary runtime objects (portable
+  documents are a fail-closed subset; see
+  [`portable-documents.md`](portable-documents.md)),
 - HDF5/XDMF/AH5 readers or writers,
 - reference resolution,
 - dependency-DAG construction,

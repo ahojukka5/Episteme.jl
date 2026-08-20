@@ -224,7 +224,8 @@ compression. They are not a place to store payload arrays.
 - content-hash algorithms (#42)
 - software-environment manifests (#37)
 - execution-context capture (#43)
-- portable `SemanticNode` documents (#34)
+- JLD2 working-archive I/O (portable documents are in
+  [`portable-documents.md`](portable-documents.md))
 
 `report` and `validate` on envelope types are read-only. `to_namedtuple`
 covers the envelope records for later JSON or AH5 encoding. It does not

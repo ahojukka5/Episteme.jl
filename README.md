@@ -47,8 +47,9 @@ parallel HDF5 access. See
 [`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md),
 [`docs/declarative-contracts.md`](docs/declarative-contracts.md),
 [`docs/archive-envelope.md`](docs/archive-envelope.md),
-[`docs/archive-lifecycle.md`](docs/archive-lifecycle.md), and
-[`docs/archive-events.md`](docs/archive-events.md).
+[`docs/archive-lifecycle.md`](docs/archive-lifecycle.md),
+[`docs/archive-events.md`](docs/archive-events.md), and
+[`docs/portable-documents.md`](docs/portable-documents.md).
 
 ## Why shared generic functions avoid name conflicts
 
@@ -151,6 +152,9 @@ Selected concrete types:
 - `promote_staged` — pure mapping of a run's staging set to envelope rows.
 - `EventBatch` / `LogStreamRecord` / `event_timeline` — durable
   human-readable event timeline and optional purgeable log streams.
+- `PortableSemanticDocument` / `capture_portable` / `portable_sexpr` —
+  fail-closed portable declarative documents, distinct from live
+  `SemanticNode` trees and from JLD2 working-archive persistence.
 
 Tree operations:
 
@@ -171,7 +175,7 @@ Serialization:
 - `to_namedtuple(x)` converts supported shared records into plain,
   serialization-friendly structures. Arbitrary runtime values inside a
   `SemanticNode` are not automatically promoted into a portable interchange
-  contract.
+  contract; use `capture_portable` for that fail-closed subset.
 
 ## What belongs in Episteme
 
