@@ -141,6 +141,8 @@ Selected concrete types:
 - `OperationSpec` / `Plan` / `RunRecord` / `ActivityRecord` /
   `EventRecord` / `RevisionRecord` — dual-history records on
   `ArchiveGraph` (snapshot revisions vs run/activity/event history).
+- `revision_parents` / `revision_children` / `revision_ancestors` /
+  `revision_descendants` — in-memory revision DAG walks.
 
 Tree operations:
 

@@ -84,8 +84,16 @@ committed). Events are not revisions.
 
 Object membership of a revision is `find_objects(graph, revision_id)`.
 `RevisionRecord` stores `id`, `parents`, optional `run_id`, and optional
-`plan_id`. It does not duplicate an object-id list. Parent-cycle checks
-are issue #30.
+`plan_id`. It does not duplicate an object-id list. Parent edges must
+resolve in the graph (`:dangling_parent`). Cycles fail (`:cycle`).
+Multiple parents are a merge. Ancestry helpers `revision_parents`,
+`revision_children`, `revision_ancestors`, and `revision_descendants`
+walk records only; they do not open files or load payloads.
+
+Committed revisions are immutable. A `WorkflowHead` is movable metadata:
+replacing `head.revision_id` does not change historical revision or
+object rows. Reused content in a later revision is a new `ArchiveObject`
+row (new `RevisionId`; `ObjectId` / `ContentId` may stay the same).
 
 Plans and authored documents are ordinary `ArchiveObject`s when persisted:
 
