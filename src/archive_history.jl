@@ -32,6 +32,22 @@ const STAGED_ORIGINS = (:generated, :reused)
 const WRITE_PHASES = (:begin, :appending, :committing, :committed, :aborted, :uncertain)
 const IN_FLIGHT_WRITE_PHASES = (:begin, :appending, :committing)
 const WRITE_SCOPES = (:archive, :run)
+const EVENT_SEVERITIES = (:debug, :info, :warn, :error)
+const EVENT_RETENTION = (:ephemeral, :debug, :forensic, :pinned)
+const LOG_STREAM_KINDS = (:stdout, :stderr, :trace)
+const SECRET_NAME_MARKERS = (
+    "password",
+    "secret",
+    "token",
+    "api_key",
+    "apikey",
+    "authorization",
+    "private_key",
+    "privatekey",
+    "cookie",
+    "credential",
+    "passwd",
+)
 
 episteme_document_schema(version::AbstractString = "1.0.0") =
     SchemaRef(:episteme, "document", version)
@@ -401,11 +417,15 @@ end
 
 """
     EventRecord(kind, run_id; activity_id=nothing, sequence=nothing,
-                source=nothing, payload=(;))
+                source=nothing, severity=:info, message="", timestamp=nothing,
+                scope=nothing, revision_id=nothing, object_refs=(),
+                producer_id=nothing, execution_context=nothing,
+                retention=:forensic, payload=(;))
 
-Append-only timeline fact inside a run. Not a [`RevisionRecord`](@ref).
-`sequence` is a source-local monotonic identity; wall-clock timestamps in
-`payload` are metadata and never the only causal order.
+Append-only timeline fact inside a run. Not a [`RevisionRecord`](@ref)
+and not authoritative scientific state. `sequence` is the source-local
+causal identity; `timestamp` is optional UTC metadata and is never the
+only ordering primitive.
 """
 struct EventRecord
     kind::Symbol
@@ -413,6 +433,15 @@ struct EventRecord
     activity_id::Union{Nothing,ActivityId}
     sequence::Union{Nothing,Int}
     source::Union{Nothing,String}
+    severity::Symbol
+    message::String
+    timestamp::Union{Nothing,String}
+    scope::Union{Nothing,Symbol}
+    revision_id::Union{Nothing,RevisionId}
+    object_refs::Vector{ObjectRef}
+    producer_id::Union{Nothing,AgentId}
+    execution_context::Union{Nothing,ExecutionContextId}
+    retention::Symbol
     payload::NamedTuple
 end
 
@@ -422,16 +451,119 @@ function EventRecord(
     activity_id = nothing,
     sequence = nothing,
     source = nothing,
+    severity::Symbol = :info,
+    message::AbstractString = "",
+    timestamp = nothing,
+    scope = nothing,
+    revision_id = nothing,
+    object_refs = ObjectRef[],
+    producer_id = nothing,
+    execution_context = nothing,
+    retention::Symbol = :forensic,
     payload::NamedTuple = (;),
 )
-    seq = _optional_sequence(sequence)
+    severity in EVENT_SEVERITIES || throw(ArgumentError(
+        "severity must be one of $EVENT_SEVERITIES, got :$severity",
+    ))
+    retention in EVENT_RETENTION || throw(ArgumentError(
+        "retention must be one of $EVENT_RETENTION, got :$retention",
+    ))
+    scope === nothing || scope isa Symbol || throw(ArgumentError(
+        "scope must be a Symbol or nothing, got $(typeof(scope))",
+    ))
     return EventRecord(
         kind,
         run_id,
         _optional_id(ActivityId, activity_id),
-        seq,
+        _optional_sequence(sequence),
         _optional_nonempty_string(source),
+        severity,
+        String(message),
+        _optional_nonempty_string(timestamp),
+        scope,
+        _optional_id(RevisionId, revision_id),
+        _object_refs(object_refs),
+        _optional_id(AgentId, producer_id),
+        _optional_id(ExecutionContextId, execution_context),
+        retention,
         payload,
+    )
+end
+
+function _object_refs(values)
+    refs = ObjectRef[]
+    for value in values
+        if value isa ObjectRef
+            push!(refs, value)
+        elseif value isa ObjectId
+            push!(refs, ObjectRef(value))
+        else
+            throw(ArgumentError("object_refs must contain ObjectRef or ObjectId values"))
+        end
+    end
+    return refs
+end
+
+"""
+    EventBatch(events; write=nothing)
+
+Logical grouping of timeline events published in one durable append.
+v1 writers persist the batch in one metadata transaction, not one
+transaction per event. Not a revision.
+"""
+struct EventBatch
+    events::Vector{EventRecord}
+    write::Union{Nothing,WriteTransaction}
+end
+
+function EventBatch(events; write = nothing)
+    write === nothing || write isa WriteTransaction || throw(ArgumentError(
+        "write must be WriteTransaction or nothing, got $(typeof(write))",
+    ))
+    return EventBatch(_typed_vector(EventRecord, events, "events"), write)
+end
+
+"""
+    LogStreamRecord(run_id, kind; activity_id=nothing, source=nothing,
+                    retention=:debug, content_id=nothing, summary=nothing)
+
+Optional archived stdout/stderr/trace. Never authoritative scientific
+state and never a substitute for typed provenance. Default retention
+`:debug` is purgeable unless `:pinned` or `:forensic`.
+"""
+struct LogStreamRecord
+    run_id::RunId
+    kind::Symbol
+    activity_id::Union{Nothing,ActivityId}
+    source::Union{Nothing,String}
+    retention::Symbol
+    content_id::Union{Nothing,ContentId}
+    summary::Union{Nothing,String}
+end
+
+function LogStreamRecord(
+    run_id::RunId,
+    kind::Symbol;
+    activity_id = nothing,
+    source = nothing,
+    retention::Symbol = :debug,
+    content_id = nothing,
+    summary = nothing,
+)
+    kind in LOG_STREAM_KINDS || throw(ArgumentError(
+        "log stream kind must be one of $LOG_STREAM_KINDS, got :$kind",
+    ))
+    retention in EVENT_RETENTION || throw(ArgumentError(
+        "retention must be one of $EVENT_RETENTION, got :$retention",
+    ))
+    return LogStreamRecord(
+        run_id,
+        kind,
+        _optional_id(ActivityId, activity_id),
+        _optional_nonempty_string(source),
+        retention,
+        _optional_id(ContentId, content_id),
+        _optional_nonempty_string(summary),
     )
 end
 
@@ -442,6 +574,140 @@ function _optional_sequence(value)
     ))
     Int(value) < 0 && throw(ArgumentError("event sequence must be non-negative"))
     return Int(value)
+end
+
+function _looks_like_secret_name(name::AbstractString)
+    lowered = lowercase(name)
+    return any(marker -> occursin(marker, lowered), SECRET_NAME_MARKERS)
+end
+
+function _looks_like_secret_value(text::AbstractString)
+    occursin(r"-----BEGIN [A-Z ]*PRIVATE KEY-----", text) && return true
+    occursin(r"(?i)\bbearer\s+[A-Za-z0-9._\-+/=]{20,}", text) && return true
+    occursin(r"(?i)\b(sk|ghp|gho|xox[baprs])-[A-Za-z0-9]{16,}", text) && return true
+    return false
+end
+
+function _credential_like_diagnostics!(diagnostics, text, context)
+    text === nothing && return diagnostics
+    _looks_like_secret_value(text) || return diagnostics
+    push!(diagnostics, error_diagnostic(
+        :credential_like_content,
+        "credential-like content is not allowed on the generic event/log path";
+        context...,
+    ))
+    return diagnostics
+end
+
+function _validate_event_record!(diagnostics, event::EventRecord)
+    _credential_like_diagnostics!(
+        diagnostics,
+        event.message,
+        (; kind = event.kind, run_id = event.run_id.value, field = :message),
+    )
+    for name in keys(event.payload)
+        if _looks_like_secret_name(String(name))
+            push!(diagnostics, error_diagnostic(
+                :credential_like_content,
+                "payload key :$name looks like a secret name";
+                kind = event.kind,
+                run_id = event.run_id.value,
+                field = name,
+            ))
+        end
+        value = event.payload[name]
+        value isa AbstractString || continue
+        _credential_like_diagnostics!(
+            diagnostics,
+            value,
+            (; kind = event.kind, run_id = event.run_id.value, field = name),
+        )
+    end
+    return diagnostics
+end
+
+function validate(event::EventRecord)
+    diagnostics = DiagnosticMessage[]
+    _validate_event_record!(diagnostics, event)
+    return ValidationReport(
+        :event,
+        isempty(diagnostics),
+        diagnostics,
+        (;
+            kind = event.kind,
+            run_id = event.run_id.value,
+            sequence = event.sequence,
+            severity = event.severity,
+        ),
+    )
+end
+
+function validate(batch::EventBatch)
+    diagnostics = DiagnosticMessage[]
+    isempty(batch.events) && return ValidationReport(
+        :event_batch,
+        true,
+        diagnostics,
+        (; count = 0),
+    )
+    run_id = batch.events[1].run_id
+    for event in batch.events
+        _validate_event_record!(diagnostics, event)
+        event.run_id == run_id && continue
+        push!(diagnostics, error_diagnostic(
+            :event_batch_run_mismatch,
+            "event batch mixes run $(run_id.value) with $(event.run_id.value)";
+            run_id = run_id.value,
+            other_run_id = event.run_id.value,
+            kind = event.kind,
+        ))
+    end
+    write = batch.write
+    if write !== nothing
+        if write.scope !== :run
+            push!(diagnostics, error_diagnostic(
+                :event_batch_write_scope,
+                "event batch write must be run-scoped, got :$(write.scope)";
+                scope = write.scope,
+            ))
+        elseif write.run_id !== nothing && write.run_id != run_id
+            push!(diagnostics, error_diagnostic(
+                :event_batch_write_run_mismatch,
+                "event batch write names run $(write.run_id.value), not $(run_id.value)";
+                run_id = run_id.value,
+                write_run_id = write.run_id.value,
+            ))
+        end
+    end
+    return ValidationReport(
+        :event_batch,
+        isempty(diagnostics),
+        diagnostics,
+        (;
+            run_id = run_id.value,
+            count = length(batch.events),
+            write_sequence = write === nothing ? nothing : write.sequence,
+        ),
+    )
+end
+
+function validate(stream::LogStreamRecord)
+    diagnostics = DiagnosticMessage[]
+    _credential_like_diagnostics!(
+        diagnostics,
+        stream.summary,
+        (; kind = stream.kind, run_id = stream.run_id.value, field = :summary),
+    )
+    return ValidationReport(
+        :log_stream,
+        isempty(diagnostics),
+        diagnostics,
+        (;
+            kind = stream.kind,
+            run_id = stream.run_id.value,
+            retention = stream.retention,
+        ),
+    )
 end
 
 function validate(plan::Plan)
@@ -834,5 +1100,31 @@ to_namedtuple(event::EventRecord) = (
     activity_id = event.activity_id === nothing ? nothing : event.activity_id.value,
     sequence = event.sequence,
     source = event.source,
+    severity = event.severity,
+    message = event.message,
+    timestamp = event.timestamp,
+    scope = event.scope,
+    revision_id = event.revision_id === nothing ? nothing : event.revision_id.value,
+    object_refs = Tuple(to_namedtuple.(event.object_refs)),
+    producer_id = event.producer_id === nothing ? nothing : event.producer_id.value,
+    execution_context = event.execution_context === nothing ? nothing :
+        event.execution_context.value,
+    retention = event.retention,
     payload = event.payload,
+)
+
+to_namedtuple(batch::EventBatch) = (
+    events = Tuple(to_namedtuple.(batch.events)),
+    write = batch.write === nothing ? nothing : to_namedtuple(batch.write),
+    count = length(batch.events),
+)
+
+to_namedtuple(stream::LogStreamRecord) = (
+    run_id = stream.run_id.value,
+    kind = stream.kind,
+    activity_id = stream.activity_id === nothing ? nothing : stream.activity_id.value,
+    source = stream.source,
+    retention = stream.retention,
+    content_id = stream.content_id === nothing ? nothing : stream.content_id.value,
+    summary = stream.summary,
 )

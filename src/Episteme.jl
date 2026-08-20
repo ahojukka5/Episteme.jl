@@ -25,12 +25,14 @@ export LogicalType, LogicalArraySpec, LOGICAL_SCALAR_KINDS
 export ArchiveObject, WorkflowHead, ArchiveGraph, ArchiveCatalog
 export OperationSpec, Plan, RevisionRecord, RunRecord, ActivityRecord, EventRecord
 export StagedObject, CheckpointRef, RestartRequirement, WriteTransaction
+export EventBatch, LogStreamRecord
 export EPISTEME_DOCUMENT_KIND, EPISTEME_PLAN_KIND
 export episteme_document_schema, episteme_plan_schema
 export RUN_STATUSES, WRITE_PHASES, STAGED_ORIGINS, WRITE_SCOPES
+export EVENT_SEVERITIES, EVENT_RETENTION, LOG_STREAM_KINDS
 export ordered_objects, ordered_references, ordered_heads
 export ordered_revisions, ordered_runs, ordered_events, ordered_writes
-export ordered_run_events
+export ordered_run_events, ordered_log_streams, event_timeline
 export find_object, find_objects, find_revisions, find_revision, find_run, find_write
 export promote_staged
 export revision_parents, revision_children, revision_ancestors, revision_descendants

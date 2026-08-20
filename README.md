@@ -46,8 +46,9 @@ parallel HDF5 access. See
 [`docs/archive-ownership.md`](docs/archive-ownership.md),
 [`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md),
 [`docs/declarative-contracts.md`](docs/declarative-contracts.md),
-[`docs/archive-envelope.md`](docs/archive-envelope.md), and
-[`docs/archive-lifecycle.md`](docs/archive-lifecycle.md).
+[`docs/archive-envelope.md`](docs/archive-envelope.md),
+[`docs/archive-lifecycle.md`](docs/archive-lifecycle.md), and
+[`docs/archive-events.md`](docs/archive-events.md).
 
 ## Why shared generic functions avoid name conflicts
 
@@ -148,6 +149,8 @@ Selected concrete types:
 - `revision_parents` / `revision_children` / `revision_ancestors` /
   `revision_descendants` — in-memory revision DAG walks.
 - `promote_staged` — pure mapping of a run's staging set to envelope rows.
+- `EventBatch` / `LogStreamRecord` / `event_timeline` — durable
+  human-readable event timeline and optional purgeable log streams.
 
 Tree operations:
 

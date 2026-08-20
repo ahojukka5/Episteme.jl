@@ -36,7 +36,9 @@ Shared *record* types (`Plan`, `RunRecord`, `ActivityRecord`,
 `EventRecord`, `RevisionRecord`) live on `ArchiveGraph` as data.
 The durable run/commit/restart contract (`StagedObject`,
 `WriteTransaction`, `RestartRequirement`) is documented in
-[`archive-lifecycle.md`](archive-lifecycle.md). Orchestration
+[`archive-lifecycle.md`](archive-lifecycle.md). The event timeline
+(`EventRecord`, `EventBatch`, `LogStreamRecord`, `event_timeline`) is
+documented in [`archive-events.md`](archive-events.md). Orchestration
 (`execute!` / `commit!`) and `.ah5` persistence are later PRs.
 
 ```julia
@@ -83,9 +85,12 @@ not a second `producer_revision` field on the envelope.
 Activities live on `RunRecord`, not in a second graph-wide store. A run
 may have `revision_id === nothing` (failed, still running, interrupted,
 cancelled, uncertain, or not yet committed). Incomplete statuses never
-name a committed revision. Events are not revisions. Uncommitted snapshot
-payloads live on `RunRecord.staged` until a later `commit!` promotes
-them. Logical write phases live on `ArchiveGraph.writes`.
+name a committed revision. Events are not revisions. `event_timeline` is
+a denormalized audit view; event text is not scientific state.
+Uncommitted snapshot payloads live on `RunRecord.staged` until a later
+`commit!` promotes them. Logical write phases live on
+`ArchiveGraph.writes`. Optional raw logs live on
+`ArchiveGraph.log_streams`.
 
 Object membership of a revision is `find_objects(graph, revision_id)`.
 `RevisionRecord` stores `id`, `parents`, optional `run_id`, and optional

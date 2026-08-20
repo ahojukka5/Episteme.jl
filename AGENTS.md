@@ -44,9 +44,9 @@ It also owns shared, domain-neutral supporting types and protocols:
   `ValidationRule`, `NodeValidationRule`),
 - opaque scripting contracts (`script_node`),
 - scientific-archive identities, references, schema-version vocabulary,
-  portable document envelopes, provenance/history records, and the
+  portable document envelopes, provenance/history records, the
   durable run/commit/restart contract (status, staging, write phases,
-  restart refs).
+  restart refs), and the event timeline / optional log-stream records.
 
 Shared infrastructure kinds use the `:episteme` / `episteme/*` namespace.
 Domain kinds stay in the namespace of the domain package that owns them.

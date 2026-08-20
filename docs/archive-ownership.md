@@ -261,7 +261,7 @@ Logical contract first, then physical persistence in Episteme.
 | #41 schema migrations | source/target identifiers | runner only; domain owns each transformation |
 | #42 content hashes / verification | canonicalization rules | hash compute and verify |
 | #43 execution-context fingerprint | record types and denylist data | storage |
-| #44 event timeline / log streams | event record types | append layout |
+| #44 event timeline / log streams | EventRecord, EventBatch, LogStreamRecord, event_timeline | JLD2/HDF5 append layout |
 
 ## Domain archive epics
 
