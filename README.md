@@ -48,8 +48,9 @@ parallel HDF5 access. See
 [`docs/declarative-contracts.md`](docs/declarative-contracts.md),
 [`docs/archive-envelope.md`](docs/archive-envelope.md),
 [`docs/archive-lifecycle.md`](docs/archive-lifecycle.md),
-[`docs/archive-events.md`](docs/archive-events.md), and
-[`docs/portable-documents.md`](docs/portable-documents.md).
+[`docs/archive-events.md`](docs/archive-events.md),
+[`docs/portable-documents.md`](docs/portable-documents.md), and
+[`docs/archive-checkout.md`](docs/archive-checkout.md).
 
 ## Why shared generic functions avoid name conflicts
 
@@ -155,6 +156,8 @@ Selected concrete types:
 - `PortableSemanticDocument` / `capture_portable` / `portable_sexpr` —
   fail-closed portable declarative documents, distinct from live
   `SemanticNode` trees and from JLD2 working-archive persistence.
+- `RevisionManifest` / `inspect` / `checkout` / `select` / `branch_from`
+  — lazy historical-revision manifests; no payload load and no file I/O.
 
 Tree operations:
 

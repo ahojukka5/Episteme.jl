@@ -219,8 +219,9 @@ runtime operation using them has not landed yet.
 
 Also out of scope in the current implementation:
 
-- `execute!` / `commit!` / `branch!` / `rerun!` runtime (lifecycle *records*
-  and `validate` / `readiness` for them are in scope),
+- `execute!` / `commit!` / `branch!` / `rerun!` runtime (lifecycle *records*,
+  in-memory `inspect` / `checkout` manifests, and `validate` / `readiness`
+  for them are in scope),
 - orchestration execution paths not yet implemented,
 - optional parallel/bulk archive I/O extensions not yet implemented,
 - speculative multi-backend storage abstractions without a real second backend,

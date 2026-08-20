@@ -251,7 +251,7 @@ Logical contract first, then physical persistence in Episteme.
 | #30 revision history | revision identity types | graph storage |
 | #31 purge / compaction | reachability as data | rewrite / new archive |
 | #32 derived / debug artifacts | provenance record types | storage and retention flags |
-| #33 checkout / lazy manifest | manifest types | selective reads |
+| #33 checkout / lazy manifest | RevisionManifest, inspect, in-memory checkout | selective payload reads |
 | #34 portable declarative document | PortableSemanticDocument capture, sexpr view | encoding inside `.ah5` |
 | #35 reproduction capsules | capsule manifest types | packaging |
 | #37 software-environment manifests | record types | `/provenance/software` storage |
