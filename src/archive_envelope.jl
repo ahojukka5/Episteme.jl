@@ -520,11 +520,12 @@ end
 include("archive_history.jl")
 
 """
-    ArchiveGraph(objects; heads=(), revisions=(), runs=(), events=())
+    ArchiveGraph(objects; heads=(), revisions=(), runs=(), events=(), writes=())
 
 A logical collection of envelope objects, workflow heads, and dual-history
 records. Snapshot history lives in `revisions`; activity history lives in
-`runs` (activities) and `events`. There is no parallel session type.
+`runs` (activities) and `events`. Logical write transactions live in
+`writes`. There is no parallel session type.
 
 Object order in `objects` is insertion order and is not semantically
 authoritative. Use [`ordered_objects`](@ref) for a deterministic walk
@@ -537,6 +538,7 @@ struct ArchiveGraph
     revisions::Vector{RevisionRecord}
     runs::Vector{RunRecord}
     events::Vector{EventRecord}
+    writes::Vector{WriteTransaction}
 end
 
 function ArchiveGraph(
@@ -545,6 +547,7 @@ function ArchiveGraph(
     revisions = RevisionRecord[],
     runs = RunRecord[],
     events = EventRecord[],
+    writes = WriteTransaction[],
 )
     return ArchiveGraph(
         _typed_vector(ArchiveObject, objects, "graph objects"),
@@ -552,6 +555,7 @@ function ArchiveGraph(
         _typed_vector(RevisionRecord, revisions, "graph revisions"),
         _typed_vector(RunRecord, runs, "graph runs"),
         _typed_vector(EventRecord, events, "graph events"),
+        _typed_vector(WriteTransaction, writes, "graph writes"),
     )
 end
 
@@ -638,6 +642,34 @@ ordered_runs(graph::ArchiveGraph) = sort(graph.runs; by = run -> run.id.value)
 
 ordered_events(graph::ArchiveGraph) = graph.events
 
+ordered_writes(graph::ArchiveGraph) = sort(graph.writes; by = _write_sort_key)
+
+_write_sort_key(tx::WriteTransaction) = (
+    String(tx.scope),
+    tx.run_id === nothing ? "" : tx.run_id.value,
+    tx.sequence,
+)
+
+"""
+    ordered_run_events(graph, run_id) -> Vector{EventRecord}
+
+Events for `run_id`, ordered by source then source-local sequence.
+Events without a sequence sort last. Wall-clock payload is ignored.
+"""
+function ordered_run_events(graph::ArchiveGraph, run_id::RunId)
+    matches = EventRecord[]
+    for event in graph.events
+        event.run_id == run_id && push!(matches, event)
+    end
+    return sort(matches; by = _event_sequence_key)
+end
+
+_event_sequence_key(event::EventRecord) = (
+    event.source === nothing ? "" : event.source,
+    event.sequence === nothing ? typemax(Int) : event.sequence,
+    String(event.kind),
+)
+
 function find_revision(graph::ArchiveGraph, revision_id::RevisionId)
     for rev in graph.revisions
         rev.id == revision_id && return rev
@@ -648,6 +680,20 @@ end
 function find_run(graph::ArchiveGraph, run_id::RunId)
     for run in graph.runs
         run.id == run_id && return run
+    end
+    return nothing
+end
+
+"""
+    find_write(graph; scope, run_id=nothing) -> Union{WriteTransaction,Nothing}
+
+The write transaction for `scope` and optional `run_id`, if present.
+"""
+function find_write(graph::ArchiveGraph; scope::Symbol, run_id = nothing)
+    rid = _optional_id(RunId, run_id)
+    for tx in graph.writes
+        tx.scope === scope || continue
+        tx.run_id == rid && return tx
     end
     return nothing
 end
@@ -1276,6 +1322,195 @@ function _validate_history_records!(diagnostics, graph::ArchiveGraph)
             activity_id = event.activity_id.value,
         ))
     end
+
+    _validate_event_sequences!(diagnostics, graph)
+    _validate_run_lifecycle!(diagnostics, graph)
+    _validate_write_transactions!(diagnostics, graph)
+    return diagnostics
+end
+
+function _validate_event_sequences!(diagnostics, graph::ArchiveGraph)
+    seen = Dict{Tuple{String,String,Int},Symbol}()
+    for event in graph.events
+        event.sequence === nothing && continue
+        source = event.source === nothing ? "" : event.source
+        key = (event.run_id.value, source, event.sequence)
+        if haskey(seen, key)
+            push!(diagnostics, error_diagnostic(
+                :duplicate_event_sequence,
+                "run $(event.run_id.value) has two events with sequence $(event.sequence)";
+                run_id = event.run_id.value,
+                source = event.source,
+                sequence = event.sequence,
+                kind = event.kind,
+            ))
+        else
+            seen[key] = event.kind
+        end
+    end
+    return diagnostics
+end
+
+function _validate_run_lifecycle!(diagnostics, graph::ArchiveGraph)
+    for run in graph.runs
+        _validate_run_record!(diagnostics, run)
+        if run.revision_id === nothing
+            for rev in graph.revisions
+                rev.run_id == run.id || continue
+                push!(diagnostics, error_diagnostic(
+                    :uncommitted_run_has_revision,
+                    "revision $(rev.id.value) names uncommitted run $(run.id.value)";
+                    run_id = run.id.value,
+                    revision_id = rev.id.value,
+                    status = run.status,
+                ))
+            end
+        end
+        for staged in run.staged
+            _validate_staged_against_graph!(diagnostics, graph, run, staged)
+        end
+    end
+    return diagnostics
+end
+
+function _validate_staged_against_graph!(diagnostics, graph, run::RunRecord, staged::StagedObject)
+    if staged.origin === :reused
+        source_rev = staged.source_revision_id
+        if source_rev === nothing
+            return diagnostics
+        end
+        source = find_object(graph, staged.object_id, source_rev)
+        if source === nothing
+            push!(diagnostics, error_diagnostic(
+                :reused_source_missing,
+                "reused object $(staged.object_id.value) has no source at $(source_rev.value)";
+                run_id = run.id.value,
+                object_id = staged.object_id.value,
+                source_revision_id = source_rev.value,
+            ))
+        elseif staged.content_id !== nothing && source.content_id !== nothing &&
+                staged.content_id != source.content_id
+            push!(diagnostics, error_diagnostic(
+                :reused_content_mismatch,
+                "reused object $(staged.object_id.value) content does not match source";
+                run_id = run.id.value,
+                object_id = staged.object_id.value,
+                content_id = staged.content_id.value,
+                source_content_id = source.content_id.value,
+            ))
+        end
+    end
+
+    run.revision_id === nothing && return diagnostics
+    promoted = find_object(graph, staged.object_id, run.revision_id)
+    if promoted === nothing
+        push!(diagnostics, error_diagnostic(
+            :staged_not_promoted,
+            "committed run $(run.id.value) did not promote staged object $(staged.object_id.value)";
+            run_id = run.id.value,
+            object_id = staged.object_id.value,
+            revision_id = run.revision_id.value,
+        ))
+    elseif staged.content_id !== nothing && promoted.content_id !== nothing &&
+            staged.content_id != promoted.content_id
+        push!(diagnostics, error_diagnostic(
+            :committed_content_mismatch,
+            "promoted object $(staged.object_id.value) content does not match staging";
+            run_id = run.id.value,
+            object_id = staged.object_id.value,
+            revision_id = run.revision_id.value,
+            staged_content_id = staged.content_id.value,
+            object_content_id = promoted.content_id.value,
+        ))
+    end
+    return diagnostics
+end
+
+function _validate_write_transactions!(diagnostics, graph::ArchiveGraph)
+    seen = Tuple{Symbol,String}[]
+    in_flight_archive = WriteTransaction[]
+    for tx in graph.writes
+        _validate_write_transaction!(diagnostics, tx)
+        key_run = tx.run_id === nothing ? "" : tx.run_id.value
+        key = (tx.scope, key_run)
+        if key in seen
+            push!(diagnostics, error_diagnostic(
+                :duplicate_write,
+                "$(tx.scope) write for $(key_run) is recorded more than once";
+                scope = tx.scope,
+                run_id = tx.run_id === nothing ? nothing : tx.run_id.value,
+                sequence = tx.sequence,
+            ))
+        else
+            push!(seen, key)
+        end
+
+        if tx.run_id !== nothing && find_run(graph, tx.run_id) === nothing
+            push!(diagnostics, error_diagnostic(
+                :missing_write_run,
+                "$(tx.scope) write sequence $(tx.sequence) names unknown run $(tx.run_id.value)";
+                scope = tx.scope,
+                sequence = tx.sequence,
+                run_id = tx.run_id.value,
+            ))
+        end
+
+        if tx.scope === :archive && tx.phase in IN_FLIGHT_WRITE_PHASES
+            push!(in_flight_archive, tx)
+        end
+
+        tx.run_id === nothing && continue
+        run = find_run(graph, tx.run_id)
+        run === nothing && continue
+        _validate_write_against_run!(diagnostics, tx, run)
+    end
+    if length(in_flight_archive) > 1
+        push!(diagnostics, error_diagnostic(
+            :multiple_archive_writers,
+            "v1 JLD2 path allows one in-flight archive writer; found $(length(in_flight_archive))";
+            writers = length(in_flight_archive),
+        ))
+    end
+    return diagnostics
+end
+
+function _validate_write_against_run!(diagnostics, tx::WriteTransaction, run::RunRecord)
+    if tx.phase in IN_FLIGHT_WRITE_PHASES && run.revision_id !== nothing
+        push!(diagnostics, error_diagnostic(
+            :in_flight_write_has_revision,
+            "run $(run.id.value) has an in-flight write and must not name a revision";
+            run_id = run.id.value,
+            phase = tx.phase,
+            revision_id = run.revision_id.value,
+        ))
+    end
+    if tx.phase === :committed && run.revision_id === nothing
+        push!(diagnostics, error_diagnostic(
+            :committed_write_missing_revision,
+            "run $(run.id.value) write is :committed but names no revision";
+            run_id = run.id.value,
+            sequence = tx.sequence,
+        ))
+    end
+    if tx.phase === :uncertain
+        if run.revision_id !== nothing
+            push!(diagnostics, error_diagnostic(
+                :uncertain_write_has_revision,
+                "run $(run.id.value) write is :uncertain and must not name a revision";
+                run_id = run.id.value,
+                revision_id = run.revision_id.value,
+            ))
+        end
+        if run.status !== :uncertain
+            push!(diagnostics, error_diagnostic(
+                :uncertain_write_status_mismatch,
+                "run $(run.id.value) write is :uncertain but status is :$(run.status)";
+                run_id = run.id.value,
+                status = run.status,
+                phase = tx.phase,
+            ))
+        end
+    end
     return diagnostics
 end
 
@@ -1306,11 +1541,205 @@ function report(graph::ArchiveGraph)
             revisions = length(graph.revisions),
             runs = length(graph.runs),
             events = length(graph.events),
+            writes = length(graph.writes),
             namespaces = Tuple(unique(obj.namespace.id for obj in ordered_objects(graph))),
         ),
         DiagnosticMessage[],
         ArtifactRef[],
     )
+end
+
+function readiness(graph::ArchiveGraph, target::PipelineTarget)
+    if target.name === :commit
+        return _graph_commit_readiness(graph, target)
+    elseif target.name === :restart
+        return _graph_restart_readiness(graph, target)
+    end
+    return ReadinessReport(
+        :archive_graph,
+        target,
+        false,
+        [error_diagnostic(
+            :unsupported_target,
+            "archive graph readiness target :$(target.name) is not :commit or :restart";
+            target = target.name,
+        )],
+        (; runs = length(graph.runs)),
+    )
+end
+
+function _run_from_target(graph::ArchiveGraph, target::PipelineTarget)
+    raw = get(target.options, :run_id, nothing)
+    raw === nothing && return nothing
+    run_id = raw isa RunId ? raw : RunId(string(raw))
+    return find_run(graph, run_id)
+end
+
+function _graph_commit_readiness(graph::ArchiveGraph, target::PipelineTarget)
+    run = _run_from_target(graph, target)
+    if run === nothing
+        return ReadinessReport(
+            :archive_graph,
+            target,
+            false,
+            [error_diagnostic(
+                :missing_commit_run,
+                "commit readiness requires a known run_id option",
+            )],
+            (;),
+        )
+    end
+    local_report = readiness(run, PipelineTarget(:commit))
+    diagnostics = DiagnosticMessage[local_report.diagnostics...]
+    tx = find_write(graph; scope = :run, run_id = run.id)
+    archive_tx = find_write(graph; scope = :archive, run_id = run.id)
+    for write in (tx, archive_tx)
+        write === nothing && continue
+        if write.phase in IN_FLIGHT_WRITE_PHASES
+            push!(diagnostics, error_diagnostic(
+                :in_flight_write,
+                "run $(run.id.value) still has an in-flight :$(write.phase) write";
+                run_id = run.id.value,
+                scope = write.scope,
+                phase = write.phase,
+            ))
+        elseif write.phase === :uncertain
+            push!(diagnostics, error_diagnostic(
+                :uncertain_side_effect,
+                "run $(run.id.value) write is :uncertain; commit is fail-closed";
+                run_id = run.id.value,
+                scope = write.scope,
+            ))
+        end
+    end
+    return ReadinessReport(
+        :archive_graph,
+        target,
+        isempty(diagnostics),
+        diagnostics,
+        (; run_id = run.id.value, status = run.status, staged = length(run.staged)),
+    )
+end
+
+function _graph_restart_readiness(graph::ArchiveGraph, target::PipelineTarget)
+    run = _run_from_target(graph, target)
+    if run === nothing
+        return ReadinessReport(
+            :archive_graph,
+            target,
+            false,
+            [error_diagnostic(
+                :missing_restart_run,
+                "restart readiness requires a known run_id option",
+            )],
+            (;),
+        )
+    end
+    local_report = readiness(run, PipelineTarget(:restart))
+    diagnostics = DiagnosticMessage[local_report.diagnostics...]
+    req = run.restart
+    if req !== nothing
+        parent = run.parent_run_id === nothing ? nothing : find_run(graph, run.parent_run_id)
+        for checkpoint in req.checkpoints
+            _append_checkpoint_diagnostics!(diagnostics, graph, run, parent, checkpoint)
+        end
+        if req.execution_context !== nothing
+            if run.execution_context === nothing
+                push!(diagnostics, error_diagnostic(
+                    :missing_restart_execution_context,
+                    "run $(run.id.value) restart needs execution context $(req.execution_context.value)";
+                    run_id = run.id.value,
+                    execution_context = req.execution_context.value,
+                ))
+            elseif run.execution_context != req.execution_context
+                push!(diagnostics, error_diagnostic(
+                    :incompatible_restart_execution_context,
+                    "run $(run.id.value) execution context does not match restart requirement";
+                    run_id = run.id.value,
+                    execution_context = run.execution_context.value,
+                    required = req.execution_context.value,
+                ))
+            end
+        end
+    end
+    return ReadinessReport(
+        :archive_graph,
+        target,
+        isempty(diagnostics),
+        diagnostics,
+        (;
+            run_id = run.id.value,
+            status = run.status,
+            checkpoints = req === nothing ? 0 : length(req.checkpoints),
+        ),
+    )
+end
+
+function _append_checkpoint_diagnostics!(diagnostics, graph, run, parent, checkpoint::CheckpointRef)
+    found, found_content = _locate_checkpoint(graph, run, parent, checkpoint)
+    if found === nothing
+        push!(diagnostics, error_diagnostic(
+            :missing_restart_checkpoint,
+            "restart checkpoint $(checkpoint.object_id.value) is not in the archive";
+            run_id = run.id.value,
+            object_id = checkpoint.object_id.value,
+            content_id = checkpoint.content_id === nothing ? nothing :
+                checkpoint.content_id.value,
+            revision_id = checkpoint.revision_id === nothing ? nothing :
+                checkpoint.revision_id.value,
+            kind = checkpoint.kind,
+        ))
+        return diagnostics
+    end
+    if checkpoint.content_id !== nothing && found_content !== nothing &&
+            checkpoint.content_id != found_content
+        push!(diagnostics, error_diagnostic(
+            :incompatible_restart_content,
+            "restart checkpoint $(checkpoint.object_id.value) content does not match";
+            run_id = run.id.value,
+            object_id = checkpoint.object_id.value,
+            required_content_id = checkpoint.content_id.value,
+            found_content_id = found_content.value,
+        ))
+    end
+    return diagnostics
+end
+
+function _checkpoint_content(found)
+    found isa ArchiveObject && return found.content_id
+    found isa StagedObject && return found.content_id
+    return nothing
+end
+
+function _content_matches(checkpoint::CheckpointRef, found)
+    checkpoint.content_id === nothing && return true
+    found_content = _checkpoint_content(found)
+    found_content === nothing && return true
+    return checkpoint.content_id == found_content
+end
+
+function _locate_checkpoint(graph, run, parent, checkpoint::CheckpointRef)
+    candidates = Union{ArchiveObject,StagedObject}[]
+    if checkpoint.revision_id !== nothing
+        object = find_object(graph, checkpoint.object_id, checkpoint.revision_id)
+        object === nothing || push!(candidates, object)
+    else
+        append!(candidates, find_revisions(graph, checkpoint.object_id))
+        for staged in run.staged
+            staged.object_id == checkpoint.object_id && push!(candidates, staged)
+        end
+        if parent !== nothing
+            for staged in parent.staged
+                staged.object_id == checkpoint.object_id && push!(candidates, staged)
+            end
+        end
+    end
+    isempty(candidates) && return nothing, nothing
+    for found in candidates
+        _content_matches(checkpoint, found) && return found, _checkpoint_content(found)
+    end
+    found = candidates[1]
+    return found, _checkpoint_content(found)
 end
 
 # ---------------------------------------------------------------------------
@@ -1395,6 +1824,7 @@ function to_namedtuple(graph::ArchiveGraph)
         revisions = Tuple(to_namedtuple.(ordered_revisions(graph))),
         runs = Tuple(to_namedtuple.(ordered_runs(graph))),
         events = Tuple(to_namedtuple.(ordered_events(graph))),
+        writes = Tuple(to_namedtuple.(ordered_writes(graph))),
     )
 end
 
@@ -1432,6 +1862,8 @@ function Base.show(io::IO, graph::ArchiveGraph)
         length(graph.runs),
         ", events=",
         length(graph.events),
+        ", writes=",
+        length(graph.writes),
         ")",
     )
 end

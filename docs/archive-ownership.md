@@ -245,7 +245,7 @@ Logical contract first, then physical persistence in Episteme.
 | Issue | Episteme types / rules | Later AH5 profile in Episteme |
 | --- | --- | --- |
 | #26 envelope, identities, references, schema-version rules | done | persist those records |
-| #27 transactions / completion / restart | completion-state types | markers and recovery |
+| #27 transactions / completion / restart | status, staging, write phases, restart refs | JLD2 markers, file locks, recovery |
 | #28 XDMF views | none | generic writer; domain registers the projection recipe |
 | #29 integrity and parallel-HDF5 qualification | none | `EpistemeHDF5Ext` after domain codecs exist |
 | #30 revision history | revision identity types | graph storage |

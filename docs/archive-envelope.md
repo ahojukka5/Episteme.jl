@@ -34,8 +34,10 @@ DocumentId != PlanId != RunId != ActivityId != RevisionId != ObjectId != Content
 
 Shared *record* types (`Plan`, `RunRecord`, `ActivityRecord`,
 `EventRecord`, `RevisionRecord`) live on `ArchiveGraph` as data.
-Orchestration (`execute!` / `commit!`) and `.ah5` persistence are later
-PRs.
+The durable run/commit/restart contract (`StagedObject`,
+`WriteTransaction`, `RestartRequirement`) is documented in
+[`archive-lifecycle.md`](archive-lifecycle.md). Orchestration
+(`execute!` / `commit!`) and `.ah5` persistence are later PRs.
 
 ```julia
 object = ObjectId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
@@ -79,8 +81,11 @@ not a second `producer_revision` field on the envelope.
 | `runs` / activities / `events` | `RunRecord`, `ActivityRecord`, `EventRecord` | What happened, with which plan and env? |
 
 Activities live on `RunRecord`, not in a second graph-wide store. A run
-may have `revision_id === nothing` (failed, still running, or not yet
-committed). Events are not revisions.
+may have `revision_id === nothing` (failed, still running, interrupted,
+cancelled, uncertain, or not yet committed). Incomplete statuses never
+name a committed revision. Events are not revisions. Uncommitted snapshot
+payloads live on `RunRecord.staged` until a later `commit!` promotes
+them. Logical write phases live on `ArchiveGraph.writes`.
 
 Object membership of a revision is `find_objects(graph, revision_id)`.
 `RevisionRecord` stores `id`, `parents`, optional `run_id`, and optional
@@ -208,7 +213,8 @@ compression. They are not a place to store payload arrays.
 
 - package payload schemas or payload bytes (domain packages / AH5 codecs)
 - HDF5 layout, `.ah5` profile, or XDMF (later Episteme AH5 profile)
-- the revision DAG of parent/input revisions (#30)
+- `execute!` / `commit!` runtime and on-disk write recovery (#27 contract
+  types are in [`archive-lifecycle.md`](archive-lifecycle.md))
 - schema migration implementations (#41)
 - content-hash algorithms (#42)
 - software-environment manifests (#37)
