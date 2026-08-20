@@ -249,7 +249,7 @@ Logical contract first, then physical persistence in Episteme.
 | #28 XDMF views | none | generic writer; domain registers the projection recipe |
 | #29 integrity and parallel-HDF5 qualification | none | `EpistemeHDF5Ext` after domain codecs exist |
 | #30 revision history | revision identity types | graph storage |
-| #31 purge / compaction | reachability as data | rewrite / new archive |
+| #31 purge / compaction | RetentionRoot, plan_purge, compact_archive | physical rewrite / new `.ah5` |
 | #32 derived / debug artifacts | provenance record types | storage and retention flags |
 | #33 checkout / lazy manifest | RevisionManifest, inspect, in-memory checkout | selective payload reads |
 | #34 portable declarative document | PortableSemanticDocument capture, sexpr view | encoding inside `.ah5` |

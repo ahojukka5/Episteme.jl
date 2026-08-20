@@ -49,8 +49,9 @@ parallel HDF5 access. See
 [`docs/archive-envelope.md`](docs/archive-envelope.md),
 [`docs/archive-lifecycle.md`](docs/archive-lifecycle.md),
 [`docs/archive-events.md`](docs/archive-events.md),
-[`docs/portable-documents.md`](docs/portable-documents.md), and
-[`docs/archive-checkout.md`](docs/archive-checkout.md).
+[`docs/portable-documents.md`](docs/portable-documents.md),
+[`docs/archive-checkout.md`](docs/archive-checkout.md), and
+[`docs/archive-purge.md`](docs/archive-purge.md).
 
 ## Why shared generic functions avoid name conflicts
 
@@ -158,6 +159,8 @@ Selected concrete types:
   `SemanticNode` trees and from JLD2 working-archive persistence.
 - `RevisionManifest` / `inspect` / `checkout` / `select` / `branch_from`
   — lazy historical-revision manifests; no payload load and no file I/O.
+- `RetentionRoot` / `plan_purge` / `compact_archive` — explicit
+  reachability-based purge into a new graph; the source is never mutated.
 
 Tree operations:
 
