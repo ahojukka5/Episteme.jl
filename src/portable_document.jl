@@ -18,6 +18,17 @@ struct PortableEncoded
 end
 
 """
+    PortableDict(entries)
+
+Canonical captured dictionary. Keys are `Symbol` or `String`; entries are
+sorted by `(Symbol before String, then text)` so `:a` and `"a"` are distinct
+and order is independent of source insertion.
+"""
+struct PortableDict
+    entries::Vector{Pair{Any,Any}}
+end
+
+"""
     PortableNode(kind, name, attributes, children)
 
 Canonical portable node. Attribute values are members of the portable
@@ -105,6 +116,7 @@ portable_decode(::Val{K}, data::NamedTuple) where {K} = PortableEncoded(K, data)
 portable_decode(kind::Symbol, data::NamedTuple) = portable_decode(Val(kind), data)
 
 Base.:(==)(a::PortableEncoded, b::PortableEncoded) = a.kind == b.kind && a.data == b.data
+Base.:(==)(a::PortableDict, b::PortableDict) = a.entries == b.entries
 Base.:(==)(a::PortableNode, b::PortableNode) =
     a.kind == b.kind &&
     a.name == b.name &&
@@ -121,11 +133,11 @@ Does not mutate `value`.
 """
 is_portable_value(value) = _capture_value!(DiagnosticMessage[], value, "", nothing) !== :__unsupported__
 
-function _node_path(node::SemanticNode, index::Int)
+function _node_path(node, index::Int)
     node.name === nothing ? "#$index" : String(node.name)
 end
 
-function _child_path(parent_path::AbstractString, child::SemanticNode, index::Int)
+function _child_path(parent_path::AbstractString, child, index::Int)
     return parent_path * "/" * _node_path(child, index)
 end
 
@@ -157,7 +169,8 @@ function _capture_value!(diagnostics, value, path, attribute)
     value isa Symbol && return value
     value === nothing && return nothing
     value isa NodeRef && return value
-    value isa PortableEncoded && return value
+    value isa PortableEncoded && return _capture_encoded!(diagnostics, value, path, attribute)
+    value isa PortableDict && return _capture_portable_dict!(diagnostics, value, path, attribute)
     value isa AbstractArray && ndims(value) >= 1 &&
         return _capture_array!(diagnostics, value, path, attribute)
     value isa Tuple && return _capture_tuple!(diagnostics, value, path, attribute)
@@ -253,10 +266,18 @@ function _capture_namedtuple_data!(diagnostics, value::NamedTuple, path, attribu
     return (; (first(p) => last(p) for p in captured)...), true
 end
 
-function _capture_dict!(diagnostics, value, path, attribute)
-    entries = Pair{Any,Any}[]
+function _capture_encoded!(diagnostics, value::PortableEncoded, path, attribute)
+    data, ok = _capture_namedtuple_data!(diagnostics, value.data, path, attribute)
+    ok || return :__unsupported__
+    return PortableEncoded(value.kind, data)
+end
+
+_dict_sort_key(key) = (key isa Symbol ? 0 : 1, string(key))
+
+function _capture_dict_entries!(diagnostics, entries, path, attribute)
+    captured = Pair{Any,Any}[]
     ok = true
-    for (key, item) in value
+    for (key, item) in entries
         if !(key isa Symbol || key isa AbstractString)
             push!(diagnostics, error_diagnostic(
                 :unsupported_portable_value,
@@ -273,12 +294,24 @@ function _capture_dict!(diagnostics, value, path, attribute)
         if captured_item === :__unsupported__
             ok = false
         else
-            push!(entries, captured_key => captured_item)
+            push!(captured, captured_key => captured_item)
         end
     end
+    ok || return captured, false
+    sort!(captured; by = pair -> _dict_sort_key(first(pair)))
+    return captured, true
+end
+
+function _capture_dict!(diagnostics, value, path, attribute)
+    entries, ok = _capture_dict_entries!(diagnostics, value, path, attribute)
     ok || return :__unsupported__
-    sort!(entries; by = pair -> string(first(pair)))
-    return entries
+    return PortableDict(entries)
+end
+
+function _capture_portable_dict!(diagnostics, value::PortableDict, path, attribute)
+    entries, ok = _capture_dict_entries!(diagnostics, value.entries, path, attribute)
+    ok || return :__unsupported__
+    return PortableDict(entries)
 end
 
 function _capture_node!(diagnostics, node::SemanticNode, path::AbstractString)
@@ -355,8 +388,20 @@ function capture_portable(
     metadata::NamedTuple = (;),
 )
     fragments, diagnostics = _capture_fragments(roots)
+    meta, meta_ok = _capture_namedtuple_data!(diagnostics, metadata, "<metadata>", :metadata)
     isempty(diagnostics) || _throw_portable(diagnostics)
-    return PortableSemanticDocument(id, fragments; schema = schema, metadata = metadata)
+    meta_ok || _throw_portable(diagnostics)
+    return PortableSemanticDocument(id, fragments; schema = schema, metadata = meta)
+end
+
+function _validate_portable_node!(diagnostics, node::PortableNode, path::AbstractString)
+    for (key, value) in node.attributes
+        _capture_value!(diagnostics, value, path, key)
+    end
+    for (i, child) in enumerate(node.children)
+        _validate_portable_node!(diagnostics, child, _child_path(path, child, i))
+    end
+    return diagnostics
 end
 
 function validate(doc::PortableSemanticDocument)
@@ -367,6 +412,7 @@ function validate(doc::PortableSemanticDocument)
         document_id = doc.id.value,
         schema_kind = schema_kind(doc.schema),
     ))
+    _capture_namedtuple_data!(diagnostics, doc.metadata, "<metadata>", :metadata)
     seen = String[]
     for (i, fragment) in enumerate(doc.fragments)
         name = fragment.name === nothing ? "#$i" : String(fragment.name)
@@ -380,6 +426,7 @@ function validate(doc::PortableSemanticDocument)
         else
             push!(seen, name)
         end
+        _validate_portable_node!(diagnostics, fragment, name)
     end
     return ValidationReport(
         EPISTEME_DOCUMENT_KIND,
@@ -404,10 +451,25 @@ function report(doc::PortableSemanticDocument)
 end
 
 function _restore_value(value; decode::Bool)
-    value isa PortableEncoded || return value
-    decode || return value
-    restored = portable_decode(value.kind, value.data)
-    return restored
+    if value isa PortableEncoded
+        data = _restore_value(value.data; decode = decode)
+        decode || return PortableEncoded(value.kind, data)
+        return portable_decode(value.kind, data)
+    elseif value isa PortableDict
+        restored = Dict{Any,Any}()
+        for (key, item) in value.entries
+            restored[_restore_value(key; decode = decode)] = _restore_value(item; decode = decode)
+        end
+        return restored
+    elseif value isa Tuple
+        return Tuple(_restore_value(item; decode = decode) for item in value)
+    elseif value isa NamedTuple
+        names = keys(value)
+        return (; (name => _restore_value(value[name]; decode = decode) for name in names)...)
+    elseif value isa AbstractArray
+        return map(item -> _restore_value(item; decode = decode), value)
+    end
+    return value
 end
 
 function restore_semantic(node::PortableNode; decode::Bool = false)
@@ -427,7 +489,13 @@ function from_namedtuple(::Type{PortableSemanticDocument}, nt::NamedTuple)
     fragments = PortableNode[_portable_node_from_namedtuple(frag) for frag in nt.fragments]
     schema_nt = nt.schema
     schema = SchemaRef(schema_nt.namespace_id, schema_nt.schema_id, schema_nt.version)
-    metadata = haskey(nt, :metadata) ? nt.metadata : (;)
+    metadata = if haskey(nt, :metadata)
+        restored = _value_from_namedtuple(nt.metadata)
+        restored isa NamedTuple || throw(ArgumentError("portable metadata must restore as a NamedTuple"))
+        restored
+    else
+        (;)
+    end
     return PortableSemanticDocument(
         DocumentId(nt.id),
         fragments;
@@ -456,12 +524,12 @@ function _value_from_namedtuple(nt::NamedTuple)
     kind === :symbol && return Symbol(nt.value)
     kind === :nothing && return nothing
     kind === :noderef && return NodeRef(Symbol(nt.target))
-    kind === :encoded && return PortableEncoded(Symbol(nt.kind), nt.data)
+    kind === :encoded && return PortableEncoded(Symbol(nt.kind), _value_from_namedtuple(nt.data))
     kind === :tuple && return Tuple(_value_from_namedtuple(item) for item in nt.items)
     kind === :namedtuple && return (; (Symbol(item.name) => _value_from_namedtuple(item.value) for item in nt.items)...)
-    kind === :dict && return Pair{Any,Any}[
+    kind === :dict && return PortableDict(Pair{Any,Any}[
         _dict_key_from_namedtuple(item.key) => _value_from_namedtuple(item.value) for item in nt.items
-    ]
+    ])
     kind === :array && return reshape(
         [_value_from_namedtuple(item) for item in nt.data],
         Tuple(Int(dim) for dim in nt.size),
@@ -488,7 +556,11 @@ function _portable_value_namedtuple(value)
     value isa Symbol && return (portable_kind = :symbol, value = String(value))
     value === nothing && return (portable_kind = :nothing, value = nothing)
     value isa NodeRef && return (portable_kind = :noderef, target = String(value.target))
-    value isa PortableEncoded && return (portable_kind = :encoded, kind = String(value.kind), data = value.data)
+    value isa PortableEncoded && return (
+        portable_kind = :encoded,
+        kind = String(value.kind),
+        data = _portable_value_namedtuple(value.data),
+    )
     if value isa Tuple
         return (portable_kind = :tuple, items = Tuple(_portable_value_namedtuple.(value)))
     end
@@ -497,10 +569,10 @@ function _portable_value_namedtuple(value)
         items = Tuple((name = name, value = _portable_value_namedtuple(value[name])) for name in names)
         return (portable_kind = :namedtuple, items = items)
     end
-    if value isa Vector{<:Pair}
+    if value isa PortableDict
         items = Tuple(
             (key = _portable_value_namedtuple(first(entry)), value = _portable_value_namedtuple(last(entry)))
-            for entry in value
+            for entry in value.entries
         )
         return (portable_kind = :dict, items = items)
     end
@@ -527,7 +599,7 @@ to_namedtuple(doc::PortableSemanticDocument) = (
     id = doc.id.value,
     schema = to_namedtuple(doc.schema),
     fragments = Tuple(to_namedtuple.(doc.fragments)),
-    metadata = doc.metadata,
+    metadata = _portable_value_namedtuple(doc.metadata),
 )
 
 function _sexpr_atom(value)
@@ -545,8 +617,11 @@ function _sexpr_atom(value)
     if value isa NamedTuple
         return _sexpr_namedtuple(value)
     end
-    if value isa Vector{<:Pair}
-        inner = join(["($(_sexpr_atom(first(entry))) $(_sexpr_atom(last(entry))))" for entry in value], " ")
+    if value isa PortableDict
+        inner = join(
+            ["($(_sexpr_atom(first(entry))) $(_sexpr_atom(last(entry))))" for entry in value.entries],
+            " ",
+        )
         return "(dict $inner)"
     end
     if value isa AbstractArray

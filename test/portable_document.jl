@@ -5,12 +5,25 @@ struct PortableMaterial
     modulus::Float64
 end
 
+struct PortableBinding
+    target::NodeRef
+    scale::Float64
+end
+
 function Episteme.portable_encode(x::PortableMaterial)
     return (kind = Symbol("example/material"), data = (; name = x.name, modulus = x.modulus))
 end
 
 function Episteme.portable_decode(::Val{Symbol("example/material")}, data::NamedTuple)
     return PortableMaterial(data.name, data.modulus)
+end
+
+function Episteme.portable_encode(x::PortableBinding)
+    return (kind = Symbol("example/binding"), data = (; target = x.target, scale = x.scale))
+end
+
+function Episteme.portable_decode(::Val{Symbol("example/binding")}, data::NamedTuple)
+    return PortableBinding(data.target, data.scale)
 end
 
 function _example_geometry()
@@ -124,4 +137,87 @@ end
         root;
         schema = SchemaRef(:example, "other", "1.0.0"),
     )
+end
+
+@testset "portable metadata is fail-closed and canonical" begin
+    model = SemanticNode(:ok, :root; n = 1)
+    @test_throws ArgumentError capture_portable(
+        DocumentId("doc-meta"),
+        model;
+        metadata = (; hook = identity),
+    )
+    doc = capture_portable(
+        DocumentId("doc-meta"),
+        model;
+        metadata = (; note = "stable", tags = (:a, :b)),
+    )
+    @test doc.metadata.note == "stable"
+    reloaded = from_namedtuple(PortableSemanticDocument, to_namedtuple(doc))
+    @test reloaded.metadata == doc.metadata
+end
+
+@testset "PortableEncoded and PortableNode cannot smuggle runtime values" begin
+    smuggled = PortableEncoded(Symbol("example/bad"), (; hook = identity))
+    live = SemanticNode(:payload, :live; encoded = smuggled)
+    @test !isvalid(validate_portable(live))
+    @test_throws ArgumentError capture_portable(DocumentId("doc-smuggle"), live)
+
+    node = PortableNode(
+        :payload,
+        :live,
+        [:encoded => PortableEncoded(Symbol("example/bad"), (; hook = identity))],
+        PortableNode[],
+    )
+    doc = PortableSemanticDocument(DocumentId("doc-smuggle"), [node])
+    @test !isvalid(validate(doc))
+    @test any(d -> d.code === :unsupported_portable_value, validate(doc).diagnostics)
+
+    raw = PortableNode(:payload, :live, [:hook => identity], PortableNode[])
+    @test !isvalid(validate(PortableSemanticDocument(DocumentId("doc-raw"), [raw])))
+end
+
+@testset "dicts restore as Dict and mixed keys have a total order" begin
+    node = SemanticNode(:params, :p; values = Dict(:b => 2, :a => 1))
+    doc = capture_portable(DocumentId("doc-dict"), node)
+    @test attribute(restore_semantic(doc)[1], :values) == Dict(:a => 1, :b => 2)
+    reloaded = from_namedtuple(PortableSemanticDocument, to_namedtuple(doc))
+    @test attribute(restore_semantic(reloaded)[1], :values) == Dict(:a => 1, :b => 2)
+
+    mixed_a = Dict{Any,Any}(:a => 1, "a" => 2)
+    mixed_b = Dict{Any,Any}("a" => 2, :a => 1)
+    da = capture_portable(DocumentId("doc-mix"), SemanticNode(:params, :p; values = mixed_a))
+    db = capture_portable(DocumentId("doc-mix"), SemanticNode(:params, :p; values = mixed_b))
+    @test to_namedtuple(da).fragments == to_namedtuple(db).fragments
+    @test portable_sexpr(da) == portable_sexpr(db)
+    restored = attribute(restore_semantic(da)[1], :values)
+    @test restored[:a] == 1
+    @test restored["a"] == 2
+end
+
+@testset "nested codec values restore and serialize recursively" begin
+    node = SemanticNode(
+        Symbol("example/part"),
+        :beam;
+        binding = PortableBinding(NodeRef(:plate), 2.0),
+        bundle = (PortableMaterial(:steel, 210e9), NodeRef(:plate)),
+    )
+    doc = capture_portable(DocumentId("doc-nested"), node)
+    generic = restore_semantic(doc; decode = false)
+    @test attribute(generic[1], :binding) isa PortableEncoded
+    bundle = attribute(generic[1], :bundle)
+    @test bundle[1] isa PortableEncoded
+    @test bundle[2] == NodeRef(:plate)
+
+    decoded = restore_semantic(doc; decode = true)
+    @test attribute(decoded[1], :binding) == PortableBinding(NodeRef(:plate), 2.0)
+    decoded_bundle = attribute(decoded[1], :bundle)
+    @test decoded_bundle[1] == PortableMaterial(:steel, 210e9)
+    @test decoded_bundle[2] == NodeRef(:plate)
+
+    nt = to_namedtuple(doc)
+    binding_nt = nt.fragments[1].attributes[findfirst(a -> a.name === :binding, nt.fragments[1].attributes)].value
+    @test binding_nt.portable_kind === :encoded
+    @test binding_nt.data.portable_kind === :namedtuple
+    reloaded = from_namedtuple(PortableSemanticDocument, nt)
+    @test restore_semantic(reloaded; decode = true)[1] == decoded[1]
 end
