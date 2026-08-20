@@ -23,7 +23,11 @@ export schema_kind, schema_status, resolve_schema, SCHEMA_COMPATIBILITY
 export ObjectRef, ArchiveReference
 export LogicalType, LogicalArraySpec, LOGICAL_SCALAR_KINDS
 export ArchiveObject, WorkflowHead, ArchiveGraph, ArchiveCatalog
+export OperationSpec, Plan, RevisionRecord, RunRecord, ActivityRecord, EventRecord
+export EPISTEME_DOCUMENT_KIND, EPISTEME_PLAN_KIND
+export episteme_document_schema, episteme_plan_schema
 export ordered_objects, ordered_references, ordered_heads
-export find_object, find_objects, find_revisions
+export ordered_revisions, ordered_runs, ordered_events
+export find_object, find_objects, find_revisions, find_revision, find_run
 
 end # module Episteme

@@ -138,6 +138,9 @@ Selected concrete types:
   archive identities.
 - `ArchiveObject` / `ArchiveReference` / `SchemaRef` / `ArchiveGraph` —
   shared logical archive-envelope records.
+- `OperationSpec` / `Plan` / `RunRecord` / `ActivityRecord` /
+  `EventRecord` / `RevisionRecord` — dual-history records on
+  `ArchiveGraph` (snapshot revisions vs run/activity/event history).
 
 Tree operations:
 
