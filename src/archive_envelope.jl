@@ -1053,11 +1053,9 @@ function _validate_archive_graph!(diagnostics, graph::ArchiveGraph)
 end
 
 function _validate_revision_parent_dag!(diagnostics, graph::ArchiveGraph)
-    n = 0
     indeg = Dict{String,Int}()
     children = Dict{String,Vector{String}}()
     for rev in graph.revisions
-        n += 1
         indeg[rev.id.value] = 0
         children[rev.id.value] = String[]
     end
@@ -1076,6 +1074,7 @@ function _validate_revision_parent_dag!(diagnostics, graph::ArchiveGraph)
             push!(children[parent_id.value], rev.id.value)
         end
     end
+    n = length(indeg)
     n == 0 && return diagnostics
 
     queue = String[]
