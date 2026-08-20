@@ -30,8 +30,10 @@ capture_portable(DocumentId("doc-1"), live)  # throws
 ```
 
 `capture_portable` either returns a `PortableSemanticDocument` or fails
-with node/attribute diagnostics. It does not fall back to `show` text,
-`eval`, closures, or Julia AST replay.
+with node/attribute diagnostics. Document `metadata` uses the same
+portable universe. It does not fall back to `show` text, `eval`,
+closures, or Julia AST replay. `validate(doc)` also rejects smuggled
+non-portable leaves in a hand-built document.
 
 ## Portable universe
 
@@ -41,8 +43,10 @@ Supported leaves:
   `nothing`
 - `NodeRef`
 - tuples, named tuples, arrays, and `Dict`s of portable values
-  (`Dict` keys must be `Symbol` or `String`)
-- `PortableEncoded` values from a registered codec
+  (`Dict` keys must be `Symbol` or `String`; `:a` and `"a"` are distinct
+  and ordered deterministically)
+- `PortableEncoded` values from a registered codec (`data` is itself
+  portable and restored recursively)
 
 `Float32`, `Char`, functions, and unregistered custom structs fail
 closed. Dictionary insertion order is not semantic: capture sorts keys
