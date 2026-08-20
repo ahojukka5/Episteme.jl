@@ -105,10 +105,15 @@ function find_head(graph::ArchiveGraph, head_id::WorkflowHeadId)
 end
 
 function find_head(graph::ArchiveGraph, name::Symbol)
+    matches = WorkflowHead[]
     for head in ordered_heads(graph)
-        head.name === name && return head
+        head.name === name && push!(matches, head)
     end
-    return nothing
+    isempty(matches) && return nothing
+    length(matches) > 1 && throw(ArgumentError(
+        "workflow head name :$name is ambiguous",
+    ))
+    return matches[1]
 end
 
 function _externals_vector(externals)
@@ -125,20 +130,109 @@ function _match_external(externals, object_id::ObjectId, content_id)
     return nothing
 end
 
-function _dangling_targets(graph::ArchiveGraph, objects)
-    targets = Tuple{ObjectId,Union{Nothing,RevisionId},Union{Nothing,ContentId}}[]
-    seen = String[]
-    for object in objects
-        for ref in ordered_references(object)
-            _reference_resolves(graph, ref.target) && continue
-            key = ref.target.object_id.value * "@" *
-                (ref.target.revision_id === nothing ? "" : ref.target.revision_id.value)
-            key in seen && continue
-            push!(seen, key)
-            push!(targets, (ref.target.object_id, ref.target.revision_id, nothing))
+function _visible_revision_order(graph::ArchiveGraph, revision_id::RevisionId)
+    order = RevisionId[]
+    seen = Set{String}()
+    queue = RevisionId[revision_id]
+    while !isempty(queue)
+        id = popfirst!(queue)
+        id.value in seen && continue
+        push!(seen, id.value)
+        rec = find_revision(graph, id)
+        rec === nothing && continue
+        push!(order, id)
+        for parent in rec.parents
+            parent.value in seen && continue
+            push!(queue, parent)
         end
     end
-    return targets
+    return order
+end
+
+function _resolve_in_revision_scope(graph::ArchiveGraph, target::ObjectRef, visible::Vector{RevisionId})
+    vis = Set(id.value for id in visible)
+    if target.revision_id !== nothing
+        target.revision_id.value in vis || return nothing
+        return find_object(graph, target.object_id, target.revision_id)
+    end
+    for rev in visible
+        obj = find_object(graph, target.object_id, rev)
+        obj === nothing || return obj
+    end
+    return nothing
+end
+
+function _entry_key(object_id::ObjectId, revision_id)
+    return object_id.value * "@" * (revision_id === nothing ? "" : revision_id.value)
+end
+
+function _revision_has_parent_cycle(graph::ArchiveGraph, rec::RevisionRecord)
+    seen = Set{String}([rec.id.value])
+    stack = RevisionId[_unique_parents(rec)...]
+    while !isempty(stack)
+        id = pop!(stack)
+        id == rec.id && return true
+        id.value in seen && continue
+        push!(seen, id.value)
+        parent = find_revision(graph, id)
+        parent === nothing && continue
+        append!(stack, _unique_parents(parent))
+    end
+    return false
+end
+
+function _append_selected_revision_diagnostics!(diagnostics, graph::ArchiveGraph, rec::RevisionRecord)
+    if _revision_has_parent_cycle(graph, rec)
+        push!(diagnostics, error_diagnostic(
+            :cycle,
+            "revision parent graph contains a cycle including $(rec.id.value)";
+            revision_id = rec.id.value,
+        ))
+    end
+    for parent_id in _unique_parents(rec)
+        parent_id == rec.id && continue
+        find_revision(graph, parent_id) === nothing || continue
+        push!(diagnostics, error_diagnostic(
+            :dangling_parent,
+            "revision $(rec.id.value) names unknown parent $(parent_id.value)";
+            revision_id = rec.id.value,
+            parent_id = parent_id.value,
+        ))
+    end
+    return diagnostics
+end
+
+function _push_unresolved_entry!(
+    entries, diagnostics, reqs, revision_id, object_id, target_rev, seen_unresolved,
+)
+    key = _entry_key(object_id, target_rev)
+    key in seen_unresolved && return nothing
+    push!(seen_unresolved, key)
+    req = _match_external(reqs, object_id, nothing)
+    if req !== nothing
+        push!(entries, ManifestEntry(
+            object_id;
+            revision_id = target_rev,
+            content_id = req.content_id,
+            availability = :external_required,
+            artifact = req.artifact,
+        ))
+    else
+        push!(entries, ManifestEntry(
+            object_id;
+            revision_id = target_rev,
+            content_id = nothing,
+            availability = :missing,
+        ))
+        push!(diagnostics, error_diagnostic(
+            :missing_manifest_object,
+            "revision $(revision_id.value) names missing object $(object_id.value)";
+            revision_id = revision_id.value,
+            object_id = object_id.value,
+            target_revision_id = target_rev === nothing ? nothing : target_rev.value,
+        ))
+    end
+    return nothing
 end
 
 function _revision_manifest(
@@ -155,10 +249,18 @@ function _revision_manifest(
         "revision $(revision_id.value) is not in the archive graph",
     ))
     reqs = _externals_vector(externals)
-    objects = find_objects(graph, revision_id)
-    entries = ManifestEntry[]
     diagnostics = DiagnosticMessage[]
-    for object in objects
+    _append_selected_revision_diagnostics!(diagnostics, graph, rec)
+    visible = _visible_revision_order(graph, revision_id)
+    queue = find_objects(graph, revision_id)
+    seen = Set{String}()
+    entries = ManifestEntry[]
+    unresolved = String[]
+    while !isempty(queue)
+        object = popfirst!(queue)
+        key = _entry_key(object.object_id, object.revision_id)
+        key in seen && continue
+        push!(seen, key)
         push!(entries, ManifestEntry(
             object.object_id;
             object = object,
@@ -166,31 +268,21 @@ function _revision_manifest(
             content_id = object.content_id,
             availability = :envelope_only,
         ))
-    end
-    for (object_id, target_rev, content_id) in _dangling_targets(graph, objects)
-        req = _match_external(reqs, object_id, content_id)
-        if req !== nothing
-            push!(entries, ManifestEntry(
-                object_id;
-                revision_id = target_rev,
-                content_id = req.content_id,
-                availability = :external_required,
-                artifact = req.artifact,
-            ))
-        else
-            push!(entries, ManifestEntry(
-                object_id;
-                revision_id = target_rev,
-                content_id = content_id,
-                availability = :missing,
-            ))
-            push!(diagnostics, error_diagnostic(
-                :missing_manifest_object,
-                "revision $(revision_id.value) names missing object $(object_id.value)";
-                revision_id = revision_id.value,
-                object_id = object_id.value,
-                target_revision_id = target_rev === nothing ? nothing : target_rev.value,
-            ))
+        for ref in ordered_references(object)
+            resolved = _resolve_in_revision_scope(graph, ref.target, visible)
+            if resolved === nothing
+                _push_unresolved_entry!(
+                    entries,
+                    diagnostics,
+                    reqs,
+                    revision_id,
+                    ref.target.object_id,
+                    ref.target.revision_id,
+                    unresolved,
+                )
+            else
+                push!(queue, resolved)
+            end
         end
     end
     heads = WorkflowHead[]
@@ -376,8 +468,23 @@ function _manifest_inspect_readiness(manifest::RevisionManifest, target::Pipelin
     )
 end
 
+function _append_external_dependency_diagnostics!(diagnostics, manifest::RevisionManifest)
+    for entry in manifest.entries
+        entry.availability === :external_required || continue
+        push!(diagnostics, error_diagnostic(
+            :external_content_required,
+            "revision $(manifest.revision.id.value) requires external object $(entry.object_id.value)";
+            revision_id = manifest.revision.id.value,
+            object_id = entry.object_id.value,
+            content_id = entry.content_id === nothing ? nothing : entry.content_id.value,
+        ))
+    end
+    return diagnostics
+end
+
 function _manifest_replay_readiness(manifest::RevisionManifest, target::PipelineTarget)
     diagnostics = DiagnosticMessage[validate(manifest).diagnostics...]
+    _append_external_dependency_diagnostics!(diagnostics, manifest)
     if manifest.run === nothing
         push!(diagnostics, error_diagnostic(
             :replay_run_missing,
@@ -455,6 +562,7 @@ end
 
 function _manifest_rerun_readiness(manifest::RevisionManifest, target::PipelineTarget)
     diagnostics = DiagnosticMessage[validate(manifest).diagnostics...]
+    _append_external_dependency_diagnostics!(diagnostics, manifest)
     run = manifest.run
     if run === nothing
         push!(diagnostics, error_diagnostic(

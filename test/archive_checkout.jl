@@ -61,6 +61,9 @@ end
     @test Set(e.object_id for e in m0.entries) == Set([ObjectId(ID_GEOM), ObjectId(ID_SECTOR)])
     @test select(m1, ObjectId(ID_SECTOR)).availability === :envelope_only
     @test select(m1, ObjectId(ID_SECTOR)).object.content_id == ContentId("hash-x")
+    @test select(m1, ObjectId(ID_GEOM)).availability === :envelope_only
+    @test select(m1, ObjectId(ID_GEOM)).object.revision_id == r0
+    @test Set(e.object_id for e in m1.entries) == Set([ObjectId(ID_SECTOR), ObjectId(ID_GEOM)])
     @test select(m2, ObjectId(ID_MESH)).object.kind === Symbol("example/mesh")
     @test m1.parents == [r0]
     @test Set(m3.parents) == Set([r1, r2])
@@ -132,6 +135,10 @@ end
     @test select(present, ObjectId(ID_GEOM)).availability === :external_required
     @test select(present, ObjectId(ID_GEOM)).artifact.path == "geometry.bin"
     @test isready(readiness(present, PipelineTarget(:inspect)))
+    @test !isready(readiness(present, PipelineTarget(:replay)))
+    @test any(d -> d.code === :external_content_required,
+        readiness(present, PipelineTarget(:replay)).diagnostics)
+    @test !isready(readiness(present, PipelineTarget(:rerun)))
     @test any(e -> e.availability === :external_required, present.entries)
     @test !any(e -> e.availability === :missing, present.entries)
 end
@@ -168,4 +175,62 @@ end
         readiness(m3, PipelineTarget(:rerun)).diagnostics)
     @test_throws ArgumentError inspect(graph, RunId("missing"))
     @test_throws ArgumentError inspect(graph, RevisionId("no-such-revision"))
+end
+
+@testset "historical manifests are revision-scoped and include resolved deps" begin
+    graph, r0, r1, r2, _, _ = _branched_history()
+    m1 = inspect(graph, r1)
+    @test select(m1, ObjectId(ID_GEOM)).object.revision_id == r0
+
+    root = RevisionRecord(RevisionId(REV_1))
+    child = RevisionRecord(RevisionId(REV_2); parents = [RevisionId(REV_1)])
+    unpinned = _obj(
+        :example, "mesh", ID_MESH, REV_2;
+        references = [ArchiveReference(:geometry, ObjectId(ID_GEOM))],
+    )
+    sibling_geom = _obj(:example, "geometry", ID_GEOM, REV_3; content = "hash-g")
+    sibling = RevisionRecord(RevisionId(REV_3); parents = [RevisionId(REV_1)])
+    scoped = ArchiveGraph(
+        [unpinned, sibling_geom];
+        revisions = [root, child, sibling],
+    )
+    older = inspect(scoped, RevisionId(REV_2))
+    @test select(older, ObjectId(ID_GEOM)).availability === :missing
+    @test !isvalid(validate(older))
+    healed = inspect(scoped, RevisionId(REV_3))
+    @test select(healed, ObjectId(ID_GEOM)).availability === :envelope_only
+end
+
+@testset "selected-revision dangling parents do not hide behind other branches" begin
+    good = RevisionRecord(RevisionId(REV_1))
+    obj = _obj(:example, "geometry", ID_GEOM, REV_1; content = "hash-g")
+    dangling = RevisionRecord(RevisionId(REV_2); parents = [RevisionId("missing-parent")])
+    other = _obj(:example, "mesh", ID_MESH, REV_2; content = "hash-y")
+    graph = ArchiveGraph(
+        [obj, other];
+        revisions = [good, dangling],
+    )
+    ok = inspect(graph, RevisionId(REV_1))
+    @test isvalid(validate(ok))
+    @test isready(readiness(ok, PipelineTarget(:inspect)))
+    broken = inspect(graph, RevisionId(REV_2))
+    @test any(d -> d.code === :dangling_parent, broken.diagnostics)
+    @test !isvalid(validate(broken))
+    @test !isready(readiness(broken, PipelineTarget(:inspect)))
+end
+
+@testset "duplicate workflow head names are rejected" begin
+    rec = RevisionRecord(RevisionId(REV_1))
+    obj = _obj(:example, "geometry", ID_GEOM, REV_1)
+    graph = ArchiveGraph(
+        [obj];
+        heads = [
+            WorkflowHead(WorkflowHeadId("head-a"), :main, RevisionId(REV_1)),
+            WorkflowHead(WorkflowHeadId("head-b"), :main, RevisionId(REV_1)),
+        ],
+        revisions = [rec],
+    )
+    @test any(d -> d.code === :duplicate_workflow_head_name, validate(graph).diagnostics)
+    @test_throws ArgumentError inspect(graph, :main)
+    @test inspect(graph, WorkflowHeadId("head-a")).revision.id == RevisionId(REV_1)
 end
