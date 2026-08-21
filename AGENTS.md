@@ -19,11 +19,13 @@ Episteme.jl = semantics + schemas + history/provenance
             + JLD2-backed AH5 persistence
 ```
 
-JLD2 and the `.ah5` writer are planned focused implementation steps. HDF5.jl
-remains later optional extension work for direct/bulk/parallel HDF5 needs.
+The JLD2-backed `.ah5` profile (`write_archive` / `inspect_archive`) is in
+this package. HDF5.jl remains later optional extension work for
+direct/bulk/parallel HDF5 needs.
 
-See [`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md)
-and [`docs/archive-ownership.md`](docs/archive-ownership.md).
+See [`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md),
+[`docs/archive-ownership.md`](docs/archive-ownership.md), and
+[`docs/archive-profile.md`](docs/archive-profile.md).
 
 ## 2. What it owns
 

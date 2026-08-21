@@ -6,10 +6,9 @@ must carry the exact machine-readable schema revisions needed to
 interpret its portable/shared records and any domain payload that opts
 into schema-based generic inspection.
 
-Physical `/schemas` group spelling is issue
-[#40](https://github.com/ahojukka5/Episteme.jl/issues/40). Migration
-*execution* is issue [#41](https://github.com/ahojukka5/Episteme.jl/issues/41).
-This page does not open files.
+Physical `/episteme/schemas` spelling is in
+[`archive-profile.md`](archive-profile.md). Migration *execution* is issue
+[#41](https://github.com/ahojukka5/Episteme.jl/issues/41).
 
 JLD2 `/_types` describes Julia representation. It is not the scientific
 schema registry and is not consulted for schema identity.
@@ -99,7 +98,6 @@ registry itself is valid.
 
 ## What this is not
 
-- HDF5/JLD2 `/schemas` path layout (#40)
 - running domain migrations (#41)
 - treating JLD2 struct reconstruction as scientific compatibility
 - requiring every live Julia value to have a portable schema
