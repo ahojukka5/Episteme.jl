@@ -18,10 +18,11 @@ const REACHABILITY_CLASSES = (
     RetentionPolicy(; keep_ancestor_objects=false, keep_uncommitted_runs=false,
                     keep_debug_logs=false, keep_forensic_logs=true)
 
-Explicit retention choices. Pinned log streams always survive. Ancestor
-*revision records* of retained revisions are always kept so parent edges
-stay valid. `keep_ancestor_objects` also keeps every object materialized
-in those ancestor revisions, not only the inspect closure.
+Explicit retention choices. Pinned log streams and pinned events always
+survive and keep their run. Ancestor *revision records* of retained
+revisions are always kept so parent edges stay valid.
+`keep_ancestor_objects` also keeps every object materialized in those
+ancestor revisions, not only the inspect closure.
 """
 struct RetentionPolicy
     keep_ancestor_objects::Bool
@@ -48,7 +49,10 @@ end
     RetentionRoot(; kind, kwargs...)
 
 A caller-selected retention root: a workflow head, revision, object
-version, run, or log stream.
+version, run, or log stream. A `:log_stream` root requires `run_id` and
+`log_kind` and forces that stream to survive even when policy would
+drop debug logs. An `:object` root keeps that object version's
+reference closure, not every sibling materialized in the revision.
 """
 struct RetentionRoot
     kind::Symbol
@@ -90,6 +94,9 @@ RetentionRoot(run_id::RunId) = RetentionRoot(; kind = :run, run_id = run_id)
 function RetentionRoot(object_id::ObjectId, revision_id::RevisionId)
     return RetentionRoot(; kind = :object, object_id = object_id, revision_id = revision_id)
 end
+function RetentionRoot(run_id::RunId, log_kind::Symbol)
+    return RetentionRoot(; kind = :log_stream, run_id = run_id, log_kind = log_kind)
+end
 
 """
     PurgeClassification(object_id, class; revision_id=nothing, content_id=nothing)
@@ -124,10 +131,13 @@ end
     PurgePlan(...)
 
 Deterministic purge manifest: retained/omitted counts, unique content,
-duplicated retained content, externals, and optional byte totals.
+duplicated retained content, externals, optional byte totals, and
+reachability diagnostics. `validate(plan)` is false when required
+dependencies are unresolved.
 """
 struct PurgePlan
     policy::RetentionPolicy
+    diagnostics::Vector{DiagnosticMessage}
     classifications::Vector{PurgeClassification}
     retained_revisions::Vector{RevisionId}
     omitted_revisions::Vector{RevisionId}
@@ -157,8 +167,50 @@ struct PurgeResult
     report::ValidationReport
 end
 
+struct _Reachability
+    objects::Set{String}
+    revisions::Set{String}
+    runs::Set{String}
+    heads::Set{String}
+    externals::Vector{ExternalRequirement}
+    diagnostics::Vector{DiagnosticMessage}
+    forced_streams::Set{Tuple{String,Symbol}}
+end
+
+function _Reachability()
+    return _Reachability(
+        Set{String}(),
+        Set{String}(),
+        Set{String}(),
+        Set{String}(),
+        ExternalRequirement[],
+        DiagnosticMessage[],
+        Set{Tuple{String,Symbol}}(),
+    )
+end
+
 function _object_key(object::ArchiveObject)
     return _entry_key(object.object_id, object.revision_id)
+end
+
+function _stream_key(stream::LogStreamRecord)
+    return (stream.run_id.value, stream.kind)
+end
+
+function _push_diagnostic!(diagnostics::Vector{DiagnosticMessage}, diag::DiagnosticMessage)
+    for existing in diagnostics
+        existing.code === diag.code && existing.message == diag.message &&
+            existing.context == diag.context && return nothing
+    end
+    push!(diagnostics, diag)
+    return nothing
+end
+
+function _push_external!(state::_Reachability, req::ExternalRequirement)
+    any(e -> e.object_id == req.object_id && e.content_id == req.content_id, state.externals) &&
+        return nothing
+    push!(state.externals, req)
+    return nothing
 end
 
 function _retain_object!(objects::Set{String}, revisions::Set{String}, object::ArchiveObject)
@@ -167,43 +219,179 @@ function _retain_object!(objects::Set{String}, revisions::Set{String}, object::A
     return nothing
 end
 
+function _retain_revision_records!(state::_Reachability, graph::ArchiveGraph, revision_id::RevisionId)
+    push!(state.revisions, revision_id.value)
+    rec = find_revision(graph, revision_id)
+    rec === nothing && return nothing
+    for id in _visible_revision_order(graph, revision_id)
+        push!(state.revisions, id.value)
+        parent = find_revision(graph, id)
+        parent === nothing && continue
+        parent.run_id === nothing && continue
+        push!(state.runs, parent.run_id.value)
+    end
+    return nothing
+end
+
+function _retain_unresolved_target!(
+    state::_Reachability,
+    externals,
+    revision_id::RevisionId,
+    target::ObjectRef,
+)
+    req = _match_external(externals, target.object_id, nothing)
+    if req !== nothing
+        _push_external!(state, req)
+        return nothing
+    end
+    _push_diagnostic!(state.diagnostics, error_diagnostic(
+        :missing_manifest_object,
+        "revision $(revision_id.value) names missing object $(target.object_id.value)";
+        revision_id = revision_id.value,
+        object_id = target.object_id.value,
+        target_revision_id = target.revision_id === nothing ? nothing : target.revision_id.value,
+    ))
+    return nothing
+end
+
+function _retain_object_closure!(
+    state::_Reachability,
+    graph::ArchiveGraph,
+    object::ArchiveObject,
+    policy::RetentionPolicy,
+    externals,
+)
+    visible = _visible_revision_order(graph, object.revision_id)
+    _retain_revision_records!(state, graph, object.revision_id)
+    queue = ArchiveObject[object]
+    seen = Set{String}()
+    while !isempty(queue)
+        item = popfirst!(queue)
+        key = _object_key(item)
+        key in seen && continue
+        push!(seen, key)
+        _retain_object!(state.objects, state.revisions, item)
+        _retain_revision_records!(state, graph, item.revision_id)
+        for ref in ordered_references(item)
+            resolved = _resolve_in_revision_scope(graph, ref.target, visible)
+            if resolved === nothing
+                _retain_unresolved_target!(state, externals, object.revision_id, ref.target)
+            else
+                push!(queue, resolved)
+            end
+        end
+    end
+    policy.keep_ancestor_objects || return nothing
+    for rev_id in visible
+        for obj in find_objects(graph, rev_id)
+            _retain_object!(state.objects, state.revisions, obj)
+        end
+    end
+    return nothing
+end
+
+function _retain_object_ref!(
+    state::_Reachability,
+    graph::ArchiveGraph,
+    ref::ObjectRef,
+    policy::RetentionPolicy,
+    externals;
+    code::Symbol,
+    message::AbstractString,
+    context...,
+)
+    matches = ArchiveObject[]
+    if ref.revision_id !== nothing
+        obj = find_object(graph, ref.object_id, ref.revision_id)
+        obj === nothing || push!(matches, obj)
+    else
+        append!(matches, find_revisions(graph, ref.object_id))
+    end
+    if !isempty(matches)
+        for obj in matches
+            _retain_object_closure!(state, graph, obj, policy, externals)
+        end
+        return nothing
+    end
+    req = _match_external(externals, ref.object_id, nothing)
+    if req !== nothing
+        _push_external!(state, req)
+        return nothing
+    end
+    _push_diagnostic!(state.diagnostics, error_diagnostic(
+        code,
+        message;
+        object_id = ref.object_id.value,
+        target_revision_id = ref.revision_id === nothing ? nothing : ref.revision_id.value,
+        context...,
+    ))
+    return nothing
+end
+
 function _retain_revision_closure!(
-    objects::Set{String},
-    revisions::Set{String},
-    runs::Set{String},
-    externals_found::Vector{ExternalRequirement},
+    state::_Reachability,
     graph::ArchiveGraph,
     revision_id::RevisionId,
     policy::RetentionPolicy,
     externals,
 )
     manifest = inspect(graph, revision_id; externals = externals)
-    push!(revisions, manifest.revision.id.value)
+    for diag in manifest.diagnostics
+        _push_diagnostic!(state.diagnostics, diag)
+    end
+    _retain_revision_records!(state, graph, revision_id)
     for parent in manifest.parents
-        push!(revisions, parent.value)
+        push!(state.revisions, parent.value)
     end
     for anc in manifest.ancestors
-        push!(revisions, anc.value)
+        push!(state.revisions, anc.value)
     end
     if manifest.run !== nothing
-        push!(runs, manifest.run.id.value)
+        push!(state.runs, manifest.run.id.value)
     end
     for entry in manifest.entries
         if entry.availability === :envelope_only && entry.object !== nothing
-            _retain_object!(objects, revisions, entry.object)
+            _retain_object!(state.objects, state.revisions, entry.object)
         elseif entry.availability === :external_required
             req = _match_external(externals, entry.object_id, entry.content_id)
             req === nothing && continue
-            any(e -> e.object_id == req.object_id && e.content_id == req.content_id, externals_found) &&
-                continue
-            push!(externals_found, req)
+            _push_external!(state, req)
+        elseif entry.availability === :missing
+            _push_diagnostic!(state.diagnostics, error_diagnostic(
+                :missing_manifest_object,
+                "revision $(revision_id.value) names missing object $(entry.object_id.value)";
+                revision_id = revision_id.value,
+                object_id = entry.object_id.value,
+                target_revision_id = entry.revision_id === nothing ? nothing :
+                    entry.revision_id.value,
+            ))
         end
     end
     policy.keep_ancestor_objects || return nothing
     for rev_id in _visible_revision_order(graph, revision_id)
         for object in find_objects(graph, rev_id)
-            _retain_object!(objects, revisions, object)
+            _retain_object!(state.objects, state.revisions, object)
         end
+    end
+    return nothing
+end
+
+function _retain_run_seed!(
+    state::_Reachability,
+    graph::ArchiveGraph,
+    run_id::RunId,
+    policy::RetentionPolicy,
+    externals;
+    snapshot::Bool = true,
+)
+    push!(state.runs, run_id.value)
+    run = find_run(graph, run_id)
+    run === nothing && return nothing
+    run.revision_id === nothing && return nothing
+    if snapshot
+        _retain_revision_closure!(state, graph, run.revision_id, policy, externals)
+    else
+        _retain_revision_records!(state, graph, run.revision_id)
     end
     return nothing
 end
@@ -232,55 +420,59 @@ function _resolve_retention_root(graph::ArchiveGraph, root::RetentionRoot)
         return root.run_id
     elseif root.kind === :log_stream
         root.run_id === nothing && throw(ArgumentError("log stream root requires run_id"))
+        root.log_kind === nothing && throw(ArgumentError("log stream root requires log_kind"))
+        find_run(graph, root.run_id) === nothing &&
+            throw(ArgumentError("retention run $(root.run_id.value) is not in the graph"))
+        found = false
+        for stream in graph.log_streams
+            stream.run_id == root.run_id && stream.kind === root.log_kind || continue
+            found = true
+            break
+        end
+        found || throw(ArgumentError(
+            "retention log stream :$(root.log_kind) for run $(root.run_id.value) is not in the graph",
+        ))
         return (root.run_id, root.log_kind)
     end
     throw(ArgumentError("unknown retention root kind :$(root.kind)"))
 end
 
 function _seed_root!(
-    objects, revisions, runs, heads, graph, root, policy, externals, externals_found,
+    state::_Reachability,
+    graph::ArchiveGraph,
+    root::RetentionRoot,
+    policy::RetentionPolicy,
+    externals,
 )
     if root.kind === :head
         head = _resolve_retention_root(graph, root)
-        push!(heads, head.id.value)
-        _retain_revision_closure!(
-            objects, revisions, runs, externals_found, graph, head.revision_id, policy, externals,
-        )
+        push!(state.heads, head.id.value)
+        _retain_revision_closure!(state, graph, head.revision_id, policy, externals)
     elseif root.kind === :revision
         rid = _resolve_retention_root(graph, root)
-        _retain_revision_closure!(
-            objects, revisions, runs, externals_found, graph, rid, policy, externals,
-        )
+        _retain_revision_closure!(state, graph, rid, policy, externals)
     elseif root.kind === :object
         object_id, revision_id = _resolve_retention_root(graph, root)
         object = find_object(graph, object_id, revision_id)
-        _retain_object!(objects, revisions, object)
-        _retain_revision_closure!(
-            objects, revisions, runs, externals_found, graph, revision_id, policy, externals,
-        )
+        _retain_object_closure!(state, graph, object, policy, externals)
     elseif root.kind === :run
         run_id = _resolve_retention_root(graph, root)
-        push!(runs, run_id.value)
-        run = find_run(graph, run_id)
-        if run.revision_id !== nothing
-            _retain_revision_closure!(
-                objects, revisions, runs, externals_found, graph, run.revision_id, policy, externals,
-            )
-        end
+        _retain_run_seed!(state, graph, run_id, policy, externals)
     elseif root.kind === :log_stream
-        run_id, _ = _resolve_retention_root(graph, root)
-        push!(runs, run_id.value)
-        run = find_run(graph, run_id)
-        if run !== nothing && run.revision_id !== nothing
-            _retain_revision_closure!(
-                objects, revisions, runs, externals_found, graph, run.revision_id, policy, externals,
-            )
-        end
+        run_id, log_kind = _resolve_retention_root(graph, root)
+        push!(state.forced_streams, (run_id.value, log_kind))
+        _retain_run_seed!(state, graph, run_id, policy, externals)
     end
     return nothing
 end
 
-function _keep_log_stream(stream::LogStreamRecord, policy::RetentionPolicy, runs::Set{String})
+function _keep_log_stream(
+    stream::LogStreamRecord,
+    policy::RetentionPolicy,
+    runs::Set{String},
+    forced_streams::Set{Tuple{String,Symbol}},
+)
+    _stream_key(stream) in forced_streams && return true
     stream.retention === :pinned && return true
     stream.run_id.value in runs || return false
     stream.retention === :forensic && return policy.keep_forensic_logs
@@ -290,12 +482,129 @@ function _keep_log_stream(stream::LogStreamRecord, policy::RetentionPolicy, runs
 end
 
 function _keep_event(event::EventRecord, policy::RetentionPolicy, runs::Set{String})
-    event.run_id.value in runs || return false
     event.retention === :pinned && return true
+    event.run_id.value in runs || return false
     event.retention === :forensic && return policy.keep_forensic_logs
     event.retention === :debug && return policy.keep_debug_logs
     event.retention === :ephemeral && return policy.keep_debug_logs
     return true
+end
+
+function _close_parent_runs!(state::_Reachability, graph::ArchiveGraph)
+    for run in graph.runs
+        run.id.value in state.runs || continue
+        run.parent_run_id === nothing && continue
+        parent = find_run(graph, run.parent_run_id)
+        if parent === nothing
+            _push_diagnostic!(state.diagnostics, error_diagnostic(
+                :missing_parent_run,
+                "run $(run.id.value) names unknown parent run $(run.parent_run_id.value)";
+                run_id = run.id.value,
+                parent_run_id = run.parent_run_id.value,
+            ))
+            continue
+        end
+        parent.id.value in state.runs && continue
+        push!(state.runs, parent.id.value)
+        parent.revision_id === nothing && continue
+        _retain_revision_records!(state, graph, parent.revision_id)
+    end
+    return nothing
+end
+
+function _close_activity_refs!(
+    state::_Reachability,
+    graph::ArchiveGraph,
+    policy::RetentionPolicy,
+    externals,
+)
+    for run in graph.runs
+        run.id.value in state.runs || continue
+        for activity in run.activities
+            for ref in vcat(activity.used, activity.generated)
+                _retain_object_ref!(
+                    state,
+                    graph,
+                    ref.target,
+                    policy,
+                    externals;
+                    code = :missing_activity_object,
+                    message = "activity $(activity.id.value) names missing object $(ref.target.object_id.value)",
+                    activity_id = activity.id.value,
+                    run_id = run.id.value,
+                    name = ref.name,
+                )
+            end
+        end
+    end
+    return nothing
+end
+
+function _close_event_refs!(
+    state::_Reachability,
+    graph::ArchiveGraph,
+    policy::RetentionPolicy,
+    externals,
+)
+    for event in graph.events
+        _keep_event(event, policy, state.runs) || continue
+        push!(state.runs, event.run_id.value)
+        if event.revision_id !== nothing
+            _retain_revision_records!(state, graph, event.revision_id)
+        end
+        for ref in event.object_refs
+            _retain_object_ref!(
+                state,
+                graph,
+                ref,
+                policy,
+                externals;
+                code = :dangling_event_object,
+                message = "event :$(event.kind) names unknown object $(ref.object_id.value)",
+                kind = event.kind,
+                run_id = event.run_id.value,
+            )
+        end
+    end
+    return nothing
+end
+
+function _attach_committed_runs!(state::_Reachability, graph::ArchiveGraph)
+    for run in graph.runs
+        run.id.value in state.runs && continue
+        run.revision_id === nothing && continue
+        run.revision_id.value in state.revisions && push!(state.runs, run.id.value)
+    end
+    return nothing
+end
+
+function _attach_heads!(state::_Reachability, graph::ArchiveGraph)
+    for head in graph.heads
+        head.id.value in state.heads && continue
+        head.revision_id.value in state.revisions && push!(state.heads, head.id.value)
+    end
+    return nothing
+end
+
+function _close_reachability!(
+    state::_Reachability,
+    graph::ArchiveGraph,
+    policy::RetentionPolicy,
+    externals,
+)
+    while true
+        nobj = length(state.objects)
+        nrev = length(state.revisions)
+        nrun = length(state.runs)
+        _close_parent_runs!(state, graph)
+        _close_activity_refs!(state, graph, policy, externals)
+        _close_event_refs!(state, graph, policy, externals)
+        _attach_committed_runs!(state, graph)
+        _attach_heads!(state, graph)
+        length(state.objects) == nobj && length(state.revisions) == nrev &&
+            length(state.runs) == nrun && break
+    end
+    return nothing
 end
 
 function _content_size(content_id, sizes)
@@ -314,44 +623,26 @@ function _reachability(
     policy::RetentionPolicy,
     externals,
 )
-    objects = Set{String}()
-    revisions = Set{String}()
-    runs = Set{String}()
-    heads = Set{String}()
-    externals_found = ExternalRequirement[]
-    root_list = RetentionRoot[]
+    state = _Reachability()
     for root in roots
         root isa RetentionRoot || throw(ArgumentError("roots must contain RetentionRoot values"))
-        push!(root_list, root)
-        _seed_root!(
-            objects, revisions, runs, heads, graph, root, policy, externals, externals_found,
-        )
+        _seed_root!(state, graph, root, policy, externals)
     end
     for stream in graph.log_streams
         stream.retention === :pinned || continue
-        push!(runs, stream.run_id.value)
-        run = find_run(graph, stream.run_id)
-        if run !== nothing && run.revision_id !== nothing
-            _retain_revision_closure!(
-                objects, revisions, runs, externals_found, graph, run.revision_id, policy, externals,
-            )
-        end
+        _retain_run_seed!(state, graph, stream.run_id, policy, externals; snapshot = false)
+    end
+    for event in graph.events
+        event.retention === :pinned || continue
+        _retain_run_seed!(state, graph, event.run_id, policy, externals; snapshot = false)
     end
     if policy.keep_uncommitted_runs
         for run in graph.runs
-            run.revision_id === nothing && push!(runs, run.id.value)
+            run.revision_id === nothing && push!(state.runs, run.id.value)
         end
     end
-    for run in graph.runs
-        run.id.value in runs && continue
-        run.revision_id === nothing && continue
-        run.revision_id.value in revisions && push!(runs, run.id.value)
-    end
-    for head in graph.heads
-        head.id.value in heads && continue
-        head.revision_id.value in revisions && push!(heads, head.id.value)
-    end
-    return objects, revisions, runs, heads, externals_found, root_list
+    _close_reachability!(state, graph, policy, externals)
+    return state
 end
 
 function _sorted_revision_ids(ids::Set{String})
@@ -367,6 +658,7 @@ end
         -> PurgePlan
 
 Dry-run reachability. Does not mutate `graph` and does not write files.
+Unresolved required dependencies are recorded on `plan.diagnostics`.
 """
 function plan_purge(
     graph::ArchiveGraph,
@@ -376,7 +668,7 @@ function plan_purge(
     content_sizes = nothing,
 )
     reqs = _externals_vector(externals)
-    objects, revisions, runs, _, externals_found, _ = _reachability(graph, roots, policy, reqs)
+    state = _reachability(graph, roots, policy, reqs)
     classifications = PurgeClassification[]
     retained_content = Set{String}()
     omitted_content = Set{String}()
@@ -384,7 +676,7 @@ function plan_purge(
     for object in ordered_objects(graph)
         key = _object_key(object)
         cid = object.content_id
-        if key in objects
+        if key in state.objects
             class = :reachable
             if cid !== nothing
                 push!(retained_content, cid.value)
@@ -402,7 +694,7 @@ function plan_purge(
         ))
     end
     duplicated = count(n -> n > 1, values(content_rows))
-    for req in externals_found
+    for req in state.externals
         push!(classifications, PurgeClassification(
             req.object_id,
             :external;
@@ -411,8 +703,8 @@ function plan_purge(
     end
     debug_count = 0
     for (i, stream) in enumerate(graph.log_streams)
-        _keep_log_stream(stream, policy, runs) && continue
-        stream.run_id.value in runs || continue
+        _keep_log_stream(stream, policy, state.runs, state.forced_streams) && continue
+        stream.run_id.value in state.runs || continue
         debug_count += 1
         push!(classifications, PurgeClassification(
             ObjectId("log-stream-$(i)-$(stream.run_id.value)"),
@@ -420,8 +712,8 @@ function plan_purge(
         ))
     end
     for (i, event) in enumerate(graph.events)
-        event.run_id.value in runs || continue
-        _keep_event(event, policy, runs) && continue
+        event.run_id.value in state.runs || continue
+        _keep_event(event, policy, state.runs) && continue
         debug_count += 1
         push!(classifications, PurgeClassification(
             ObjectId("event-$(i)-$(event.run_id.value)"),
@@ -450,17 +742,18 @@ function plan_purge(
     end
     return PurgePlan(
         policy,
+        copy(state.diagnostics),
         classifications,
-        _sorted_revision_ids(revisions),
-        _sorted_revision_ids(setdiff(all_revs, revisions)),
-        _sorted_run_ids(runs),
-        _sorted_run_ids(setdiff(all_runs, runs)),
+        _sorted_revision_ids(state.revisions),
+        _sorted_revision_ids(setdiff(all_revs, state.revisions)),
+        _sorted_run_ids(state.runs),
+        _sorted_run_ids(setdiff(all_runs, state.runs)),
         count(c -> c.class === :reachable, classifications),
         count(c -> c.class === :unreachable, classifications),
         length(retained_content),
         length(omitted_content_only),
         duplicated,
-        length(externals_found),
+        length(state.externals),
         debug_count,
         retained_bytes,
         omitted_bytes,
@@ -477,20 +770,20 @@ end
 
 function _build_compacted(
     graph::ArchiveGraph,
-    objects::Set{String},
-    revisions::Set{String},
-    runs::Set{String},
-    heads::Set{String},
+    state::_Reachability,
     policy::RetentionPolicy,
 )
     return ArchiveGraph(
-        _filter_copy(ordered_objects(graph), (_, obj) -> _object_key(obj) in objects),
-        _filter_copy(ordered_heads(graph), (_, head) -> head.id.value in heads),
-        _filter_copy(ordered_revisions(graph), (_, rev) -> rev.id.value in revisions),
-        _filter_copy(ordered_runs(graph), (_, run) -> run.id.value in runs),
-        _filter_copy(graph.events, (_, event) -> _keep_event(event, policy, runs)),
-        _filter_copy(graph.writes, (_, tx) -> tx.run_id !== nothing && tx.run_id.value in runs),
-        _filter_copy(graph.log_streams, (_, stream) -> _keep_log_stream(stream, policy, runs)),
+        _filter_copy(ordered_objects(graph), (_, obj) -> _object_key(obj) in state.objects),
+        _filter_copy(ordered_heads(graph), (_, head) -> head.id.value in state.heads),
+        _filter_copy(ordered_revisions(graph), (_, rev) -> rev.id.value in state.revisions),
+        _filter_copy(ordered_runs(graph), (_, run) -> run.id.value in state.runs),
+        _filter_copy(graph.events, (_, event) -> _keep_event(event, policy, state.runs)),
+        _filter_copy(graph.writes, (_, tx) -> tx.run_id !== nothing && tx.run_id.value in state.runs),
+        _filter_copy(
+            graph.log_streams,
+            (_, stream) -> _keep_log_stream(stream, policy, state.runs, state.forced_streams),
+        ),
     )
 end
 
@@ -539,9 +832,9 @@ function compact_archive(
     content_sizes = nothing,
 )
     reqs = _externals_vector(externals)
-    objects, revisions, runs, heads, _, _ = _reachability(graph, roots, policy, reqs)
+    state = _reachability(graph, roots, policy, reqs)
     plan = plan_purge(graph, roots; policy = policy, externals = reqs, content_sizes = content_sizes)
-    compacted = _build_compacted(graph, objects, revisions, runs, heads, policy)
+    compacted = _build_compacted(graph, state, policy)
     report = _verify_compacted(compacted, plan.retained_revisions, reqs)
     if !isvalid(report)
         return PurgeResult(true, nothing, plan, report)
@@ -550,10 +843,10 @@ function compact_archive(
 end
 
 function validate(plan::PurgePlan)
-    diagnostics = DiagnosticMessage[]
+    diagnostics = copy(plan.diagnostics)
     return ValidationReport(
         :purge_plan,
-        true,
+        !any(d -> d.severity === :error, diagnostics),
         diagnostics,
         (;
             retained_objects = plan.retained_objects,
@@ -584,7 +877,7 @@ function report(plan::PurgePlan)
             retained_bytes = plan.retained_bytes,
             omitted_bytes = plan.omitted_bytes,
         ),
-        DiagnosticMessage[],
+        copy(plan.diagnostics),
         ArtifactRef[],
     )
 end
@@ -659,6 +952,7 @@ to_namedtuple(c::PurgeClassification) = (
 
 to_namedtuple(plan::PurgePlan) = (
     policy = to_namedtuple(plan.policy),
+    diagnostics = Tuple(to_namedtuple.(plan.diagnostics)),
     classifications = Tuple(to_namedtuple.(plan.classifications)),
     retained_revisions = Tuple(id.value for id in plan.retained_revisions),
     omitted_revisions = Tuple(id.value for id in plan.omitted_revisions),
