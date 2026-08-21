@@ -305,7 +305,15 @@ function _validate_object_against_registry!(diagnostics, object::ArchiveObject, 
     claimed = resolve_namespace(registry, ns.id)
     claimed === nothing && return diagnostics
     claimed_uuid = claimed.namespace.package_uuid
-    if !isempty(claimed_uuid) && !isempty(ns.package_uuid) && claimed_uuid != ns.package_uuid
+    if !isempty(claimed_uuid) && isempty(ns.package_uuid)
+        push!(diagnostics, error_diagnostic(
+            :namespace_identity_missing,
+            "object namespace :$(ns.id) omits package UUID $claimed_uuid required by the registry";
+            object_id = object.object_id.value,
+            namespace = ns.id,
+            registered_uuid = claimed_uuid,
+        ))
+    elseif !isempty(claimed_uuid) && claimed_uuid != ns.package_uuid
         push!(diagnostics, error_diagnostic(
             :namespace_identity_conflict,
             "object namespace :$(ns.id) UUID $(ns.package_uuid) does not match registered UUID $claimed_uuid";
@@ -344,14 +352,31 @@ function _validate_namespace_claim!(diagnostics, claim::NamespaceClaim)
             namespace = ns.id,
         ))
     end
-    for alias_id in claim.aliases
-        is_reserved_archive_area(alias_id) || continue
+    if claim.status === :alias && is_reserved_shared_namespace(ns.id)
         push!(diagnostics, error_diagnostic(
-            :reserved_archive_area_claimed,
-            "alias :$alias_id is a reserved archive area, not a package namespace";
+            :reserved_namespace_claimed,
+            "reserved namespace :$(ns.id) cannot be used as an alias of another identity";
             namespace = ns.id,
-            alias = alias_id,
+            canonical_id = claim.canonical_id,
         ))
+    end
+    for alias_id in claim.aliases
+        if is_reserved_archive_area(alias_id)
+            push!(diagnostics, error_diagnostic(
+                :reserved_archive_area_claimed,
+                "alias :$alias_id is a reserved archive area, not a package namespace";
+                namespace = ns.id,
+                alias = alias_id,
+            ))
+        end
+        if is_reserved_shared_namespace(alias_id)
+            push!(diagnostics, error_diagnostic(
+                :reserved_namespace_claimed,
+                "reserved namespace :$alias_id cannot be used as an alias of another identity";
+                namespace = ns.id,
+                alias = alias_id,
+            ))
+        end
     end
     if _is_episteme_identity(claim)
         if claim.role !== :shared
@@ -383,30 +408,29 @@ function _validate_namespace_claim!(diagnostics, claim::NamespaceClaim)
 end
 
 function _validate_namespace_registry!(diagnostics, registry::NamespaceRegistry)
-    seen_active = Dict{Symbol,NamespaceClaim}()
+    seen_ids = Dict{Symbol,NamespaceClaim}()
     for claim in ordered_claims(registry)
         _validate_namespace_claim!(diagnostics, claim)
-        if claim.status !== :alias
-            previous = get(seen_active, claim.namespace.id, nothing)
-            if previous === nothing
-                seen_active[claim.namespace.id] = claim
-            else
-                push!(diagnostics, error_diagnostic(
-                    :duplicate_namespace_claim,
-                    "namespace :$(claim.namespace.id) is claimed more than once";
-                    namespace = claim.namespace.id,
-                ))
-            end
+        previous = get(seen_ids, claim.namespace.id, nothing)
+        if previous === nothing
+            seen_ids[claim.namespace.id] = claim
+        else
+            push!(diagnostics, error_diagnostic(
+                :duplicate_namespace_claim,
+                "namespace :$(claim.namespace.id) is claimed more than once";
+                namespace = claim.namespace.id,
+            ))
         end
     end
 
     by_uuid = Dict{String,Vector{Symbol}}()
     for claim in ordered_claims(registry)
         uuid = claim.namespace.package_uuid
-        isempty(uuid) && continue
-        ids = get!(Vector{Symbol}, by_uuid, uuid)
-        id = claim.status === :alias ? claim.canonical_id : claim.namespace.id
-        id in ids || push!(ids, id)
+        if !isempty(uuid)
+            ids = get!(Vector{Symbol}, by_uuid, uuid)
+            id = claim.status === :alias ? claim.canonical_id : claim.namespace.id
+            id in ids || push!(ids, id)
+        end
         if claim.status === :alias
             canonical = find_claim(registry, claim.canonical_id)
             if canonical === nothing
@@ -418,7 +442,7 @@ function _validate_namespace_registry!(diagnostics, registry::NamespaceRegistry)
                 ))
             else
                 other = canonical.namespace.package_uuid
-                if !isempty(other) && uuid != other
+                if !isempty(other) && !isempty(uuid) && uuid != other
                     push!(diagnostics, error_diagnostic(
                         :namespace_alias_uuid_mismatch,
                         "alias :$(claim.namespace.id) UUID $uuid does not match :$(canonical.namespace.id) UUID $other";
@@ -426,6 +450,16 @@ function _validate_namespace_registry!(diagnostics, registry::NamespaceRegistry)
                         canonical_id = canonical.namespace.id,
                         package_uuid = uuid,
                         registered_uuid = other,
+                    ))
+                end
+                if claim.role !== canonical.role
+                    push!(diagnostics, error_diagnostic(
+                        :namespace_alias_role_mismatch,
+                        "alias :$(claim.namespace.id) role :$(claim.role) does not match :$(canonical.namespace.id) role :$(canonical.role)";
+                        namespace = claim.namespace.id,
+                        canonical_id = canonical.namespace.id,
+                        role = claim.role,
+                        registered_role = canonical.role,
                     ))
                 end
             end
