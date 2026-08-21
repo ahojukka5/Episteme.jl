@@ -4,7 +4,8 @@ This is the logical object/reference/schema-version contract from issue
 [#26](https://github.com/ahojukka5/OodiCore.jl/issues/26). It lives entirely
 in Episteme and does not open files. Physical `.ah5` encoding is the later
 JLD2-backed AH5 profile inside Episteme; see
-[`archive-ownership.md`](archive-ownership.md).
+[`archive-ownership.md`](archive-ownership.md) and
+[`archive-namespaces.md`](archive-namespaces.md).
 
 The envelope lets independently owned package payloads share one archive
 without depending on each other or on package-native runtime handles.
@@ -153,6 +154,9 @@ Required facts on every object:
 
 `kind` must be owned by the object's namespace (`oodi/field` under
 `:oodi`). Schema namespace and `schema_kind(schema)` must match `kind`.
+Package UUID, reserved `:episteme` / `episteme/*` names, aliases, and
+listing are documented in [`archive-namespaces.md`](archive-namespaces.md).
+`display_name` is not identity.
 
 `ArchiveGraph` holds objects and heads. Insertion order is not
 authoritative. `ordered_objects`, `ordered_references`, and
@@ -225,6 +229,8 @@ compression. They are not a place to store payload arrays.
 - schema migration implementations (#41)
 - content-hash algorithms (#42)
 - software-environment manifests (#37)
+- namespace reservation/alias registry (see
+  [`archive-namespaces.md`](archive-namespaces.md); #40 owns path layout)
 - execution-context capture (#43)
 - JLD2 working-archive I/O (portable documents are in
   [`portable-documents.md`](portable-documents.md))

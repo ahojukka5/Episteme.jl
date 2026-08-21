@@ -170,15 +170,26 @@ end
 
 Owning package namespace for archived objects and schemas.
 
-`id` is the stable short name (`:oodi`, `:lieb`). `package_uuid` is the
-Julia package UUID when known, otherwise the empty string. `display_name`
-is a human label such as `"Oodi.jl"`. Reserved shared namespace names are
-issue #38; this type only records identity.
+`id` is the current short name (`:oodi`, `:lieb`, `:episteme`). Identity is
+`package_uuid` when that string is non-empty; otherwise `id` is identity.
+`display_name` is a human label such as `"Oodi.jl"` and is never identity,
+so a repository or display-name rename does not mint a new namespace.
+Reservation, alias, and ownership rules are documented in
+`docs/archive-namespaces.md` (issue #38).
 """
 struct ArchiveNamespace
     id::Symbol
     package_uuid::String
     display_name::String
+
+    function ArchiveNamespace(
+        id::Symbol,
+        package_uuid::AbstractString,
+        display_name::AbstractString,
+    )
+        isempty(String(id)) && throw(ArgumentError("namespace id must not be empty"))
+        return new(id, String(strip(package_uuid)), String(strip(display_name)))
+    end
 end
 
 function ArchiveNamespace(
@@ -186,7 +197,7 @@ function ArchiveNamespace(
     package_uuid::AbstractString = "",
     display_name::AbstractString = "",
 )
-    return ArchiveNamespace(id, String(package_uuid), String(display_name))
+    return ArchiveNamespace(id, package_uuid, display_name)
 end
 
 """
@@ -934,6 +945,7 @@ function _kind_prefix(namespace_id::Symbol)
 end
 
 function _validate_archive_object!(diagnostics, object::ArchiveObject)
+    _validate_object_namespace!(diagnostics, object)
     prefix = _kind_prefix(object.namespace.id)
     startswith(String(object.kind), prefix) || push!(diagnostics, error_diagnostic(
         :kind_namespace_mismatch,
@@ -1073,7 +1085,7 @@ function validate(graph::ArchiveGraph, catalog::ArchiveCatalog)
     return ValidationReport(:archive_graph, isempty(diagnostics), diagnostics, (;))
 end
 
-function _validate_archive_graph!(diagnostics, graph::ArchiveGraph)
+function _validate_archive_graph!(diagnostics, graph::ArchiveGraph; namespace_registry = nothing)
     seen_revisions = Tuple{String,String}[]
     seen_objects = Dict{String,Tuple{Symbol,Symbol}}()
     for object in ordered_objects(graph)
@@ -1161,6 +1173,11 @@ function _validate_archive_graph!(diagnostics, graph::ArchiveGraph)
     end
 
     _validate_history_records!(diagnostics, graph)
+    _validate_namespace_identities!(
+        diagnostics,
+        graph.objects;
+        registry = namespace_registry,
+    )
     return diagnostics
 end
 
