@@ -256,7 +256,7 @@ Logical contract first, then physical persistence in Episteme.
 | #35 reproduction capsules | capsule manifest types | packaging |
 | #37 software-environment manifests | record types | `/provenance/software` storage |
 | #38 namespaces | identity, reservation, aliases, listing | path layout |
-| #39 embedded schemas | logical schema facts + `NodeSchema` serialization | physical `/schemas` storage |
+| #39 embedded schemas | SchemaDefinition, SchemaRegistry, listing | physical `/schemas` storage |
 | #40 `.ah5` profile and generic inspect | profile metadata types | primary |
 | #41 schema migrations | source/target identifiers | runner only; domain owns each transformation |
 | #42 content hashes / verification | canonicalization rules | hash compute and verify |

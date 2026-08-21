@@ -6,6 +6,7 @@ include("declarative.jl")
 include("archive_envelope.jl")
 include("archive_checkout.jl")
 include("archive_namespaces.jl")
+include("archive_schemas.jl")
 include("archive_purge.jl")
 include("portable_document.jl")
 
@@ -30,6 +31,8 @@ export NAMESPACE_ROLES, NAMESPACE_STATUSES
 export NamespaceClaim, NamespaceRegistry, NamespaceListing
 export episteme_namespace, is_reserved_shared_namespace, is_reserved_archive_area
 export owns_kind, find_claim, resolve_namespace, list_namespaces, ordered_claims
+export SchemaField, SchemaMigrationRef, SchemaDefinition, SchemaRegistry, SchemaListing
+export SCHEMA_CARDINALITIES, known_schemas, list_schemas, ordered_schemas
 export ObjectRef, ArchiveReference
 export LogicalType, LogicalArraySpec, LOGICAL_SCALAR_KINDS
 export ArchiveObject, WorkflowHead, ArchiveGraph, ArchiveCatalog

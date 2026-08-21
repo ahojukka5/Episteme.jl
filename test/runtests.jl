@@ -212,6 +212,7 @@ struct DummyObject end
 
     include("archive_envelope.jl")
     include("archive_namespaces.jl")
+    include("archive_schemas.jl")
     include("archive_history.jl")
     include("archive_revision_dag.jl")
     include("archive_lifecycle.jl")
