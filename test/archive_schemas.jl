@@ -307,6 +307,24 @@ end
     @test isvalid(validate(graph, SchemaRegistry([historical]), aliases))
 end
 
+@testset "graph objects and embedded schemas must share namespace UUID identity" begin
+    mesh = _mesh_def()
+    mismatched = validate(
+        ArchiveGraph([_obj(:delone, "mesh", ID_MESH, REV_1; uuid = UUID_OODI)]),
+        SchemaRegistry([mesh]),
+    )
+    @test any(d -> d.code === :namespace_identity_conflict, mismatched.diagnostics)
+    omitted = validate(
+        ArchiveGraph([_obj(:delone, "mesh", ID_MESH, REV_1)]),
+        SchemaRegistry([mesh]),
+    )
+    @test any(d -> d.code === :namespace_identity_missing, omitted.diagnostics)
+    @test isvalid(validate(
+        ArchiveGraph([_obj(:delone, "mesh", ID_MESH, REV_1; uuid = UUID_DELONE)]),
+        SchemaRegistry([mesh]),
+    ))
+end
+
 @testset "replacement and migration metadata cannot contradict itself" begin
     self_replaced = _field_def(; replaced_by = SchemaRef(:oodi, "field", "1.0.0"))
     @test any(d -> d.code === :corrupt_schema, validate(self_replaced).diagnostics)

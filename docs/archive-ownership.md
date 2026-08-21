@@ -28,8 +28,8 @@ Domain packages own scientific payloads, operation semantics, codecs, and
 schema-migration *functions*. They must not grow package-local HDF5 archive
 frameworks.
 
-JLD2 / `.ah5` writers are **not** in the rename PR. Current code still does
-not open files.
+JLD2 / `.ah5` writers land in the persistence PRs. The profile writer
+(`write_archive`) and generic `inspect_archive` are issue #40.
 
 See [`research/episteme-architecture.md`](research/episteme-architecture.md).
 
@@ -56,8 +56,7 @@ types land). Domain kinds stay with the owning package (`monge/*`,
                     |  SemanticNode    |
                     |  NodeSchema      |
                     |  archive types   |
-                    |  (later: JLD2    |
-                    |   AH5 profile)   |
+                    |  JLD2 AH5 profile|
                     +--------+---------+
                              ^
                              | depends on
@@ -75,7 +74,7 @@ Allowed edges:
 
 ```text
 domain package     ->  Episteme     (hard or weak, package choice)
-Episteme           ->  JLD2         (hard, later persistence PR)
+Episteme           ->  JLD2         (hard, v1 persistence)
 EpistemeHDF5Ext    ->  Episteme + HDF5.jl   (later; bulk /data, MPI)
 EpistemeXDMFExt    ->  Episteme + XML       (optional view layer)
 EpistemeMPIExt     ->  Episteme + MPI       (optional; typically with HDF5Ext)
@@ -93,7 +92,7 @@ Dependencies flow one way: into Episteme's consumers.
 
 ## What each layer owns
 
-### Episteme.jl — semantics, vocabulary, later AH5 profile
+### Episteme.jl — semantics, vocabulary, and AH5 profile
 
 Safe to add here, as ordinary immutable structs and symbolic rules:
 
@@ -110,8 +109,8 @@ Safe to add here, as ordinary immutable structs and symbolic rules:
 - canonical content-hash *rules* expressed as data (#42)
 - migration source/target identifiers (#41)
 - `to_namedtuple` for those records
-- later: Plan/Run/Activity/Event/Revision records, JLD2-backed `.ah5`
-  writer, inspect/verify/migrate/checkout
+- Plan/Run/Activity/Event/Revision records
+- JLD2-backed `.ah5` writer and generic `inspect_archive`
 
 Episteme still does not (in current code, and never as domain meaning):
 
@@ -121,7 +120,7 @@ Episteme still does not (in current code, and never as domain meaning):
   generics; those names remain reserved and unimplemented
 
 Logical envelope tests belong in this repository and must not require
-HDF5. They also must not require JLD2 until the persistence PR.
+HDF5. Profile I/O tests may use JLD2.
 
 ### Domain packages — payload schemas and codecs
 
@@ -209,14 +208,12 @@ Episteme = "7c15cd61-9c6a-4671-bc94-9960963998ac"
 ```
 
 ```julia
-using Episteme          # identities, tree, schemas; no JLD2 in this rename
-# later persistence PR: using Episteme  also loads JLD2
+using Episteme          # identities, tree, schemas, JLD2-backed AH5 profile
 # later HPC: using Episteme, HDF5   loads EpistemeHDF5Ext
 ```
 
 Provider-free cores still must not load CAD, mesh, FEM, MPI, or a vendor
-SDK. After the persistence PR, `using Episteme` *will* load JLD2; that is
-the accepted v1 product.
+SDK. `using Episteme` loads JLD2; that is the accepted v1 product.
 
 ## Schema and codec registration
 
@@ -256,8 +253,8 @@ Logical contract first, then physical persistence in Episteme.
 | #35 reproduction capsules | capsule manifest types | packaging |
 | #37 software-environment manifests | record types | `/provenance/software` storage |
 | #38 namespaces | identity, reservation, aliases, listing | path layout |
-| #39 embedded schemas | SchemaDefinition, SchemaRegistry, listing | physical `/schemas` storage |
-| #40 `.ah5` profile and generic inspect | profile metadata types | primary |
+| #39 embedded schemas | SchemaDefinition, SchemaRegistry, listing | `/episteme/schemas` in the #40 profile |
+| #40 `.ah5` profile and generic inspect | ArchiveProfile, write_archive, inspect_archive | primary |
 | #41 schema migrations | source/target identifiers | runner only; domain owns each transformation |
 | #42 content hashes / verification | canonicalization rules | hash compute and verify |
 | #43 execution-context fingerprint | record types and denylist data | storage |
@@ -288,7 +285,7 @@ Oodi #395, Stinespring #163, Lieb #65, Chappe #207) should:
 Issue [#47](https://github.com/ahojukka5/OodiCore.jl/issues/47) studied
 JLD2 as the Julia-native codec. Findings are in
 [`research/jld2-ah5-spike/FINDINGS.md`](../research/jld2-ah5-spike/FINDINGS.md).
-JLD2 is not a dependency of this package until the persistence PR.
+JLD2 is a hard dependency of this package for the v1 `.ah5` profile.
 
 Issue [#48](https://github.com/ahojukka5/OodiCore.jl/issues/48) is the
 long-term architecture study (accepted). Issue

@@ -8,10 +8,11 @@ Two related APIs share `RevisionManifest`:
 
 | API | Role |
 | --- | --- |
-| `inspect(graph, revision)` | generic record read; no file I/O |
+| `inspect(graph, revision)` | in-memory generic record read |
 | `checkout(graph, revision)` | snapshot/state primitive; payloads stay unloaded |
+| `inspect_archive(path)` | JLD2-backed `.ah5` profile inspect; see [`archive-profile.md`](archive-profile.md) |
 
-File-path AH5/JLD2 checkout is later work and must return the same
+File-path payload `checkout` is later work and must return the same
 manifest contract. Domain payload packages are not required to inspect
 envelope fields.
 
@@ -66,7 +67,7 @@ head into a copy of the graph changes bookmarks only.
 
 ## What this is not
 
-- JLD2/AH5 file checkout or payload codecs
+- payload `checkout` from `.ah5` files or payload codecs
 - `branch!` / `rerun!` runtime
 - silent fetch of external artifacts
 - a claim that a domain solver can restart from envelope metadata alone

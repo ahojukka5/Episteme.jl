@@ -792,3 +792,19 @@ to_namedtuple(listing::NamespaceListing) = (
     kinds = listing.kinds,
     schema_ids = listing.schema_ids,
 )
+
+function from_namedtuple(::Type{NamespaceListing}, nt)
+    return NamespaceListing(
+        ArchiveNamespace(
+            Symbol(nt.id);
+            package_uuid = String(nt.package_uuid),
+            display_name = String(nt.display_name),
+        ),
+        Symbol(nt.role),
+        Symbol(nt.status),
+        Symbol(nt.canonical_id),
+        Tuple(Symbol(id) for id in nt.aliases),
+        Tuple(Symbol(kind) for kind in nt.kinds),
+        Tuple(String(id) for id in nt.schema_ids),
+    )
+end
