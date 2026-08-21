@@ -56,8 +56,15 @@ SchemaField(
 
 `SchemaRegistry` holds those definitions. `list_schemas(registry)` (also
 with an `ArchiveGraph` or `RevisionManifest`) returns `SchemaListing`
-rows: identity, compatibility, field names, and migration/replacement
-pointers. It does not load payloads or import domain packages.
+rows: identity, compatibility, portable `SchemaField`s (logical type,
+units/frame, rank/shape, cardinality, support/location, reference target,
+rules, documentation), and migration/replacement pointers. It does not
+load payloads or import domain packages.
+
+`validate(schemas, namespaces)` and `validate(graph, schemas, namespaces)`
+apply #38 identity rules: a registered package UUID is required, aliases
+are accepted, and two definitions cannot share a short name with different
+UUIDs.
 
 `known_schemas(registry)` projects identity+compatibility into an
 [`ArchiveCatalog`](archive-envelope.md) for the existing envelope lookup
@@ -73,8 +80,10 @@ API. That catalog still does not contain JLD2 type names.
 | `:unsupported_schema` | embedded compatibility is `:unsupported` |
 | `:migration_required` | compatibility is `:migration_required` |
 | `:missing_migration_ref` | that compatibility is set but no `SchemaMigrationRef` is stored |
-| `:corrupt_schema` | definition is empty, duplicate, or internally inconsistent |
+| `:corrupt_schema` | definition is empty, duplicate, self-replacing, or has contradictory replacement/migration links |
 | `:duplicate_schema` | the same `SchemaRef` is embedded twice |
+| `:namespace_identity_conflict` | same short namespace name with different package UUIDs |
+| `:namespace_identity_missing` | registered owner UUID omitted from a schema namespace |
 | `:payload_schema_violation` | a portable NamedTuple/SemanticNode payload breaks the declared fields or `NodeSchema` |
 
 `validate(graph, registry)` checks the graph envelope plus that every
