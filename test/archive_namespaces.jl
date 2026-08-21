@@ -367,3 +367,61 @@ end
         NamespaceRegistry([delone]),
     ))
 end
+
+@testset "registry alias names are single-valued and canonical" begin
+    chained = NamespaceRegistry([
+        NamespaceClaim(ArchiveNamespace(:current; package_uuid = UUID_DELONE); role = :domain),
+        NamespaceClaim(
+            ArchiveNamespace(:middle; package_uuid = UUID_DELONE);
+            role = :domain,
+            status = :alias,
+            canonical_id = :current,
+        ),
+        NamespaceClaim(
+            ArchiveNamespace(:old; package_uuid = UUID_DELONE);
+            role = :domain,
+            status = :alias,
+            canonical_id = :middle,
+        ),
+    ])
+    @test any(d -> d.code === :namespace_alias_not_canonical, validate(chained).diagnostics)
+
+    shared_tuple = NamespaceRegistry([
+        NamespaceClaim(
+            ArchiveNamespace(:delone; package_uuid = UUID_DELONE);
+            role = :domain,
+            aliases = (:legacy,),
+        ),
+        NamespaceClaim(
+            ArchiveNamespace(:oodi; package_uuid = UUID_OODI);
+            role = :domain,
+            aliases = (:legacy,),
+        ),
+    ])
+    @test any(d -> d.code === :namespace_identity_conflict, validate(shared_tuple).diagnostics)
+
+    tuple_vs_direct = NamespaceRegistry([
+        NamespaceClaim(
+            ArchiveNamespace(:delone; package_uuid = UUID_DELONE);
+            role = :domain,
+            aliases = (:legacy,),
+        ),
+        NamespaceClaim(ArchiveNamespace(:legacy; package_uuid = UUID_OODI); role = :domain),
+    ])
+    @test any(d -> d.code === :namespace_identity_conflict, validate(tuple_vs_direct).diagnostics)
+
+    matched = NamespaceRegistry([
+        NamespaceClaim(
+            ArchiveNamespace(:delone; package_uuid = UUID_DELONE);
+            role = :domain,
+            aliases = (:olddelone,),
+        ),
+        NamespaceClaim(
+            ArchiveNamespace(:olddelone; package_uuid = UUID_DELONE);
+            role = :domain,
+            status = :alias,
+            canonical_id = :delone,
+        ),
+    ])
+    @test isvalid(validate(matched))
+end
