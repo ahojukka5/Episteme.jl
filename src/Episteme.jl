@@ -5,6 +5,7 @@ include("semantic_tree.jl")
 include("declarative.jl")
 include("archive_envelope.jl")
 include("archive_checkout.jl")
+include("archive_namespaces.jl")
 include("archive_purge.jl")
 include("portable_document.jl")
 
@@ -23,6 +24,12 @@ export SoftwareEnvironmentId, ExecutionContextId
 export DocumentId, PlanId, ActivityId, AgentId
 export ArchiveNamespace, SchemaRef, KnownSchema, ProvenanceRefs
 export schema_kind, schema_status, resolve_schema, SCHEMA_COMPATIBILITY
+export EPISTEME_NAMESPACE, EPISTEME_PACKAGE_UUID
+export RESERVED_SHARED_NAMESPACES, RESERVED_ARCHIVE_AREAS
+export NAMESPACE_ROLES, NAMESPACE_STATUSES
+export NamespaceClaim, NamespaceRegistry, NamespaceListing
+export episteme_namespace, is_reserved_shared_namespace, is_reserved_archive_area
+export owns_kind, find_claim, resolve_namespace, list_namespaces, ordered_claims
 export ObjectRef, ArchiveReference
 export LogicalType, LogicalArraySpec, LOGICAL_SCALAR_KINDS
 export ArchiveObject, WorkflowHead, ArchiveGraph, ArchiveCatalog
