@@ -247,3 +247,27 @@ end
     @test find_object(compacted, ObjectId(ID_MESH), r2) !== nothing
     @test select(inspect(compacted, r1), ObjectId(ID_MESH)) === nothing
 end
+
+@testset "invalid purge plan blocks compacted graph publication" begin
+    graph, _, r1, _, _, run = _purge_fixture()
+    missing = ObjectId("missing-activity-object")
+    activity = ActivityRecord(
+        ActivityId("act-1"),
+        run.id,
+        Symbol("example/step");
+        used = [ArchiveReference(:missing, missing)],
+    )
+    child = _run_with(run; activities = [activity])
+    graph = _graph_with(graph; runs = [r.id == run.id ? child : r for r in graph.runs])
+
+    plan = plan_purge(graph, [RetentionRoot(r1)])
+    @test !isvalid(validate(plan))
+    @test any(d -> d.code === :missing_activity_object, plan.diagnostics)
+
+    result = compact_archive(graph, [RetentionRoot(r1)])
+    @test result.source_unchanged
+    @test result.graph === nothing
+    @test !isvalid(result.report)
+    @test any(d -> d.code === :missing_activity_object, result.report.diagnostics)
+    @test !isready(readiness(result, PipelineTarget(:inspect)))
+end

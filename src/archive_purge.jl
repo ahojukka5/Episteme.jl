@@ -794,8 +794,13 @@ function _dangling_is_external(diag::DiagnosticMessage, externals)
     return any(req -> req.object_id.value == target, externals)
 end
 
-function _verify_compacted(compacted::ArchiveGraph, retained_revisions, externals)
-    diagnostics = DiagnosticMessage[]
+function _verify_compacted(
+    compacted::ArchiveGraph,
+    retained_revisions,
+    externals;
+    initial_diagnostics = DiagnosticMessage[],
+)
+    diagnostics = copy(initial_diagnostics)
     graph_report = validate(compacted)
     for d in graph_report.diagnostics
         _dangling_is_external(d, externals) && continue
@@ -810,7 +815,7 @@ function _verify_compacted(compacted::ArchiveGraph, retained_revisions, external
     end
     return ValidationReport(
         :purged_archive,
-        isempty(diagnostics),
+        !any(d -> d.severity === :error, diagnostics),
         diagnostics,
         (; revisions = length(retained_revisions), objects = length(compacted.objects)),
     )
@@ -835,7 +840,12 @@ function compact_archive(
     state = _reachability(graph, roots, policy, reqs)
     plan = plan_purge(graph, roots; policy = policy, externals = reqs, content_sizes = content_sizes)
     compacted = _build_compacted(graph, state, policy)
-    report = _verify_compacted(compacted, plan.retained_revisions, reqs)
+    report = _verify_compacted(
+        compacted,
+        plan.retained_revisions,
+        reqs;
+        initial_diagnostics = plan.diagnostics,
+    )
     if !isvalid(report)
         return PurgeResult(true, nothing, plan, report)
     end
