@@ -214,13 +214,15 @@ end
 """
     SchemaListing
 
-Inspection view of one embedded schema: identity, compatibility, field
-names, and replacement/migration pointers. Payloads are never loaded.
+Inspection view of one embedded schema: identity, compatibility, portable
+field structure, and replacement/migration pointers. Payloads are never
+loaded.
 """
 struct SchemaListing
     schema::SchemaRef
     namespace::ArchiveNamespace
     compatibility::Symbol
+    fields::Tuple{Vararg{SchemaField}}
     field_names::Tuple{Vararg{Symbol}}
     has_node_schema::Bool
     documentation::String
@@ -284,8 +286,10 @@ end
     list_schemas(registry) -> Vector{SchemaListing}
     list_schemas(graph, registry)
 
-Generic structural inspection of embedded schemas. Domain payload
-packages are not required.
+Generic structural inspection of embedded schemas. Listings include
+portable [`SchemaField`](@ref) facts so a reader without the owning
+package can inspect types, units, rank/shape, and references. Domain
+payload packages are not required.
 """
 function list_schemas(registry::SchemaRegistry)
     listings = SchemaListing[]
@@ -320,12 +324,14 @@ function list_schemas(
 end
 
 function _schema_listing(entry::SchemaDefinition)
-    names = Symbol[field.name for field in find_schema_fields(entry)]
+    fields = Tuple(find_schema_fields(entry))
+    names = ntuple(i -> fields[i].name, length(fields))
     return SchemaListing(
         entry.schema,
         entry.namespace,
         entry.compatibility,
-        Tuple(names),
+        fields,
+        names,
         entry.node_schema !== nothing,
         entry.documentation,
         entry.package_version,
@@ -422,6 +428,25 @@ function _validate_schema_definition!(diagnostics, entry::SchemaDefinition)
         ))
     end
 
+    if entry.replaces == entry.schema || entry.replaced_by == entry.schema
+        push!(diagnostics, error_diagnostic(
+            :corrupt_schema,
+            "schema $(schema_kind(entry.schema)) version $(entry.schema.version) replaces or is replaced by itself";
+            schema_kind = schema_kind(entry.schema),
+            version = entry.schema.version,
+        ))
+    end
+    mig = entry.migration
+    if mig !== nothing && entry.replaced_by !== nothing && mig.target != entry.replaced_by
+        push!(diagnostics, error_diagnostic(
+            :corrupt_schema,
+            "schema $(schema_kind(entry.schema)) migration target does not match replaced_by";
+            schema_kind = schema_kind(entry.schema),
+            version = entry.schema.version,
+            migration_target = schema_kind(mig.target),
+            replaced_by = schema_kind(entry.replaced_by),
+        ))
+    end
     if entry.compatibility === :migration_required
         mig = entry.migration
         if mig === nothing
@@ -443,7 +468,11 @@ function _validate_schema_definition!(diagnostics, entry::SchemaDefinition)
     return diagnostics
 end
 
-function _validate_schema_registry!(diagnostics, registry::SchemaRegistry)
+function _validate_schema_registry!(
+    diagnostics,
+    registry::SchemaRegistry;
+    namespaces::Union{Nothing,NamespaceRegistry} = nothing,
+)
     seen = SchemaRef[]
     for entry in ordered_schemas(registry)
         _validate_schema_definition!(diagnostics, entry)
@@ -457,6 +486,117 @@ function _validate_schema_registry!(diagnostics, registry::SchemaRegistry)
         else
             push!(seen, entry.schema)
         end
+    end
+    _validate_schema_namespace_identities!(diagnostics, registry, namespaces)
+    _validate_embedded_replacement_links!(diagnostics, registry)
+    return diagnostics
+end
+
+function _validate_embedded_replacement_links!(diagnostics, registry::SchemaRegistry)
+    by_ref = Dict{SchemaRef,SchemaDefinition}()
+    for entry in registry.entries
+        by_ref[entry.schema] = entry
+    end
+    for entry in ordered_schemas(registry)
+        successor = entry.replaced_by
+        if successor !== nothing && haskey(by_ref, successor)
+            other = by_ref[successor]
+            if other.replaces !== nothing && other.replaces != entry.schema
+                push!(diagnostics, error_diagnostic(
+                    :corrupt_schema,
+                    "schema $(schema_kind(successor)) replaces $(schema_kind(other.replaces)), not $(schema_kind(entry.schema))";
+                    schema_kind = schema_kind(entry.schema),
+                    version = entry.schema.version,
+                    replaced_by = schema_kind(successor),
+                ))
+            end
+        end
+        predecessor = entry.replaces
+        if predecessor !== nothing && haskey(by_ref, predecessor)
+            other = by_ref[predecessor]
+            if other.replaced_by !== nothing && other.replaced_by != entry.schema
+                push!(diagnostics, error_diagnostic(
+                    :corrupt_schema,
+                    "schema $(schema_kind(predecessor)) is replaced by $(schema_kind(other.replaced_by)), not $(schema_kind(entry.schema))";
+                    schema_kind = schema_kind(entry.schema),
+                    version = entry.schema.version,
+                    replaces = schema_kind(predecessor),
+                ))
+            end
+        end
+    end
+    return diagnostics
+end
+
+function _validate_schema_namespace_identities!(
+    diagnostics,
+    schemas::SchemaRegistry,
+    namespaces::Union{Nothing,NamespaceRegistry} = nothing,
+)
+    by_id = Dict{Symbol,Vector{String}}()
+    by_uuid = Dict{String,Vector{Symbol}}()
+    for entry in schemas.entries
+        ns = entry.namespace
+        uuids = get!(Vector{String}, by_id, ns.id)
+        isempty(ns.package_uuid) || ns.package_uuid in uuids || push!(uuids, ns.package_uuid)
+        isempty(ns.package_uuid) && continue
+        ids = get!(Vector{Symbol}, by_uuid, ns.package_uuid)
+        ns.id in ids || push!(ids, ns.id)
+    end
+    for (id, uuids) in by_id
+        length(uuids) <= 1 && continue
+        push!(diagnostics, error_diagnostic(
+            :namespace_identity_conflict,
+            "namespace :$id is claimed by multiple package UUIDs $(Tuple(uuids))";
+            namespace = id,
+            package_uuids = Tuple(uuids),
+        ))
+    end
+    for (uuid, ids) in by_uuid
+        length(ids) <= 1 && continue
+        _ids_share_canonical(namespaces, ids, uuid) && continue
+        push!(diagnostics, error_diagnostic(
+            :namespace_id_split,
+            "package UUID $uuid is used as namespaces $(Tuple(ids)) without an alias";
+            package_uuid = uuid,
+            namespaces = Tuple(sort(ids; by = String)),
+        ))
+    end
+    namespaces === nothing && return diagnostics
+    for entry in schemas.entries
+        _validate_schema_against_namespaces!(diagnostics, entry, namespaces)
+    end
+    return diagnostics
+end
+
+function _validate_schema_against_namespaces!(
+    diagnostics,
+    entry::SchemaDefinition,
+    namespaces::NamespaceRegistry,
+)
+    ns = entry.namespace
+    claimed = resolve_namespace(namespaces, ns.id)
+    claimed === nothing && return diagnostics
+    claimed_uuid = claimed.namespace.package_uuid
+    if !isempty(claimed_uuid) && isempty(ns.package_uuid)
+        push!(diagnostics, error_diagnostic(
+            :namespace_identity_missing,
+            "schema namespace :$(ns.id) omits package UUID $claimed_uuid required by the registry";
+            schema_kind = schema_kind(entry.schema),
+            version = entry.schema.version,
+            namespace = ns.id,
+            registered_uuid = claimed_uuid,
+        ))
+    elseif !isempty(claimed_uuid) && claimed_uuid != ns.package_uuid
+        push!(diagnostics, error_diagnostic(
+            :namespace_identity_conflict,
+            "schema namespace :$(ns.id) UUID $(ns.package_uuid) does not match registered UUID $claimed_uuid";
+            schema_kind = schema_kind(entry.schema),
+            version = entry.schema.version,
+            namespace = ns.id,
+            package_uuid = ns.package_uuid,
+            registered_uuid = claimed_uuid,
+        ))
     end
     return diagnostics
 end
@@ -519,6 +659,21 @@ function validate(registry::SchemaRegistry)
     )
 end
 
+function validate(schemas::SchemaRegistry, namespaces::NamespaceRegistry)
+    diagnostics = DiagnosticMessage[]
+    _validate_schema_registry!(diagnostics, schemas; namespaces = namespaces)
+    _validate_namespace_registry!(diagnostics, namespaces)
+    return ValidationReport(
+        :schema_registry,
+        isempty(diagnostics),
+        diagnostics,
+        (;
+            schemas = length(schemas.entries),
+            namespaces = length(namespaces.claims),
+        ),
+    )
+end
+
 function validate(graph::ArchiveGraph, registry::SchemaRegistry)
     diagnostics = DiagnosticMessage[]
     _validate_archive_graph!(diagnostics, graph)
@@ -529,6 +684,27 @@ function validate(graph::ArchiveGraph, registry::SchemaRegistry)
         isempty(diagnostics),
         diagnostics,
         (; schemas = length(list_schemas(graph, registry))),
+    )
+end
+
+function validate(
+    graph::ArchiveGraph,
+    schemas::SchemaRegistry,
+    namespaces::NamespaceRegistry,
+)
+    diagnostics = DiagnosticMessage[]
+    _validate_archive_graph!(diagnostics, graph; namespace_registry = namespaces)
+    _validate_namespace_registry!(diagnostics, namespaces)
+    _validate_schema_registry!(diagnostics, schemas; namespaces = namespaces)
+    _validate_graph_schemas!(diagnostics, graph, schemas)
+    return ValidationReport(
+        :archive_graph,
+        isempty(diagnostics),
+        diagnostics,
+        (;
+            schemas = length(list_schemas(graph, schemas)),
+            namespaces = length(namespaces.claims),
+        ),
     )
 end
 
@@ -685,16 +861,18 @@ function _validate_payload_element!(diagnostics, value, field::SchemaField, entr
             reason = :array_shape,
         ))
     end
-    if !isempty(value) && !_matches_logical_type(first(value), field.element)
-        push!(diagnostics, error_diagnostic(
-            :payload_schema_violation,
-            "field :$(field.name) elements must be :$(field.element.kind)";
-            field = field.name,
-            schema_kind = schema_kind(entry.schema),
-            version = entry.schema.version,
-            reason = :logical_type,
-        ))
-        return diagnostics
+    for item in value
+        if !_matches_logical_type(item, field.element)
+            push!(diagnostics, error_diagnostic(
+                :payload_schema_violation,
+                "field :$(field.name) elements must be :$(field.element.kind)";
+                field = field.name,
+                schema_kind = schema_kind(entry.schema),
+                version = entry.schema.version,
+                reason = :logical_type,
+            ))
+            return diagnostics
+        end
     end
     return diagnostics
 end
@@ -843,6 +1021,7 @@ to_namedtuple(listing::SchemaListing) = (
     schema = to_namedtuple(listing.schema),
     namespace = to_namedtuple(listing.namespace),
     compatibility = listing.compatibility,
+    fields = Tuple(to_namedtuple.(listing.fields)),
     field_names = listing.field_names,
     has_node_schema = listing.has_node_schema,
     documentation = listing.documentation,

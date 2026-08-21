@@ -49,7 +49,7 @@ function _mesh_def(; version = "1.0.0", compatibility = :exact_read, package_ver
     )
 end
 
-function _field_def(; version = "1.0.0", compatibility = :exact_read, replaced_by = nothing, migration = nothing)
+function _field_def(; version = "1.0.0", compatibility = :exact_read, replaces = nothing, replaced_by = nothing, migration = nothing)
     schema = SchemaRef(:oodi, "field", version)
     node = NodeSchema(
         schema_kind(schema),
@@ -64,6 +64,7 @@ function _field_def(; version = "1.0.0", compatibility = :exact_read, replaced_b
         node_schema = node,
         documentation = "scalar field",
         package_version = "1.2.0",
+        replaces = replaces,
         replaced_by = replaced_by,
         migration = migration,
     )
@@ -87,8 +88,19 @@ end
     listings = list_schemas(registry)
     @test [listing.schema for listing in listings] == [mesh_v1.schema, field_v1.schema, field_v2.schema]
     @test listings[1].field_names === (:coordinates, :geometry)
+    coordinates = listings[1].fields[1]
+    @test coordinates.name === :coordinates
+    @test coordinates.element.kind === :real
+    @test coordinates.element.units == "m"
+    @test coordinates.element.frame == "box"
+    @test coordinates.rank == 2
+    @test coordinates.shape === (3, nothing)
+    @test coordinates.support == "mesh"
+    @test coordinates.location == "vertex"
+    @test listings[1].fields[2].reference_target === Symbol("monge/box")
     @test listings[2].has_node_schema
     @test to_namedtuple(listings[1]).package_version == "0.4.0"
+    @test to_namedtuple(listings[1]).fields[1].element.units == "m"
 
     same_id_new_pkg = _mesh_def(; package_version = "9.9.9")
     @test same_id_new_pkg.schema == mesh_v1.schema
@@ -203,6 +215,11 @@ end
         d -> d.code === :payload_schema_violation && d.context.reason === :reference_target,
         validate(ref_bad, mesh_v1).diagnostics,
     )
+    mixed = (; name = "u", values = Any[1.0, "bad"])
+    @test any(
+        d -> d.code === :payload_schema_violation && d.context.reason === :logical_type,
+        validate(mixed, _field_def()).diagnostics,
+    )
 end
 
 @testset "schema identity is not a Julia type or package version" begin
@@ -216,4 +233,90 @@ end
     @test occursin("1.0.0", report(SchemaRegistry([v1])).summary) ||
         occursin("embedded", lowercase(report(SchemaRegistry([v1])).summary))
     @test !isready(readiness(SchemaRegistry([v1]), PipelineTarget(:commit)))
+end
+
+@testset "schema namespaces follow #38 identity and aliases" begin
+    stolen = SchemaDefinition(
+        SchemaRef(:delone, "volume", "1.0.0");
+        namespace = ArchiveNamespace(:delone; package_uuid = UUID_OODI, display_name = "NotDelone"),
+        fields = _mesh_fields(),
+    )
+    conflict = validate(SchemaRegistry([_mesh_def(), stolen]))
+    @test any(d -> d.code === :namespace_identity_conflict, conflict.diagnostics)
+
+    delone_claim = NamespaceClaim(
+        ArchiveNamespace(:delone; package_uuid = UUID_DELONE, display_name = "Delone.jl");
+        role = :domain,
+    )
+    omitted = SchemaDefinition(
+        SchemaRef(:delone, "mesh", "1.0.0");
+        namespace = ArchiveNamespace(:delone; display_name = "Delone.jl"),
+        fields = _mesh_fields(),
+    )
+    @test any(
+        d -> d.code === :namespace_identity_missing,
+        validate(SchemaRegistry([omitted]), NamespaceRegistry([delone_claim])).diagnostics,
+    )
+    @test isvalid(validate(SchemaRegistry([_mesh_def()]), NamespaceRegistry([delone_claim])))
+
+    historical = SchemaDefinition(
+        SchemaRef(:oodicore, "document", "1.0.0");
+        namespace = ArchiveNamespace(
+            :oodicore;
+            package_uuid = EPISTEME_PACKAGE_UUID,
+            display_name = "OodiCore.jl",
+        ),
+        node_schema = NodeSchema(Symbol("oodicore/document")),
+    )
+    aliases = NamespaceRegistry([
+        NamespaceClaim(episteme_namespace(); role = :shared, aliases = (:oodicore,)),
+        NamespaceClaim(
+            ArchiveNamespace(:oodicore; package_uuid = EPISTEME_PACKAGE_UUID);
+            role = :shared,
+            status = :alias,
+            canonical_id = EPISTEME_NAMESPACE,
+        ),
+    ])
+    @test isvalid(validate(SchemaRegistry([historical]), aliases))
+    graph = ArchiveGraph([
+        ArchiveObject(
+            ObjectId("doc-old"),
+            RevisionId(REV_1);
+            namespace = ArchiveNamespace(:oodicore; package_uuid = EPISTEME_PACKAGE_UUID),
+            kind = Symbol("oodicore/document"),
+            schema = historical.schema,
+        ),
+    ])
+    @test isvalid(validate(graph, SchemaRegistry([historical]), aliases))
+end
+
+@testset "replacement and migration metadata cannot contradict itself" begin
+    self_replaced = _field_def(; replaced_by = SchemaRef(:oodi, "field", "1.0.0"))
+    @test any(d -> d.code === :corrupt_schema, validate(self_replaced).diagnostics)
+
+    mismatched = _field_def(;
+        version = "0.8.0",
+        compatibility = :migration_required,
+        replaced_by = SchemaRef(:oodi, "field", "2.0.0"),
+        migration = SchemaMigrationRef(
+            SchemaRef(:oodi, "field", "0.8.0"),
+            SchemaRef(:oodi, "field", "1.0.0"),
+        ),
+    )
+    @test any(d -> d.code === :corrupt_schema, validate(mismatched).diagnostics)
+
+    old = _field_def(;
+        version = "0.8.0",
+        compatibility = :migration_required,
+        replaced_by = SchemaRef(:oodi, "field", "1.0.0"),
+        migration = SchemaMigrationRef(
+            SchemaRef(:oodi, "field", "0.8.0"),
+            SchemaRef(:oodi, "field", "1.0.0"),
+        ),
+    )
+    new = _field_def(; version = "1.0.0", replaces = SchemaRef(:oodi, "field", "0.9.0"))
+    reciprocal = validate(SchemaRegistry([old, new]))
+    @test any(d -> d.code === :corrupt_schema, reciprocal.diagnostics)
+    agreed = _field_def(; version = "1.0.0", replaces = SchemaRef(:oodi, "field", "0.8.0"))
+    @test isvalid(validate(SchemaRegistry([old, agreed])))
 end
