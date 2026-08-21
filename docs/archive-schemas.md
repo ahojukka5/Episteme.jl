@@ -58,8 +58,10 @@ SchemaField(
 with an `ArchiveGraph` or `RevisionManifest`) returns `SchemaListing`
 rows: identity, compatibility, portable `SchemaField`s (logical type,
 units/frame, rank/shape, cardinality, support/location, reference target,
-rules, documentation), and migration/replacement pointers. It does not
-load payloads or import domain packages.
+rules, documentation), the optional portable `NodeSchema` (attribute
+names/types, required/`allow_ref`, rules, `allow_extra`, node-local
+rules), and migration/replacement pointers. It does not load payloads or
+import domain packages.
 
 `validate(schemas, namespaces)` and `validate(graph, schemas, namespaces)`
 apply #38 identity rules: a registered package UUID is required, aliases
