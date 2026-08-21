@@ -12,22 +12,33 @@ reachability semantics.
 ## Roots and policy
 
 `RetentionRoot` names a workflow head, revision, object version, run, or
-log stream. `RetentionPolicy` is data:
+log stream. A `:log_stream` root requires `(run_id, log_kind)` and forces
+that stream to survive even when `keep_debug_logs=false`. A missing
+`(run, kind)` pair is an error. An `:object` root walks that object
+version's reference closure and keeps only the revision records needed
+for valid parent edges; sibling objects in the same revision are not
+kept merely because they share a snapshot.
+
+`RetentionPolicy` is data:
 
 - `keep_ancestor_objects` — also keep every object materialized in
   ancestor revisions, not only the inspect closure
 - `keep_uncommitted_runs` — keep failed/uncommitted runs
 - `keep_debug_logs` / `keep_forensic_logs` — optional log/event retention
 
-Pinned log streams always survive and keep their run. Ancestor
-*revision records* of retained revisions are always kept so parent edges
-remain valid. Identities are not rewritten.
+Pinned log streams and pinned events always survive and keep their run.
+Ancestor *revision records* of retained revisions are always kept so
+parent edges remain valid. Identities are not rewritten.
 
 ## Reachability
 
-From each root, purge walks the same revision-scoped object/reference
-closure as `inspect`. Objects, runs, events, writes, and logs outside
-that set are omitted. Classifications:
+From each revision or head root, purge walks the same revision-scoped
+object/reference closure as `inspect`. Object roots start from that
+version only. Reachability then closes retained runs over
+`parent_run_id`, retained activity `used` / `generated` references, and
+object refs on retained events so compacted provenance cannot dangle.
+Objects, runs, events, writes, and logs outside that set are omitted.
+Classifications:
 
 | Class | Meaning |
 | --- | --- |
@@ -43,8 +54,11 @@ totals. Several `ArchiveObject` rows may still share that id.
 ## API
 
 - `plan_purge(graph, roots; policy, externals, content_sizes)` — dry-run
-  manifest
+  manifest, including reachability diagnostics
 - `compact_archive(...)` — new graph plus `PurgeResult`
+
+`validate(plan)` is false when required dependencies are unresolved, so
+the dry-run is not fail-open relative to compaction.
 
 If verification fails (retained revisions would not inspect cleanly),
 `result.graph === nothing`. The source archive is still unchanged and
