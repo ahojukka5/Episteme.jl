@@ -582,7 +582,8 @@ Known schema and provenance identities used to validate references.
 
 This is not the embedded schema registry (#39) and not a software
 manifest (#37). It only answers whether a referenced schema or provenance
-id is known and how that schema may be read.
+id is known and how that schema may be read. The embedded definitions are
+[`SchemaRegistry`](@ref).
 """
 struct ArchiveCatalog
     schemas::Vector{KnownSchema}

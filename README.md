@@ -48,6 +48,7 @@ parallel HDF5 access. See
 [`docs/declarative-contracts.md`](docs/declarative-contracts.md),
 [`docs/archive-envelope.md`](docs/archive-envelope.md),
 [`docs/archive-namespaces.md`](docs/archive-namespaces.md),
+[`docs/archive-schemas.md`](docs/archive-schemas.md),
 [`docs/archive-lifecycle.md`](docs/archive-lifecycle.md),
 [`docs/archive-events.md`](docs/archive-events.md),
 [`docs/portable-documents.md`](docs/portable-documents.md),

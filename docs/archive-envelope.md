@@ -204,7 +204,8 @@ migration-required statuses into errors. Referenced software-environment
 or execution-context ids that are not in the catalog fail the same way.
 `nothing` on a provenance field means explicitly not recorded.
 
-The catalog is not the embedded schema registry (#39) and not a
+The catalog is not the embedded schema registry
+([`archive-schemas.md`](archive-schemas.md), #39) and not a
 migration runner (#41). Those issues own the full definitions.
 
 ## Shared value conventions
