@@ -605,7 +605,12 @@ function _validate_schema_against_namespaces!(
     return diagnostics
 end
 
-function _validate_graph_schemas!(diagnostics, graph::ArchiveGraph, registry::SchemaRegistry)
+function _validate_graph_schemas!(
+    diagnostics,
+    graph::ArchiveGraph,
+    registry::SchemaRegistry;
+    namespaces::Union{Nothing,NamespaceRegistry} = nothing,
+)
     for object in ordered_objects(graph)
         status = schema_status(object.schema, registry)
         if status === :missing_schema
@@ -633,6 +638,52 @@ function _validate_graph_schemas!(diagnostics, graph::ArchiveGraph, registry::Sc
                 version = object.schema.version,
             ))
         end
+        entry = resolve_schema(object.schema, registry)
+        entry === nothing && continue
+        _validate_object_schema_identity!(diagnostics, object, entry, namespaces)
+    end
+    return diagnostics
+end
+
+function _validate_object_schema_identity!(
+    diagnostics,
+    object::ArchiveObject,
+    entry::SchemaDefinition,
+    namespaces::Union{Nothing,NamespaceRegistry},
+)
+    object_uuid = object.namespace.package_uuid
+    schema_uuid = entry.namespace.package_uuid
+    if namespaces !== nothing
+        object_claim = resolve_namespace(namespaces, object.namespace.id)
+        schema_claim = resolve_namespace(namespaces, entry.namespace.id)
+        if object_claim !== nothing && !isempty(object_claim.namespace.package_uuid)
+            object_uuid = object_claim.namespace.package_uuid
+        end
+        if schema_claim !== nothing && !isempty(schema_claim.namespace.package_uuid)
+            schema_uuid = schema_claim.namespace.package_uuid
+        end
+    end
+    if !isempty(schema_uuid) && isempty(object.namespace.package_uuid) && isempty(object_uuid)
+        push!(diagnostics, error_diagnostic(
+            :namespace_identity_missing,
+            "object namespace :$(object.namespace.id) omits package UUID $schema_uuid required by schema $(schema_kind(entry.schema))";
+            object_id = object.object_id.value,
+            schema_kind = schema_kind(entry.schema),
+            version = entry.schema.version,
+            namespace = object.namespace.id,
+            registered_uuid = schema_uuid,
+        ))
+    elseif !isempty(schema_uuid) && !isempty(object_uuid) && schema_uuid != object_uuid
+        push!(diagnostics, error_diagnostic(
+            :namespace_identity_conflict,
+            "object namespace :$(object.namespace.id) UUID $object_uuid does not match schema UUID $schema_uuid";
+            object_id = object.object_id.value,
+            schema_kind = schema_kind(entry.schema),
+            version = entry.schema.version,
+            namespace = object.namespace.id,
+            package_uuid = object_uuid,
+            registered_uuid = schema_uuid,
+        ))
     end
     return diagnostics
 end
@@ -700,7 +751,7 @@ function validate(
     _validate_archive_graph!(diagnostics, graph; namespace_registry = namespaces)
     _validate_namespace_registry!(diagnostics, namespaces)
     _validate_schema_registry!(diagnostics, schemas; namespaces = namespaces)
-    _validate_graph_schemas!(diagnostics, graph, schemas)
+    _validate_graph_schemas!(diagnostics, graph, schemas; namespaces = namespaces)
     return ValidationReport(
         :archive_graph,
         isempty(diagnostics),

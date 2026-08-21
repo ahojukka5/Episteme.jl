@@ -46,7 +46,9 @@ profile spells the inspectable Episteme area as JLD2 keys (HDF5 groups):
 `write_archive` stores `plain=true`-safe values (strings, numbers, booleans,
 and vectors of those), not live domain types. Indexed listings live at
 `{root}/count` and `{root}/1`, `{root}/2`, … so forensic JLD2 can read them
-without reconstructing Julia structs. `inspect_archive` opens the file with
+without reconstructing Julia structs. Nested rule, enum, and shape metadata
+uses tagged parallel columns rather than delimiter-packed strings, so
+portable values that contain `,`, `=`, tabs, or newlines round-trip exactly. `inspect_archive` opens the file with
 `plain=true`, reads only `/episteme/profile` first, and decodes remaining
 roots only after the profile is compatible. JLD2 `/_types` remains Julia
 representation metadata, not schema identity.

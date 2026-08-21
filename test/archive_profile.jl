@@ -299,5 +299,59 @@ end
         @test !ispath(missing_schema)
         @test_throws ArgumentError write_archive(missing_schema; graph = graph)
         @test !ispath(missing_schema)
+
+        uuid_mismatch = joinpath(dir, "uuid-mismatch.ah5")
+        @test_throws ArgumentError write_archive(
+            uuid_mismatch;
+            graph = ArchiveGraph([_obj(:delone, "mesh", ID_MESH, REV_1; uuid = UUID_OODI)]),
+            schemas = SchemaRegistry([_mesh_def()]),
+        )
+        @test !ispath(uuid_mismatch)
+
+        delimited = joinpath(dir, "delimited.ah5")
+        choice = SchemaDefinition(
+            SchemaRef(:oodi, "choice", "1.0.0");
+            namespace = ArchiveNamespace(:oodi; package_uuid = UUID_OODI, display_name = "Oodi.jl"),
+            fields = [
+                SchemaField(
+                    :label,
+                    LogicalType(:enum; enum_values = (Symbol("a,b"), Symbol("c=d")));
+                    rules = (
+                        ValidationRule(
+                            :one_of;
+                            values = ("a,b", "c=d+e"),
+                            message = "pick\tone\nof",
+                        ),
+                    ),
+                    documentation = "enum,with=delimiters",
+                ),
+            ],
+            node_schema = NodeSchema(
+                Symbol("oodi/choice"),
+                AttributeSchema(
+                    :min,
+                    :real;
+                    rules = (ValidationRule(:finite; message = "must be finite"),),
+                ),
+                AttributeSchema(
+                    :max,
+                    :real;
+                    rules = (ValidationRule(:gt; value = 0.0, message = "a,b=c"),),
+                );
+                rules = (
+                    NodeValidationRule(:ordered; fields = (:min, :max), message = "min<=max\nplease"),
+                ),
+            ),
+            documentation = "delimiter round-trip",
+        )
+        write_archive(delimited; schemas = SchemaRegistry([choice]))
+        listed = inspect_archive(delimited).schemas[1]
+        @test listed.fields[1].element.enum_values === (Symbol("a,b"), Symbol("c=d"))
+        @test listed.fields[1].rules[1].parameters.values === ("a,b", "c=d+e")
+        @test listed.fields[1].rules[1].message == "pick\tone\nof"
+        @test listed.node_schema.attributes[2].rules[1].parameters.value == 0.0
+        @test listed.node_schema.attributes[2].rules[1].message == "a,b=c"
+        @test listed.node_schema.rules[1].parameters.fields === (:min, :max)
+        @test listed.node_schema.rules[1].message == "min<=max\nplease"
     end
 end

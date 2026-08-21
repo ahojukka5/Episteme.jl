@@ -557,6 +557,19 @@ function _schema_listing_storage(listing::SchemaListing)
     replaces = listing.replaces
     replaced_by = listing.replaced_by
     migration = listing.migration
+    field_enums = _symbol_columns(fields) do field
+        field.element.enum_values
+    end
+    field_shapes = _shape_columns(fields)
+    field_rules = _rule_columns(fields) do field
+        field.rules
+    end
+    attr_rules = _rule_columns(attrs) do attr
+        attr.rules
+    end
+    node_rule_table = _rule_columns([node_rules]) do rules
+        rules
+    end
     return (
         namespace_id = String(listing.schema.namespace_id),
         schema_id = listing.schema.schema_id,
@@ -570,9 +583,12 @@ function _schema_listing_storage(listing::SchemaListing)
         field_kinds = String[String(field.element.kind) for field in fields],
         field_units = String[field.element.units for field in fields],
         field_frames = String[field.element.frame for field in fields],
-        field_enums = String[_encode_symbols(field.element.enum_values) for field in fields],
+        field_enum_owners = field_enums.owners,
+        field_enum_values = field_enums.values,
         field_ranks = Int[field.rank for field in fields],
-        field_shapes = String[_encode_shape(field.shape) for field in fields],
+        field_shape_owners = field_shapes.owners,
+        field_shape_known = field_shapes.known,
+        field_shape_values = field_shapes.values,
         field_required = Bool[field.required for field in fields],
         field_cardinality = String[String(field.cardinality) for field in fields],
         field_support = String[field.support for field in fields],
@@ -582,7 +598,14 @@ function _schema_listing_storage(listing::SchemaListing)
             for field in fields
         ],
         field_docs = String[field.documentation for field in fields],
-        field_rules = String[_encode_rules(field.rules) for field in fields],
+        field_rule_owners = field_rules.owners,
+        field_rule_kinds = field_rules.kinds,
+        field_rule_messages = field_rules.messages,
+        field_param_rules = field_rules.param_rules,
+        field_param_keys = field_rules.param_keys,
+        field_param_tags = field_rules.param_tags,
+        field_param_indexes = field_rules.param_indexes,
+        field_param_values = field_rules.param_values,
         has_node_schema = listing.has_node_schema,
         node_kind = node === nothing ? "" : String(node.kind),
         node_allow_extra = node === nothing ? false : node.allow_extra,
@@ -590,10 +613,21 @@ function _schema_listing_storage(listing::SchemaListing)
         attr_kinds = String[String(attr.value_kind) for attr in attrs],
         attr_required = Bool[attr.required for attr in attrs],
         attr_allow_ref = Bool[attr.allow_ref for attr in attrs],
-        attr_rules = String[_encode_rules(attr.rules) for attr in attrs],
-        node_rule_kinds = String[String(rule.kind) for rule in node_rules],
-        node_rule_params = String[_encode_parameters(rule.parameters) for rule in node_rules],
-        node_rule_messages = String[rule.message for rule in node_rules],
+        attr_rule_owners = attr_rules.owners,
+        attr_rule_kinds = attr_rules.kinds,
+        attr_rule_messages = attr_rules.messages,
+        attr_param_rules = attr_rules.param_rules,
+        attr_param_keys = attr_rules.param_keys,
+        attr_param_tags = attr_rules.param_tags,
+        attr_param_indexes = attr_rules.param_indexes,
+        attr_param_values = attr_rules.param_values,
+        node_rule_kinds = node_rule_table.kinds,
+        node_rule_messages = node_rule_table.messages,
+        node_param_rules = node_rule_table.param_rules,
+        node_param_keys = node_rule_table.param_keys,
+        node_param_tags = node_rule_table.param_tags,
+        node_param_indexes = node_rule_table.param_indexes,
+        node_param_values = node_rule_table.param_values,
         replaces_ns = replaces === nothing ? "" : String(replaces.namespace_id),
         replaces_id = replaces === nothing ? "" : replaces.schema_id,
         replaces_version = replaces === nothing ? "" : replaces.version,
@@ -615,16 +649,29 @@ function _restore_schema_listing(nt)
     kinds = _string_vec(nt.field_kinds)
     units = _string_vec(nt.field_units)
     frames = _string_vec(nt.field_frames)
-    enums = _string_vec(nt.field_enums)
     ranks = _int_vec(nt.field_ranks)
-    shapes = _string_vec(nt.field_shapes)
     required = _bool_vec(nt.field_required)
     cardinality = _string_vec(nt.field_cardinality)
     support = _string_vec(nt.field_support)
     location = _string_vec(nt.field_location)
     refs = _string_vec(nt.field_refs)
     docs = _string_vec(nt.field_docs)
-    rules = _string_vec(nt.field_rules)
+    enum_owners = _int_vec(nt.field_enum_owners)
+    enum_values = _string_vec(nt.field_enum_values)
+    shape_owners = _int_vec(nt.field_shape_owners)
+    shape_known = _bool_vec(nt.field_shape_known)
+    shape_values = _int_vec(nt.field_shape_values)
+    field_rules = _restore_owner_rules(
+        _int_vec(nt.field_rule_owners),
+        _string_vec(nt.field_rule_kinds),
+        _string_vec(nt.field_rule_messages),
+        _int_vec(nt.field_param_rules),
+        _string_vec(nt.field_param_keys),
+        _string_vec(nt.field_param_tags),
+        _int_vec(nt.field_param_indexes),
+        _string_vec(nt.field_param_values),
+        ValidationRule,
+    )
     fields = SchemaField[]
     for i in eachindex(names)
         target = isempty(refs[i]) ? nothing : Symbol(refs[i])
@@ -634,16 +681,16 @@ function _restore_schema_listing(nt)
                 Symbol(kinds[i]);
                 units = units[i],
                 frame = frames[i],
-                enum_values = Tuple(_decode_symbols(enums[i])),
+                enum_values = Tuple(_restore_owned_symbols(enum_owners, enum_values, i)),
             );
             rank = ranks[i],
-            shape = _decode_shape(shapes[i]),
+            shape = _restore_owned_shape(shape_owners, shape_known, shape_values, i),
             required = required[i],
             cardinality = Symbol(cardinality[i]),
             support = support[i],
             location = location[i],
             reference_target = target,
-            rules = _decode_rules(rules[i]),
+            rules = get(field_rules, i, ValidationRule[]),
             documentation = docs[i],
         ))
     end
@@ -653,7 +700,17 @@ function _restore_schema_listing(nt)
         attr_kinds = _string_vec(nt.attr_kinds)
         attr_required = _bool_vec(nt.attr_required)
         attr_allow_ref = _bool_vec(nt.attr_allow_ref)
-        attr_rules = _string_vec(nt.attr_rules)
+        attr_rules = _restore_owner_rules(
+            _int_vec(nt.attr_rule_owners),
+            _string_vec(nt.attr_rule_kinds),
+            _string_vec(nt.attr_rule_messages),
+            _int_vec(nt.attr_param_rules),
+            _string_vec(nt.attr_param_keys),
+            _string_vec(nt.attr_param_tags),
+            _int_vec(nt.attr_param_indexes),
+            _string_vec(nt.attr_param_values),
+            ValidationRule,
+        )
         attributes = AttributeSchema[]
         for i in eachindex(attr_names)
             push!(attributes, AttributeSchema(
@@ -661,18 +718,24 @@ function _restore_schema_listing(nt)
                 Symbol(attr_kinds[i]);
                 required = attr_required[i],
                 allow_ref = attr_allow_ref[i],
-                rules = _decode_rules(attr_rules[i]),
+                rules = get(attr_rules, i, ValidationRule[]),
             ))
         end
+        node_kinds = _string_vec(nt.node_rule_kinds)
+        node_messages = _string_vec(nt.node_rule_messages)
+        node_params = _restore_rule_parameters(
+            _int_vec(nt.node_param_rules),
+            _string_vec(nt.node_param_keys),
+            _string_vec(nt.node_param_tags),
+            _int_vec(nt.node_param_indexes),
+            _string_vec(nt.node_param_values),
+        )
         node_rules = NodeValidationRule[]
-        rule_kinds = _string_vec(nt.node_rule_kinds)
-        rule_params = _string_vec(nt.node_rule_params)
-        rule_messages = _string_vec(nt.node_rule_messages)
-        for i in eachindex(rule_kinds)
-            params = _decode_parameters(rule_params[i])
+        for i in eachindex(node_kinds)
+            params = get(node_params, i, NamedTuple())
             push!(node_rules, NodeValidationRule(
-                Symbol(rule_kinds[i]);
-                message = rule_messages[i],
+                Symbol(node_kinds[i]);
+                message = node_messages[i],
                 params...,
             ))
         end
@@ -725,98 +788,197 @@ function _migration_parts(nt)
     return SchemaMigrationRef(source, target; implementation_id = String(nt.migration_impl))
 end
 
-function _encode_symbols(values)
-    return join(String.(values), ",")
-end
-
-function _decode_symbols(text::AbstractString)
-    isempty(text) && return Symbol[]
-    return Symbol[Symbol(part) for part in split(String(text), ',')]
-end
-
-function _encode_shape(shape)
-    return join((dim === nothing ? "?" : string(dim) for dim in shape), ",")
-end
-
-function _decode_shape(text::AbstractString)
-    isempty(text) && return ()
-    dims = Union{Nothing,Int}[]
-    for part in split(String(text), ',')
-        if part == "?" || isempty(part)
-            push!(dims, nothing)
-        else
-            push!(dims, parse(Int, part))
+function _symbol_columns(extractor, items)
+    owners = Int[]
+    values = String[]
+    for (index, item) in enumerate(items)
+        for symbol in extractor(item)
+            push!(owners, index)
+            push!(values, String(symbol))
         end
+    end
+    return (owners = owners, values = values)
+end
+
+function _shape_columns(fields)
+    owners = Int[]
+    known = Bool[]
+    values = Int[]
+    for (index, field) in enumerate(fields)
+        for dim in field.shape
+            push!(owners, index)
+            if dim === nothing
+                push!(known, false)
+                push!(values, 0)
+            else
+                push!(known, true)
+                push!(values, Int(dim))
+            end
+        end
+    end
+    return (owners = owners, known = known, values = values)
+end
+
+function _rule_columns(extractor, items)
+    owners = Int[]
+    kinds = String[]
+    messages = String[]
+    param_rules = Int[]
+    param_keys = String[]
+    param_tags = String[]
+    param_indexes = Int[]
+    param_values = String[]
+    for (owner, item) in enumerate(items)
+        for rule in extractor(item)
+            push!(owners, owner)
+            push!(kinds, String(rule.kind))
+            push!(messages, rule.message)
+            rule_index = length(kinds)
+            for (key, value) in pairs(rule.parameters)
+                _append_param_rows!(
+                    param_rules, param_keys, param_tags, param_indexes, param_values,
+                    rule_index, key, value,
+                )
+            end
+        end
+    end
+    return (
+        owners = owners,
+        kinds = kinds,
+        messages = messages,
+        param_rules = param_rules,
+        param_keys = param_keys,
+        param_tags = param_tags,
+        param_indexes = param_indexes,
+        param_values = param_values,
+    )
+end
+
+function _append_param_rows!(
+    rules, keys, tags, indexes, values, rule_index, key, value,
+)
+    name = String(key)
+    if value isa Tuple || value isa AbstractVector
+        if isempty(value)
+            push!(rules, rule_index)
+            push!(keys, name)
+            push!(tags, "e")
+            push!(indexes, 0)
+            push!(values, "")
+            return
+        end
+        for (index, item) in enumerate(value)
+            tag, encoded = _tag_scalar(item)
+            push!(rules, rule_index)
+            push!(keys, name)
+            push!(tags, tag)
+            push!(indexes, index)
+            push!(values, encoded)
+        end
+        return
+    end
+    tag, encoded = _tag_scalar(value)
+    push!(rules, rule_index)
+    push!(keys, name)
+    push!(tags, tag)
+    push!(indexes, 0)
+    push!(values, encoded)
+    return
+end
+
+function _tag_scalar(value)
+    value isa Symbol && return ("y", String(value))
+    value isa Bool && return ("b", value ? "true" : "false")
+    value isa Integer && return ("i", string(Int(value)))
+    value isa AbstractFloat && return ("f", string(Float64(value)))
+    value isa AbstractString && return ("s", String(value))
+    throw(ArgumentError("unsupported AH5 rule parameter type $(typeof(value))"))
+end
+
+function _untag_scalar(tag, encoded)
+    tag == "y" && return Symbol(encoded)
+    tag == "b" && return encoded == "true"
+    tag == "i" && return parse(Int, encoded)
+    tag == "f" && return parse(Float64, encoded)
+    tag == "s" && return String(encoded)
+    tag == "e" && return ()
+    throw(ArgumentError("unsupported AH5 rule parameter tag $(repr(tag))"))
+end
+
+function _restore_owned_symbols(owners, values, owner)
+    result = Symbol[]
+    for (index, item_owner) in enumerate(owners)
+        item_owner == owner || continue
+        push!(result, Symbol(values[index]))
+    end
+    return result
+end
+
+function _restore_owned_shape(owners, known, values, owner)
+    dims = Union{Nothing,Int}[]
+    for (index, item_owner) in enumerate(owners)
+        item_owner == owner || continue
+        push!(dims, known[index] ? values[index] : nothing)
     end
     return Tuple(dims)
 end
 
-function _encode_parameters(nt::NamedTuple)
-    isempty(nt) && return ""
-    return join(
-        (string(key, "=", _encode_param_value(value)) for (key, value) in pairs(nt)),
-        ",",
-    )
+function _restore_rule_parameters(rules, keys, tags, indexes, values)
+    by_rule = Dict{Int,Vector{Int}}()
+    order = Int[]
+    for (index, rule) in enumerate(rules)
+        if !haskey(by_rule, rule)
+            push!(order, rule)
+            by_rule[rule] = Int[]
+        end
+        push!(by_rule[rule], index)
+    end
+    result = Dict{Int,NamedTuple}()
+    for rule in order
+        result[rule] = _namedtuple_params(keys, tags, indexes, values, by_rule[rule])
+    end
+    return result
 end
 
-function _decode_parameters(text::AbstractString)
-    isempty(text) && return NamedTuple()
+function _namedtuple_params(keys, tags, indexes, values, rows)
     items = Pair{Symbol,Any}[]
-    for part in split(String(text), ',')
-        isempty(part) && continue
-        key, value = split(part, '='; limit = 2)
-        push!(items, Symbol(key) => _decode_param_value(value))
+    seen = Dict{Symbol,Vector{Int}}()
+    key_order = Symbol[]
+    for row in rows
+        key = Symbol(keys[row])
+        if !haskey(seen, key)
+            push!(key_order, key)
+            seen[key] = Int[]
+        end
+        push!(seen[key], row)
+    end
+    for key in key_order
+        key_rows = sort(seen[key]; by = row -> indexes[row])
+        if length(key_rows) == 1 && (indexes[key_rows[1]] == 0 || tags[key_rows[1]] == "e")
+            push!(items, key => _untag_scalar(tags[key_rows[1]], values[key_rows[1]]))
+        else
+            push!(items, key => Tuple(
+                _untag_scalar(tags[row], values[row]) for row in key_rows
+            ))
+        end
     end
     return NamedTuple(items)
 end
 
-function _encode_param_value(value)
-    value isa Symbol && return string(":", value)
-    value isa Bool && return value ? "true" : "false"
-    value isa Integer && return string(Int(value))
-    value isa AbstractFloat && return string(Float64(value))
-    if value isa Tuple || value isa AbstractVector
-        return join(_encode_param_value.(value), "+")
+function _restore_owner_rules(
+    owners, kinds, messages, param_rules, param_keys, param_tags, param_indexes, param_values, ::Type{T},
+) where {T}
+    params = _restore_rule_parameters(
+        param_rules, param_keys, param_tags, param_indexes, param_values,
+    )
+    by_owner = Dict{Int,Vector{T}}()
+    for (index, owner) in enumerate(owners)
+        decoded = get(params, index, NamedTuple())
+        rule = T(Symbol(kinds[index]); message = messages[index], decoded...)
+        bucket = get!(Vector{T}, by_owner, owner)
+        push!(bucket, rule)
     end
-    return String(value)
-end
-
-function _decode_param_value(token::AbstractString)
-    token == "true" && return true
-    token == "false" && return false
-    startswith(token, ":") && return Symbol(SubString(token, 2))
-    if occursin('+', token)
-        return Tuple(_decode_param_value(part) for part in split(token, '+'))
-    end
-    integer = tryparse(Int, token)
-    integer !== nothing && return integer
-    float = tryparse(Float64, token)
-    float !== nothing && return float
-    return String(token)
-end
-
-function _encode_rules(rules)
-    parts = String[]
-    for rule in rules
-        push!(parts, string(
-            rule.kind, '\t',
-            _encode_parameters(rule.parameters), '\t',
-            rule.message,
-        ))
-    end
-    return join(parts, '\n')
-end
-
-function _decode_rules(text::AbstractString)
-    isempty(text) && return ValidationRule[]
-    rules = ValidationRule[]
-    for line in split(String(text), '\n')
-        isempty(line) && continue
-        kind, params, message = split(line, '\t'; limit = 3)
-        decoded = _decode_parameters(params)
-        push!(rules, ValidationRule(Symbol(kind); message = String(message), decoded...))
-    end
-    return rules
+    return by_owner
 end
 
 function _string_vec(value)
