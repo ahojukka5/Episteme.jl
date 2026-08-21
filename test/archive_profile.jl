@@ -54,6 +54,8 @@ using JLD2
         @test inspection.profile.package_version == "9.9.9"
         @test inspection.profile.profile_version != inspection.profile.package_version
         @test inspection.profile.roots.schemas == AH5_SCHEMAS_KEY
+        @test Set(inspection.profile.features) == Set(AH5_V1_FEATURES)
+        @test isempty(inspection.profile.required_features)
         @test inspection.history.objects == 2
         @test inspection.history.head_names === (:main,)
         @test inspection.provenance.software_environments === ("sw-delone",)
@@ -118,24 +120,123 @@ end
         future = joinpath(dir, "future.ah5")
         write_archive(
             future;
+            schemas = SchemaRegistry([_mesh_def()]),
             profile = ArchiveProfile(; archive_id = "future-id", profile_version = "2.0.0"),
         )
+        stored_count = JLD2.jldopen(future, "r"; plain = true) do file
+            file["episteme/schemas/count"]
+        end
+        @test stored_count == 1
         future_view = inspect_archive(future)
         @test future_view.identified
         @test any(d -> d.code === :unsupported_profile_version, future_view.diagnostics)
+        @test isempty(future_view.schemas)
+        @test isempty(future_view.namespaces)
+        @test future_view.history.objects == 0
         @test !isready(readiness(future_view, PipelineTarget(:inspect)))
 
         bulk = joinpath(dir, "bulk.ah5")
         write_archive(
             bulk;
+            schemas = SchemaRegistry([_mesh_def()]),
             profile = ArchiveProfile(;
                 archive_id = "bulk-id",
+                features = (:jld2_writer, :hdf5_bulk_data),
                 required_features = (:hdf5_bulk_data,),
             ),
         )
+        bulk_stored = JLD2.jldopen(bulk, "r"; plain = true) do file
+            file["episteme/schemas/count"]
+        end
+        @test bulk_stored == 1
         bulk_view = inspect_archive(bulk)
         @test bulk_view.identified
         @test any(d -> d.code === :unsupported_required_feature, bulk_view.diagnostics)
+        @test isempty(bulk_view.schemas)
+
+        undeclared = joinpath(dir, "undeclared.ah5")
+        @test_throws ArgumentError write_archive(
+            undeclared;
+            profile = ArchiveProfile(;
+                archive_id = "undeclared-id",
+                required_features = (:hdf5_bulk_data,),
+            ),
+        )
+        @test !ispath(undeclared)
+
+        crafted = joinpath(dir, "crafted.ah5")
+        JLD2.jldopen(crafted, "w") do file
+            file[AH5_PROFILE_KEY] = (
+                magic = AH5_MAGIC,
+                profile_version = AH5_PROFILE_VERSION,
+                archive_id = "crafted-id",
+                created_at = "2026-01-01T00:00:00Z",
+                creator = "Episteme.jl",
+                features = ["jld2_writer"],
+                required_features = ["hdf5_bulk_data"],
+                roots = (
+                    namespaces = AH5_NAMESPACES_KEY,
+                    schemas = AH5_SCHEMAS_KEY,
+                    history = AH5_HISTORY_KEY,
+                    provenance = AH5_PROVENANCE_KEY,
+                    externals = AH5_EXTERNALS_KEY,
+                ),
+                package_version = "0.1.0",
+            )
+            file["episteme/schemas/count"] = 1
+            file["episteme/schemas/1"] = (
+                namespace_id = "delone",
+                schema_id = "mesh",
+                version = "1.0.0",
+                package_uuid = "",
+                display_name = "",
+                compatibility = "exact_read",
+                documentation = "",
+                package_version = "",
+                field_names = String[],
+                field_kinds = String[],
+                field_units = String[],
+                field_frames = String[],
+                field_enums = String[],
+                field_ranks = Int[],
+                field_shapes = String[],
+                field_required = Bool[],
+                field_cardinality = String[],
+                field_support = String[],
+                field_location = String[],
+                field_refs = String[],
+                field_docs = String[],
+                field_rules = String[],
+                has_node_schema = false,
+                node_kind = "",
+                node_allow_extra = false,
+                attr_names = String[],
+                attr_kinds = String[],
+                attr_required = Bool[],
+                attr_allow_ref = Bool[],
+                attr_rules = String[],
+                node_rule_kinds = String[],
+                node_rule_params = String[],
+                node_rule_messages = String[],
+                replaces_ns = "",
+                replaces_id = "",
+                replaces_version = "",
+                replaced_by_ns = "",
+                replaced_by_id = "",
+                replaced_by_version = "",
+                migration_source_ns = "",
+                migration_source_id = "",
+                migration_source_version = "",
+                migration_target_ns = "",
+                migration_target_id = "",
+                migration_target_version = "",
+                migration_impl = "",
+            )
+        end
+        crafted_view = inspect_archive(crafted)
+        @test crafted_view.identified
+        @test any(d -> d.code === :required_feature_missing, crafted_view.diagnostics)
+        @test isempty(crafted_view.schemas)
 
         corrupt = joinpath(dir, "corrupt.ah5")
         JLD2.jldopen(corrupt, "w") do file
@@ -159,5 +260,44 @@ end
         end
         @test "episteme" in names || any(startswith("episteme"), string.(names))
         @test_throws ArgumentError write_archive(path)
+    end
+end
+
+@testset "AH5 roots, feature flags, and write-time validation honor the profile contract" begin
+    mktempdir() do dir
+        custom = joinpath(dir, "custom.ah5")
+        roots = ArchiveProfileRoots(; schemas = "episteme/schema_registry_v2")
+        write_archive(
+            custom;
+            schemas = SchemaRegistry([_mesh_def()]),
+            profile = ArchiveProfile(; archive_id = "custom-id", roots = roots),
+        )
+        custom_view = inspect_archive(custom)
+        @test custom_view.identified
+        @test custom_view.profile.roots.schemas == "episteme/schema_registry_v2"
+        @test custom_view.schemas[1].schema == SchemaRef(:delone, "mesh", "1.0.0")
+        JLD2.jldopen(custom, "r"; plain = true) do file
+            @test haskey(file, "episteme/schema_registry_v2/count")
+            @test file["episteme/schema_registry_v2/count"] == 1
+            @test !haskey(file, "episteme/schemas/count")
+            @test haskey(file, AH5_PROFILE_KEY)
+        end
+
+        default = joinpath(dir, "default.ah5")
+        write_archive(default)
+        default_view = inspect_archive(default)
+        @test Set(default_view.profile.features) == Set(AH5_V1_FEATURES)
+        @test isvalid(validate(default_view))
+
+        missing_schema = joinpath(dir, "missing-schema.ah5")
+        graph = ArchiveGraph([_obj(:delone, "mesh", ID_MESH, REV_1; uuid = UUID_DELONE)])
+        @test_throws ArgumentError write_archive(
+            missing_schema;
+            graph = graph,
+            schemas = SchemaRegistry(),
+        )
+        @test !ispath(missing_schema)
+        @test_throws ArgumentError write_archive(missing_schema; graph = graph)
+        @test !ispath(missing_schema)
     end
 end

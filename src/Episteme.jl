@@ -59,7 +59,7 @@ export ExternalRequirement, ManifestEntry, RevisionManifest
 export inspect, checkout, select, branch_from
 export ArchiveProfile, ArchiveProfileRoots, ArchiveHistorySummary, ArchiveProvenanceSummary
 export ArchiveInspection
-export AH5_MAGIC, AH5_PROFILE_VERSION, AH5_SUPPORTED_FEATURES
+export AH5_MAGIC, AH5_PROFILE_VERSION, AH5_SUPPORTED_FEATURES, AH5_V1_FEATURES
 export AH5_PROFILE_KEY, AH5_NAMESPACES_KEY, AH5_SCHEMAS_KEY
 export AH5_HISTORY_KEY, AH5_PROVENANCE_KEY, AH5_EXTERNALS_KEY
 export write_archive, inspect_archive, is_ah5_archive, is_hdf5_container

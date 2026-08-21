@@ -28,12 +28,20 @@ const AH5_SUPPORTED_FEATURES = (
     :provenance,
     :externals,
 )
+const AH5_V1_FEATURES = AH5_SUPPORTED_FEATURES
+const AH5_INTERPRETATION_BLOCKERS = (
+    :unsupported_profile_version,
+    :unsupported_required_feature,
+    :required_feature_missing,
+    :invalid_archive_root,
+)
 
 """
     ArchiveProfileRoots
 
-Physical JLD2/HDF5 paths for inspectable AH5 records. These are not
-package namespaces and not scientific schema identity.
+Physical JLD2/HDF5 paths for inspectable AH5 records. The profile itself
+always lives at [`AH5_PROFILE_KEY`](@ref). Other groups follow these
+paths. They are not package namespaces and not scientific schema identity.
 """
 struct ArchiveProfileRoots
     namespaces::String
@@ -223,7 +231,9 @@ end
                   externals=(), profile=nothing, kwargs...)
 
 Create a JLD2-backed AH5 file. The path is created by JLD2. Existing
-paths are refused. Domain payloads are not written.
+paths are refused. Domain payloads are not written. Logical metadata is
+validated before the file is created; inspectable groups follow
+`profile.roots`. Records are stored as `plain=true`-safe values.
 """
 function write_archive(
     path::AbstractString;
@@ -251,6 +261,9 @@ function write_archive(
     profile_record isa ArchiveProfile || throw(ArgumentError(
         "profile must be ArchiveProfile, got $(typeof(profile_record))",
     ))
+    profile_record = _published_profile(profile_record)
+    _refuse_invalid_profile(profile_record)
+    _refuse_invalid_payload(graph, namespaces, schemas)
 
     objects = graph === nothing ? ArchiveObject[] : graph.objects
     ns_listings = namespaces === nothing && graph === nothing ?
@@ -259,14 +272,15 @@ function write_archive(
     history = graph === nothing ? ArchiveHistorySummary() : ArchiveHistorySummary(graph)
     provenance = graph === nothing ? ArchiveProvenanceSummary() : ArchiveProvenanceSummary(graph)
     external_values = _typed_vector(ExternalRequirement, externals, "external requirements")
+    roots = profile_record.roots
 
     JLD2.jldopen(path, "w") do file
         file[AH5_PROFILE_KEY] = _profile_storage(profile_record)
-        file[AH5_NAMESPACES_KEY] = _record_storage(ns_listings)
-        file[AH5_SCHEMAS_KEY] = _record_storage(schema_listings)
-        file[AH5_HISTORY_KEY] = _history_storage(history)
-        file[AH5_PROVENANCE_KEY] = _provenance_storage(provenance)
-        file[AH5_EXTERNALS_KEY] = _record_storage(external_values)
+        _write_indexed!(file, roots.namespaces, ns_listings, _namespace_listing_storage)
+        _write_indexed!(file, roots.schemas, schema_listings, _schema_listing_storage)
+        file[roots.history] = _history_storage(history)
+        file[roots.provenance] = _provenance_storage(provenance)
+        _write_indexed!(file, roots.externals, external_values, _external_storage)
     end
     return path
 end
@@ -275,22 +289,14 @@ end
     inspect_archive(path) -> ArchiveInspection
 
 Read AH5 profile metadata without domain packages or payload load.
-Forensic JLD2 `plain=true` is the default reader. Full Julia-native
+Forensic JLD2 `plain=true` is the default reader. The tiny profile is
+validated first; unsupported versions or required features return an
+identified archive without decoding remaining roots. Full Julia-native
 object reconstruction is not this API.
 """
 function inspect_archive(path::AbstractString)
     diagnostics = DiagnosticMessage[]
-    empty = ArchiveInspection(
-        String(path),
-        false,
-        nothing,
-        NamespaceListing[],
-        SchemaListing[],
-        ArchiveHistorySummary(),
-        ArchiveProvenanceSummary(),
-        ExternalRequirement[],
-        diagnostics,
-    )
+    empty = _empty_inspection(path, diagnostics)
     if !ispath(path)
         push!(diagnostics, error_diagnostic(
             :missing_archive,
@@ -308,8 +314,10 @@ function inspect_archive(path::AbstractString)
         return empty
     end
 
-    groups = try
-        _read_ah5_groups(path)
+    try
+        return JLD2.jldopen(path, "r"; plain = true) do file
+            return _inspect_open_archive(path, file, diagnostics)
+        end
     catch err
         push!(diagnostics, error_diagnostic(
             :not_ah5_archive,
@@ -319,15 +327,22 @@ function inspect_archive(path::AbstractString)
         ))
         return empty
     end
+end
 
-    raw_profile = groups.profile
+function is_ah5_archive(path::AbstractString)
+    inspection = inspect_archive(path)
+    return inspection.identified
+end
+
+function _inspect_open_archive(path, file, diagnostics)
+    raw_profile = _jld2_get(file, AH5_PROFILE_KEY)
     if raw_profile === nothing
         push!(diagnostics, error_diagnostic(
             :missing_profile,
             "mandatory AH5 profile record $(AH5_PROFILE_KEY) is missing";
             path = String(path),
         ))
-        return empty
+        return _empty_inspection(path, diagnostics)
     end
 
     profile = try
@@ -339,7 +354,7 @@ function inspect_archive(path::AbstractString)
             path = String(path),
             reason = sprint(showerror, err),
         ))
-        return empty
+        return _empty_inspection(path, diagnostics)
     end
 
     identified = profile.magic == AH5_MAGIC
@@ -352,6 +367,19 @@ function inspect_archive(path::AbstractString)
         ))
     end
     _validate_archive_profile!(diagnostics, profile)
+    if !identified || _blocks_interpretation(diagnostics)
+        return ArchiveInspection(
+            String(path),
+            identified,
+            identified ? profile : nothing,
+            NamespaceListing[],
+            SchemaListing[],
+            ArchiveHistorySummary(),
+            ArchiveProvenanceSummary(),
+            ExternalRequirement[],
+            diagnostics,
+        )
+    end
 
     namespaces = NamespaceListing[]
     schemas = SchemaListing[]
@@ -359,13 +387,21 @@ function inspect_archive(path::AbstractString)
     provenance = ArchiveProvenanceSummary()
     externals = ExternalRequirement[]
     try
-        namespaces = _restore_records(NamespaceListing, groups.namespaces)
-        schemas = _restore_records(SchemaListing, groups.schemas)
-        history = groups.history === nothing ? ArchiveHistorySummary() :
-            from_namedtuple(ArchiveHistorySummary, groups.history)
-        provenance = groups.provenance === nothing ? ArchiveProvenanceSummary() :
-            from_namedtuple(ArchiveProvenanceSummary, groups.provenance)
-        externals = _restore_records(ExternalRequirement, groups.externals)
+        namespaces = _read_indexed(
+            NamespaceListing, file, profile.roots.namespaces, _restore_namespace_listing,
+        )
+        schemas = _read_indexed(
+            SchemaListing, file, profile.roots.schemas, _restore_schema_listing,
+        )
+        raw_history = _jld2_get(file, profile.roots.history)
+        history = raw_history === nothing ? ArchiveHistorySummary() :
+            from_namedtuple(ArchiveHistorySummary, raw_history)
+        raw_prov = _jld2_get(file, profile.roots.provenance)
+        provenance = raw_prov === nothing ? ArchiveProvenanceSummary() :
+            from_namedtuple(ArchiveProvenanceSummary, raw_prov)
+        externals = _read_indexed(
+            ExternalRequirement, file, profile.roots.externals, _restore_external,
+        )
     catch err
         push!(diagnostics, error_diagnostic(
             :corrupt_profile,
@@ -378,7 +414,7 @@ function inspect_archive(path::AbstractString)
     return ArchiveInspection(
         String(path),
         identified,
-        identified ? profile : nothing,
+        profile,
         namespaces,
         schemas,
         history,
@@ -388,22 +424,18 @@ function inspect_archive(path::AbstractString)
     )
 end
 
-function is_ah5_archive(path::AbstractString)
-    inspection = inspect_archive(path)
-    return inspection.identified
-end
-
-function _read_ah5_groups(path::AbstractString)
-    return JLD2.jldopen(path, "r") do file
-        return (
-            profile = _jld2_get(file, AH5_PROFILE_KEY),
-            namespaces = _jld2_get(file, AH5_NAMESPACES_KEY),
-            schemas = _jld2_get(file, AH5_SCHEMAS_KEY),
-            history = _jld2_get(file, AH5_HISTORY_KEY),
-            provenance = _jld2_get(file, AH5_PROVENANCE_KEY),
-            externals = _jld2_get(file, AH5_EXTERNALS_KEY),
-        )
-    end
+function _empty_inspection(path, diagnostics)
+    return ArchiveInspection(
+        String(path),
+        false,
+        nothing,
+        NamespaceListing[],
+        SchemaListing[],
+        ArchiveHistorySummary(),
+        ArchiveProvenanceSummary(),
+        ExternalRequirement[],
+        diagnostics,
+    )
 end
 
 function _jld2_get(file, key::AbstractString)
@@ -411,8 +443,32 @@ function _jld2_get(file, key::AbstractString)
     return file[key]
 end
 
-function _record_storage(records)
-    return [to_namedtuple(record) for record in records]
+function _count_key(root::AbstractString)
+    return string(root, "/count")
+end
+
+function _entry_key(root::AbstractString, index::Integer)
+    return string(root, "/", index)
+end
+
+function _write_indexed!(file, root, records, encoder)
+    file[_count_key(root)] = length(records)
+    for (index, record) in enumerate(records)
+        file[_entry_key(root, index)] = encoder(record)
+    end
+    return file
+end
+
+function _read_indexed(::Type{T}, file, root, decoder) where {T}
+    raw_count = _jld2_get(file, _count_key(root))
+    raw_count === nothing && return T[]
+    typed = T[]
+    for index in 1:Int(raw_count)
+        raw = _jld2_get(file, _entry_key(root, index))
+        raw === nothing && throw(ArgumentError("missing AH5 record $root/$index"))
+        push!(typed, decoder(raw))
+    end
+    return typed
 end
 
 function _string_storage(values)
@@ -424,12 +480,21 @@ function _profile_storage(profile::ArchiveProfile)
     return merge(nt, (
         features = _string_storage(profile.features),
         required_features = _string_storage(profile.required_features),
+        roots = to_namedtuple(profile.roots),
     ))
 end
 
 function _history_storage(history::ArchiveHistorySummary)
-    nt = to_namedtuple(history)
-    return merge(nt, (; head_names = _string_storage(history.head_names)))
+    return (
+        objects = history.objects,
+        heads = history.heads,
+        revisions = history.revisions,
+        runs = history.runs,
+        events = history.events,
+        writes = history.writes,
+        log_streams = history.log_streams,
+        head_names = _string_storage(history.head_names),
+    )
 end
 
 function _provenance_storage(prov::ArchiveProvenanceSummary)
@@ -439,24 +504,422 @@ function _provenance_storage(prov::ArchiveProvenanceSummary)
     )
 end
 
+function _namespace_listing_storage(listing::NamespaceListing)
+    return (
+        id = String(listing.namespace.id),
+        package_uuid = listing.namespace.package_uuid,
+        display_name = listing.namespace.display_name,
+        role = String(listing.role),
+        status = String(listing.status),
+        canonical_id = String(listing.canonical_id),
+        aliases = _string_storage(listing.aliases),
+        kinds = _string_storage(listing.kinds),
+        schema_ids = _string_storage(listing.schema_ids),
+    )
+end
+
+function _restore_namespace_listing(nt)
+    return from_namedtuple(NamespaceListing, nt)
+end
+
+function _external_storage(req::ExternalRequirement)
+    return (
+        object_id = req.object_id.value,
+        content_id = req.content_id === nothing ? "" : req.content_id.value,
+        artifact_kind = String(req.artifact.kind),
+        artifact_path = req.artifact.path === nothing ? "" : req.artifact.path,
+        artifact_uri = req.artifact.uri === nothing ? "" : req.artifact.uri,
+        artifact_description = req.artifact.description,
+    )
+end
+
+function _restore_external(nt)
+    content = String(nt.content_id)
+    path = String(nt.artifact_path)
+    uri = String(nt.artifact_uri)
+    return ExternalRequirement(
+        ObjectId(String(nt.object_id));
+        content_id = isempty(content) ? nothing : ContentId(content),
+        artifact = ArtifactRef(
+            Symbol(nt.artifact_kind);
+            path = isempty(path) ? nothing : path,
+            uri = isempty(uri) ? nothing : uri,
+            description = String(nt.artifact_description),
+        ),
+    )
+end
+
+function _schema_listing_storage(listing::SchemaListing)
+    fields = listing.fields
+    node = listing.node_schema
+    attrs = node === nothing ? AttributeSchema[] : node.attributes
+    node_rules = node === nothing ? NodeValidationRule[] : node.rules
+    replaces = listing.replaces
+    replaced_by = listing.replaced_by
+    migration = listing.migration
+    return (
+        namespace_id = String(listing.schema.namespace_id),
+        schema_id = listing.schema.schema_id,
+        version = listing.schema.version,
+        package_uuid = listing.namespace.package_uuid,
+        display_name = listing.namespace.display_name,
+        compatibility = String(listing.compatibility),
+        documentation = listing.documentation,
+        package_version = listing.package_version,
+        field_names = String[String(field.name) for field in fields],
+        field_kinds = String[String(field.element.kind) for field in fields],
+        field_units = String[field.element.units for field in fields],
+        field_frames = String[field.element.frame for field in fields],
+        field_enums = String[_encode_symbols(field.element.enum_values) for field in fields],
+        field_ranks = Int[field.rank for field in fields],
+        field_shapes = String[_encode_shape(field.shape) for field in fields],
+        field_required = Bool[field.required for field in fields],
+        field_cardinality = String[String(field.cardinality) for field in fields],
+        field_support = String[field.support for field in fields],
+        field_location = String[field.location for field in fields],
+        field_refs = String[
+            field.reference_target === nothing ? "" : String(field.reference_target)
+            for field in fields
+        ],
+        field_docs = String[field.documentation for field in fields],
+        field_rules = String[_encode_rules(field.rules) for field in fields],
+        has_node_schema = listing.has_node_schema,
+        node_kind = node === nothing ? "" : String(node.kind),
+        node_allow_extra = node === nothing ? false : node.allow_extra,
+        attr_names = String[String(attr.name) for attr in attrs],
+        attr_kinds = String[String(attr.value_kind) for attr in attrs],
+        attr_required = Bool[attr.required for attr in attrs],
+        attr_allow_ref = Bool[attr.allow_ref for attr in attrs],
+        attr_rules = String[_encode_rules(attr.rules) for attr in attrs],
+        node_rule_kinds = String[String(rule.kind) for rule in node_rules],
+        node_rule_params = String[_encode_parameters(rule.parameters) for rule in node_rules],
+        node_rule_messages = String[rule.message for rule in node_rules],
+        replaces_ns = replaces === nothing ? "" : String(replaces.namespace_id),
+        replaces_id = replaces === nothing ? "" : replaces.schema_id,
+        replaces_version = replaces === nothing ? "" : replaces.version,
+        replaced_by_ns = replaced_by === nothing ? "" : String(replaced_by.namespace_id),
+        replaced_by_id = replaced_by === nothing ? "" : replaced_by.schema_id,
+        replaced_by_version = replaced_by === nothing ? "" : replaced_by.version,
+        migration_source_ns = migration === nothing ? "" : String(migration.source.namespace_id),
+        migration_source_id = migration === nothing ? "" : migration.source.schema_id,
+        migration_source_version = migration === nothing ? "" : migration.source.version,
+        migration_target_ns = migration === nothing ? "" : String(migration.target.namespace_id),
+        migration_target_id = migration === nothing ? "" : migration.target.schema_id,
+        migration_target_version = migration === nothing ? "" : migration.target.version,
+        migration_impl = migration === nothing ? "" : migration.implementation_id,
+    )
+end
+
+function _restore_schema_listing(nt)
+    names = _string_vec(nt.field_names)
+    kinds = _string_vec(nt.field_kinds)
+    units = _string_vec(nt.field_units)
+    frames = _string_vec(nt.field_frames)
+    enums = _string_vec(nt.field_enums)
+    ranks = _int_vec(nt.field_ranks)
+    shapes = _string_vec(nt.field_shapes)
+    required = _bool_vec(nt.field_required)
+    cardinality = _string_vec(nt.field_cardinality)
+    support = _string_vec(nt.field_support)
+    location = _string_vec(nt.field_location)
+    refs = _string_vec(nt.field_refs)
+    docs = _string_vec(nt.field_docs)
+    rules = _string_vec(nt.field_rules)
+    fields = SchemaField[]
+    for i in eachindex(names)
+        target = isempty(refs[i]) ? nothing : Symbol(refs[i])
+        push!(fields, SchemaField(
+            Symbol(names[i]),
+            LogicalType(
+                Symbol(kinds[i]);
+                units = units[i],
+                frame = frames[i],
+                enum_values = Tuple(_decode_symbols(enums[i])),
+            );
+            rank = ranks[i],
+            shape = _decode_shape(shapes[i]),
+            required = required[i],
+            cardinality = Symbol(cardinality[i]),
+            support = support[i],
+            location = location[i],
+            reference_target = target,
+            rules = _decode_rules(rules[i]),
+            documentation = docs[i],
+        ))
+    end
+    node = nothing
+    if _as_bool(nt.has_node_schema) && !isempty(String(nt.node_kind))
+        attr_names = _string_vec(nt.attr_names)
+        attr_kinds = _string_vec(nt.attr_kinds)
+        attr_required = _bool_vec(nt.attr_required)
+        attr_allow_ref = _bool_vec(nt.attr_allow_ref)
+        attr_rules = _string_vec(nt.attr_rules)
+        attributes = AttributeSchema[]
+        for i in eachindex(attr_names)
+            push!(attributes, AttributeSchema(
+                Symbol(attr_names[i]),
+                Symbol(attr_kinds[i]);
+                required = attr_required[i],
+                allow_ref = attr_allow_ref[i],
+                rules = _decode_rules(attr_rules[i]),
+            ))
+        end
+        node_rules = NodeValidationRule[]
+        rule_kinds = _string_vec(nt.node_rule_kinds)
+        rule_params = _string_vec(nt.node_rule_params)
+        rule_messages = _string_vec(nt.node_rule_messages)
+        for i in eachindex(rule_kinds)
+            params = _decode_parameters(rule_params[i])
+            push!(node_rules, NodeValidationRule(
+                Symbol(rule_kinds[i]);
+                message = rule_messages[i],
+                params...,
+            ))
+        end
+        node = NodeSchema(
+            Symbol(nt.node_kind),
+            attributes...;
+            allow_extra = _as_bool(nt.node_allow_extra),
+            rules = node_rules,
+        )
+    end
+    schema = SchemaRef(Symbol(nt.namespace_id), String(nt.schema_id), String(nt.version))
+    field_tuple = Tuple(fields)
+    return SchemaListing(
+        schema,
+        ArchiveNamespace(
+            Symbol(nt.namespace_id);
+            package_uuid = String(nt.package_uuid),
+            display_name = String(nt.display_name),
+        ),
+        Symbol(nt.compatibility),
+        field_tuple,
+        ntuple(i -> field_tuple[i].name, length(field_tuple)),
+        node,
+        node !== nothing,
+        String(nt.documentation),
+        String(nt.package_version),
+        _schema_ref_parts(nt.replaces_ns, nt.replaces_id, nt.replaces_version),
+        _schema_ref_parts(nt.replaced_by_ns, nt.replaced_by_id, nt.replaced_by_version),
+        _migration_parts(nt),
+    )
+end
+
+function _schema_ref_parts(ns, schema_id, version)
+    namespace = String(ns)
+    id = String(schema_id)
+    ver = String(version)
+    (isempty(namespace) || isempty(id) || isempty(ver)) && return nothing
+    return SchemaRef(Symbol(namespace), id, ver)
+end
+
+function _migration_parts(nt)
+    source = _schema_ref_parts(
+        nt.migration_source_ns, nt.migration_source_id, nt.migration_source_version,
+    )
+    target = _schema_ref_parts(
+        nt.migration_target_ns, nt.migration_target_id, nt.migration_target_version,
+    )
+    source === nothing && return nothing
+    target === nothing && return nothing
+    return SchemaMigrationRef(source, target; implementation_id = String(nt.migration_impl))
+end
+
+function _encode_symbols(values)
+    return join(String.(values), ",")
+end
+
+function _decode_symbols(text::AbstractString)
+    isempty(text) && return Symbol[]
+    return Symbol[Symbol(part) for part in split(String(text), ',')]
+end
+
+function _encode_shape(shape)
+    return join((dim === nothing ? "?" : string(dim) for dim in shape), ",")
+end
+
+function _decode_shape(text::AbstractString)
+    isempty(text) && return ()
+    dims = Union{Nothing,Int}[]
+    for part in split(String(text), ',')
+        if part == "?" || isempty(part)
+            push!(dims, nothing)
+        else
+            push!(dims, parse(Int, part))
+        end
+    end
+    return Tuple(dims)
+end
+
+function _encode_parameters(nt::NamedTuple)
+    isempty(nt) && return ""
+    return join(
+        (string(key, "=", _encode_param_value(value)) for (key, value) in pairs(nt)),
+        ",",
+    )
+end
+
+function _decode_parameters(text::AbstractString)
+    isempty(text) && return NamedTuple()
+    items = Pair{Symbol,Any}[]
+    for part in split(String(text), ',')
+        isempty(part) && continue
+        key, value = split(part, '='; limit = 2)
+        push!(items, Symbol(key) => _decode_param_value(value))
+    end
+    return NamedTuple(items)
+end
+
+function _encode_param_value(value)
+    value isa Symbol && return string(":", value)
+    value isa Bool && return value ? "true" : "false"
+    value isa Integer && return string(Int(value))
+    value isa AbstractFloat && return string(Float64(value))
+    if value isa Tuple || value isa AbstractVector
+        return join(_encode_param_value.(value), "+")
+    end
+    return String(value)
+end
+
+function _decode_param_value(token::AbstractString)
+    token == "true" && return true
+    token == "false" && return false
+    startswith(token, ":") && return Symbol(SubString(token, 2))
+    if occursin('+', token)
+        return Tuple(_decode_param_value(part) for part in split(token, '+'))
+    end
+    integer = tryparse(Int, token)
+    integer !== nothing && return integer
+    float = tryparse(Float64, token)
+    float !== nothing && return float
+    return String(token)
+end
+
+function _encode_rules(rules)
+    parts = String[]
+    for rule in rules
+        push!(parts, string(
+            rule.kind, '\t',
+            _encode_parameters(rule.parameters), '\t',
+            rule.message,
+        ))
+    end
+    return join(parts, '\n')
+end
+
+function _decode_rules(text::AbstractString)
+    isempty(text) && return ValidationRule[]
+    rules = ValidationRule[]
+    for line in split(String(text), '\n')
+        isempty(line) && continue
+        kind, params, message = split(line, '\t'; limit = 3)
+        decoded = _decode_parameters(params)
+        push!(rules, ValidationRule(Symbol(kind); message = String(message), decoded...))
+    end
+    return rules
+end
+
+function _string_vec(value)
+    value === nothing && return String[]
+    return String[String(item) for item in value]
+end
+
+function _int_vec(value)
+    value === nothing && return Int[]
+    return Int[Int(item) for item in value]
+end
+
+function _bool_vec(value)
+    value === nothing && return Bool[]
+    return Bool[_as_bool(item) for item in value]
+end
+
+function _as_bool(value)
+    value isa Bool && return value
+    value isa Integer && return value != 0
+    value isa AbstractString && return value == "true"
+    return Bool(value)
+end
+
 function _feature_tuple(value)
     value === nothing && return ()
+    value isa AbstractString && return (Symbol(value),)
     if value isa NamedTuple
         return Tuple(Symbol(item) for item in values(value))
     end
     return Tuple(Symbol(item) for item in value)
 end
 
-function _restore_records(::Type{T}, values) where {T}
-    values === nothing && return T[]
-    result = T[]
-    for value in values
-        push!(result, from_namedtuple(T, value))
+function _published_features(profile::ArchiveProfile)
+    seen = Symbol[]
+    for feature in AH5_V1_FEATURES
+        feature in seen || push!(seen, feature)
     end
-    return result
+    for feature in profile.features
+        feature in seen || push!(seen, feature)
+    end
+    return Tuple(seen)
+end
+
+function _published_profile(profile::ArchiveProfile)
+    return ArchiveProfile(
+        profile.magic,
+        profile.profile_version,
+        profile.archive_id,
+        profile.created_at,
+        profile.creator,
+        _published_features(profile),
+        profile.required_features,
+        profile.roots,
+        profile.package_version,
+    )
+end
+
+function _refuse_invalid_profile(profile::ArchiveProfile)
+    diagnostics = DiagnosticMessage[]
+    _validate_profile_consistency!(diagnostics, profile)
+    isempty(diagnostics) && return profile
+    codes = Tuple(item.code for item in diagnostics)
+    throw(ArgumentError("refusing to write invalid AH5 profile: $codes"))
+end
+
+function _refuse_invalid_payload(graph, namespaces, schemas)
+    if graph !== nothing && !isempty(graph.objects) && schemas === nothing
+        throw(ArgumentError(
+            "refusing to write AH5 archive: graph objects require an embedded SchemaRegistry",
+        ))
+    end
+    report = if graph !== nothing && schemas !== nothing && namespaces !== nothing
+        validate(graph, schemas, namespaces)
+    elseif graph !== nothing && schemas !== nothing
+        validate(graph, schemas)
+    elseif graph !== nothing && namespaces !== nothing
+        validate(graph, namespaces)
+    elseif schemas !== nothing && namespaces !== nothing
+        validate(schemas, namespaces)
+    elseif graph !== nothing
+        validate(graph)
+    elseif schemas !== nothing
+        validate(schemas)
+    elseif namespaces !== nothing
+        validate(namespaces)
+    else
+        return nothing
+    end
+    isvalid(report) && return report
+    codes = Tuple(item.code for item in report.diagnostics)
+    throw(ArgumentError("refusing to write invalid AH5 archive: $codes"))
+end
+
+function _blocks_interpretation(diagnostics)
+    for diagnostic in diagnostics
+        diagnostic.code in AH5_INTERPRETATION_BLOCKERS && return true
+    end
+    return false
 end
 
 function _validate_archive_profile!(diagnostics, profile::ArchiveProfile)
+    _validate_profile_consistency!(diagnostics, profile)
     if profile.magic == AH5_MAGIC
         major = _profile_major(profile.profile_version)
         if major === nothing || major != _profile_major(AH5_PROFILE_VERSION)
@@ -478,6 +941,57 @@ function _validate_archive_profile!(diagnostics, profile::ArchiveProfile)
             "AH5 archive requires unsupported features $(Tuple(unknown))";
             required_features = Tuple(unknown),
         ))
+    end
+    return diagnostics
+end
+
+function _validate_profile_consistency!(diagnostics, profile::ArchiveProfile)
+    missing = Symbol[]
+    for feature in profile.required_features
+        feature in profile.features || push!(missing, feature)
+    end
+    if !isempty(missing)
+        push!(diagnostics, error_diagnostic(
+            :required_feature_missing,
+            "AH5 required features $(Tuple(missing)) are not declared present";
+            required_features = Tuple(missing),
+        ))
+    end
+    _validate_roots!(diagnostics, profile.roots)
+    return diagnostics
+end
+
+function _validate_roots!(diagnostics, roots::ArchiveProfileRoots)
+    used = String[]
+    for (name, path) in (
+        (:namespaces, roots.namespaces),
+        (:schemas, roots.schemas),
+        (:history, roots.history),
+        (:provenance, roots.provenance),
+        (:externals, roots.externals),
+    )
+        stripped = String(strip(path))
+        if isempty(stripped) || stripped == AH5_PROFILE_KEY ||
+                stripped == "_types" || startswith(stripped, "_types/") ||
+                occursin("//", stripped)
+            push!(diagnostics, error_diagnostic(
+                :invalid_archive_root,
+                "AH5 $name root $(repr(path)) is not a usable inspectable path";
+                root = name,
+                path = path,
+            ))
+            continue
+        end
+        if stripped in used
+            push!(diagnostics, error_diagnostic(
+                :invalid_archive_root,
+                "AH5 $name root $(repr(path)) collides with another inspectable path";
+                root = name,
+                path = path,
+            ))
+        else
+            push!(used, stripped)
+        end
     end
     return diagnostics
 end
