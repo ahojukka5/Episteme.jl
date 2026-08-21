@@ -271,3 +271,99 @@ end
     @test occursin("claims", report(registry).summary)
     @test !isready(readiness(registry, PipelineTarget(:commit)))
 end
+
+@testset "registry rejects stolen reserved aliases, duplicate ids, and omitted UUIDs" begin
+    stolen_alias = NamespaceClaim(
+        ArchiveNamespace(:foo; package_uuid = UUID_OODI);
+        role = :domain,
+        aliases = (EPISTEME_NAMESPACE,),
+    )
+    @test any(d -> d.code === :reserved_namespace_claimed, validate(stolen_alias).diagnostics)
+    stolen_ext = NamespaceClaim(
+        ArchiveNamespace(:foo_xdmf; package_uuid = UUID_EXT);
+        role = :extension,
+        aliases = (EPISTEME_NAMESPACE,),
+    )
+    @test any(d -> d.code === :reserved_namespace_claimed, validate(stolen_ext).diagnostics)
+    @test any(
+        d -> d.code === :reserved_namespace_claimed,
+        validate(NamespaceRegistry([stolen_alias])).diagnostics,
+    )
+
+    reserved_as_alias = NamespaceClaim(
+        ArchiveNamespace(EPISTEME_NAMESPACE);
+        role = :shared,
+        status = :alias,
+        canonical_id = :foo,
+    )
+    @test any(d -> d.code === :reserved_namespace_claimed, validate(reserved_as_alias).diagnostics)
+
+    two_aliases = NamespaceRegistry([
+        NamespaceClaim(ArchiveNamespace(:delone; package_uuid = UUID_DELONE); role = :domain),
+        NamespaceClaim(ArchiveNamespace(:oodi; package_uuid = UUID_OODI); role = :domain),
+        NamespaceClaim(
+            ArchiveNamespace(:oldname; package_uuid = UUID_DELONE);
+            role = :domain,
+            status = :alias,
+            canonical_id = :delone,
+        ),
+        NamespaceClaim(
+            ArchiveNamespace(:oldname; package_uuid = UUID_OODI);
+            role = :domain,
+            status = :alias,
+            canonical_id = :oodi,
+        ),
+    ])
+    @test any(d -> d.code === :duplicate_namespace_claim, validate(two_aliases).diagnostics)
+
+    active_and_alias = NamespaceRegistry([
+        NamespaceClaim(ArchiveNamespace(:delone; package_uuid = UUID_DELONE); role = :domain),
+        NamespaceClaim(ArchiveNamespace(:newer; package_uuid = UUID_DELONE); role = :domain),
+        NamespaceClaim(
+            ArchiveNamespace(:delone; package_uuid = UUID_DELONE);
+            role = :domain,
+            status = :alias,
+            canonical_id = :newer,
+        ),
+    ])
+    @test any(d -> d.code === :duplicate_namespace_claim, validate(active_and_alias).diagnostics)
+
+    role_mismatch = NamespaceRegistry([
+        NamespaceClaim(ArchiveNamespace(:delone; package_uuid = UUID_DELONE); role = :domain),
+        NamespaceClaim(
+            ArchiveNamespace(:olddelone; package_uuid = UUID_DELONE);
+            role = :extension,
+            status = :alias,
+            canonical_id = :delone,
+        ),
+    ])
+    @test any(d -> d.code === :namespace_alias_role_mismatch, validate(role_mismatch).diagnostics)
+
+    delone = NamespaceClaim(
+        ArchiveNamespace(:delone; package_uuid = UUID_DELONE, display_name = "Delone.jl");
+        role = :domain,
+    )
+    shared = NamespaceClaim(episteme_namespace(); role = :shared)
+    omitted_domain = validate(
+        ArchiveGraph([_obj(:delone, "mesh", ID_MESH, REV_1)]),
+        NamespaceRegistry([delone]),
+    )
+    @test any(d -> d.code === :namespace_identity_missing, omitted_domain.diagnostics)
+    omitted_shared = ArchiveObject(
+        ObjectId("doc-1"),
+        RevisionId(REV_1);
+        namespace = ArchiveNamespace(EPISTEME_NAMESPACE; display_name = "Episteme.jl"),
+        kind = EPISTEME_DOCUMENT_KIND,
+        schema = episteme_document_schema(),
+    )
+    @test isvalid(validate(omitted_shared))
+    omitted_shared_reg = validate(
+        ArchiveGraph([omitted_shared]),
+        NamespaceRegistry([shared]),
+    )
+    @test any(d -> d.code === :namespace_identity_missing, omitted_shared_reg.diagnostics)
+    @test isvalid(validate(
+        ArchiveGraph([_obj(:delone, "mesh", ID_MESH, REV_1; uuid = UUID_DELONE)]),
+        NamespaceRegistry([delone]),
+    ))
+end

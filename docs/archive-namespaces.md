@@ -66,6 +66,8 @@ profile provenance schemas revisions runs events heads objects content payloads
 ```
 
 A package may not register one of those names as its namespace `id`.
+Reserved shared names such as `:episteme` also cannot appear in another
+identity's `aliases` list or as the short name of an alias claim.
 Exact `.ah5` spelling remains #40.
 
 ## Aliases
@@ -110,20 +112,24 @@ list_namespaces(inspect(graph, revision_id), registry)
 
 | Code | Meaning |
 | --- | --- |
-| `:reserved_namespace_claimed` | domain/extension claimed `:episteme` |
+| `:reserved_namespace_claimed` | domain/extension claimed `:episteme`, including as an alias |
 | `:reserved_archive_area_claimed` | package id is a reserved profile area |
 | `:reserved_kind_claimed` | `episteme/*` kind under a non-Episteme namespace |
 | `:kind_namespace_mismatch` | kind prefix is not the object's namespace |
 | `:namespace_identity_conflict` | same short name, different package UUIDs |
+| `:namespace_identity_missing` | registry UUID present; object omitted it |
 | `:namespace_id_split` | same UUID, different short names, no alias |
 | `:namespace_alias_unresolved` | alias `canonical_id` is missing |
 | `:namespace_alias_uuid_mismatch` | alias UUID does not match canonical |
-| `:duplicate_namespace_claim` | two active claims for one short name |
+| `:namespace_alias_role_mismatch` | alias role does not match canonical |
+| `:duplicate_namespace_claim` | two claims (active or alias) for one short name |
 | `:shared_namespace_role_mismatch` | `:shared` used off `:episteme` |
 
 `validate(graph, registry)` accepts UUID-preserving aliases declared in
-the registry. `readiness(registry, PipelineTarget(:inspect))` is true
-when the registry itself is valid.
+the registry. When a claim records a package UUID, objects that use that
+namespace or alias must carry the same UUID; omitting it is
+`:namespace_identity_missing`. `readiness(registry, PipelineTarget(:inspect))`
+is true when the registry itself is valid.
 
 ## What this is not
 
