@@ -43,11 +43,23 @@ profile spells the inspectable Episteme area as JLD2 keys (HDF5 groups):
 /_types                JLD2 representation metadata (not schema identity)
 ```
 
-`write_archive` stores portable namedtuples, not live domain types.
-`inspect_archive` reads those namedtuples through JLD2 without loading
-domain packages. JLD2 `/_types` remains Julia representation metadata,
-not schema identity. Forensic `plain=true` may be used as a fallback
-reader; it is not the scientific schema registry.
+`write_archive` stores `plain=true`-safe values (strings, numbers, booleans,
+and vectors of those), not live domain types. Indexed listings live at
+`{root}/count` and `{root}/1`, `{root}/2`, … so forensic JLD2 can read them
+without reconstructing Julia structs. `inspect_archive` opens the file with
+`plain=true`, reads only `/episteme/profile` first, and decodes remaining
+roots only after the profile is compatible. JLD2 `/_types` remains Julia
+representation metadata, not schema identity.
+
+Feature flags name capabilities **present in the file**. The v1 writer always
+creates the five inspectable groups, so published archives advertise
+`:jld2_writer`, `:namespaces`, `:embedded_schemas`, `:history`,
+`:provenance`, and `:externals`. `required_features` must be a subset of
+`features`. Custom `ArchiveProfileRoots` are honored; the profile record
+itself stays at `/episteme/profile`.
+
+Logical graph/schema/namespace metadata is validated before the file is
+created. A graph that references a missing embedded schema is refused.
 
 ## Writer and inspector
 
@@ -62,9 +74,10 @@ ids/versions/compatibility and field/`NodeSchema` structure, history
 counts, provenance summaries, external requirements, and structured
 diagnostics. It does not load domain packages or payload bytes.
 
-Unsupported future profile majors and unknown `required_features` fail
-closed (`:unsupported_profile_version`, `:unsupported_required_feature`)
-before domain interpretation.
+Unsupported future profile majors, unknown `required_features`, and
+required flags that are not declared present fail closed
+(`:unsupported_profile_version`, `:unsupported_required_feature`,
+`:required_feature_missing`) before remaining roots are decoded.
 
 XDMF views (#28) must treat the extension as advisory and qualify
 datasets from in-file AH5 identity.
