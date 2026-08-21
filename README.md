@@ -18,9 +18,10 @@ Episteme.jl = semantics + schemas + history/provenance
             + JLD2-backed AH5 persistence
 ```
 
-This package currently ships the semantics, schemas, and archive *vocabulary*.
-JLD2-backed AH5 persistence and the orchestration protocol are the next
-implementation steps.
+This package currently ships the semantics, schemas, archive vocabulary,
+and the JLD2-backed `.ah5` profile plus generic `inspect_archive`.
+The orchestration protocol (`execute!` / `commit!`) remains a later
+implementation step.
 
 ## Why this package exists
 
@@ -39,9 +40,9 @@ readiness(x, target)    # Can it move to the requested next stage?
 `readiness` as generic functions, plus structured report, diagnostic, schema,
 semantic-tree, identity, reference, and archive-record vocabulary.
 
-Physical `.ah5` I/O is planned as Episteme's JLD2-backed archive/profile.
-HDF5.jl remains a later optional extension for capabilities that need direct or
-parallel HDF5 access. See
+Physical `.ah5` I/O is Episteme's JLD2-backed archive/profile
+(`write_archive` / `inspect_archive`). HDF5.jl remains a later optional
+extension for capabilities that need direct or parallel HDF5 access. See
 [`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md),
 [`docs/archive-ownership.md`](docs/archive-ownership.md),
 [`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md),
@@ -49,6 +50,7 @@ parallel HDF5 access. See
 [`docs/archive-envelope.md`](docs/archive-envelope.md),
 [`docs/archive-namespaces.md`](docs/archive-namespaces.md),
 [`docs/archive-schemas.md`](docs/archive-schemas.md),
+[`docs/archive-profile.md`](docs/archive-profile.md),
 [`docs/archive-lifecycle.md`](docs/archive-lifecycle.md),
 [`docs/archive-events.md`](docs/archive-events.md),
 [`docs/portable-documents.md`](docs/portable-documents.md),
@@ -161,6 +163,8 @@ Selected concrete types:
   `SemanticNode` trees and from JLD2 working-archive persistence.
 - `RevisionManifest` / `inspect` / `checkout` / `select` / `branch_from`
   — lazy historical-revision manifests; no payload load and no file I/O.
+- `ArchiveProfile` / `write_archive` / `inspect_archive` — JLD2-backed
+  `.ah5` profile identity and generic file inspection.
 - `RetentionRoot` / `plan_purge` / `compact_archive` — explicit
   reachability-based purge into a new graph; the source is never mutated.
 

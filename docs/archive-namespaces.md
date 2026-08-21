@@ -5,9 +5,9 @@ This is the logical namespace contract from issue
 Episteme as identity records, a claim registry, listing, and `validate`.
 It does not open files or choose HDF5/JLD2 group paths.
 
-Physical path spelling is issue
-[#40](https://github.com/ahojukka5/Episteme.jl/issues/40). Namespace
-identity is logical and must not be equated with a group path.
+Physical path spelling is in [`archive-profile.md`](archive-profile.md)
+(`/episteme/namespaces`). Namespace identity is logical and must not be
+equated with a group path.
 
 ## Ownership
 
@@ -138,7 +138,6 @@ is true when the registry itself is valid.
 
 ## What this is not
 
-- HDF5/JLD2 path layout or `/episteme` group spelling (#40)
 - embedded payload-schema registry (#39)
 - codec registration
 - a scientific meaning for anything inside a domain namespace

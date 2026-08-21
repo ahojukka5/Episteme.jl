@@ -653,6 +653,20 @@ to_namedtuple(req::ExternalRequirement) = (
     ),
 )
 
+function from_namedtuple(::Type{ExternalRequirement}, nt)
+    artifact_nt = nt.artifact
+    return ExternalRequirement(
+        ObjectId(String(nt.object_id));
+        content_id = nt.content_id === nothing ? nothing : ContentId(String(nt.content_id)),
+        artifact = ArtifactRef(
+            Symbol(artifact_nt.kind);
+            path = artifact_nt.path,
+            uri = artifact_nt.uri,
+            description = String(artifact_nt.description),
+        ),
+    )
+end
+
 to_namedtuple(entry::ManifestEntry) = (
     object_id = entry.object_id.value,
     revision_id = entry.revision_id === nothing ? nothing : entry.revision_id.value,

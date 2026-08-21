@@ -2,8 +2,8 @@
 
 This is the logical object/reference/schema-version contract from issue
 [#26](https://github.com/ahojukka5/OodiCore.jl/issues/26). It lives entirely
-in Episteme and does not open files. Physical `.ah5` encoding is the later
-JLD2-backed AH5 profile inside Episteme; see
+in Episteme and does not open files. Physical `.ah5` encoding is the
+JLD2-backed AH5 profile; see [`archive-profile.md`](archive-profile.md),
 [`archive-ownership.md`](archive-ownership.md) and
 [`archive-namespaces.md`](archive-namespaces.md).
 
@@ -224,14 +224,15 @@ compression. They are not a place to store payload arrays.
 ## What this is not
 
 - package payload schemas or payload bytes (domain packages / AH5 codecs)
-- HDF5 layout, `.ah5` profile, or XDMF (later Episteme AH5 profile)
+- XDMF views (#28)
 - `execute!` / `commit!` runtime and on-disk write recovery (#27 contract
   types are in [`archive-lifecycle.md`](archive-lifecycle.md))
 - schema migration implementations (#41)
 - content-hash algorithms (#42)
 - software-environment manifests (#37)
 - namespace reservation/alias registry (see
-  [`archive-namespaces.md`](archive-namespaces.md); #40 owns path layout)
+  [`archive-namespaces.md`](archive-namespaces.md); path layout is
+  [`archive-profile.md`](archive-profile.md))
 - execution-context capture (#43)
 - JLD2 working-archive I/O (portable documents are in
   [`portable-documents.md`](portable-documents.md))

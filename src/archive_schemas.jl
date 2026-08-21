@@ -1036,6 +1036,25 @@ to_namedtuple(listing::SchemaListing) = (
     migration = listing.migration === nothing ? nothing : to_namedtuple(listing.migration),
 )
 
+function from_namedtuple(::Type{SchemaListing}, nt)
+    fields = Tuple(from_namedtuple(SchemaField, field) for field in nt.fields)
+    node = nt.node_schema === nothing ? nothing : from_namedtuple(NodeSchema, nt.node_schema)
+    return SchemaListing(
+        from_namedtuple(SchemaRef, nt.schema),
+        from_namedtuple(ArchiveNamespace, nt.namespace),
+        Symbol(nt.compatibility),
+        fields,
+        Tuple(Symbol(name) for name in nt.field_names),
+        node,
+        node !== nothing,
+        String(nt.documentation),
+        String(nt.package_version),
+        nt.replaces === nothing ? nothing : from_namedtuple(SchemaRef, nt.replaces),
+        nt.replaced_by === nothing ? nothing : from_namedtuple(SchemaRef, nt.replaced_by),
+        nt.migration === nothing ? nothing : from_namedtuple(SchemaMigrationRef, nt.migration),
+    )
+end
+
 function from_namedtuple(::Type{SchemaRef}, nt)
     return SchemaRef(Symbol(nt.namespace_id), String(nt.schema_id), String(nt.version))
 end
