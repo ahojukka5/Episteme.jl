@@ -98,7 +98,24 @@ end
     @test coordinates.support == "mesh"
     @test coordinates.location == "vertex"
     @test listings[1].fields[2].reference_target === Symbol("monge/box")
+    @test listings[1].node_schema === nothing
     @test listings[2].has_node_schema
+    field_only = only(list_schemas(SchemaRegistry([field_v1])))
+    node = field_only.node_schema
+    @test node !== nothing
+    @test node.kind === Symbol("oodi/field")
+    @test getfield.(node.attributes, :name) == [:name, :scale]
+    @test node.attributes[1].value_kind === :string
+    @test node.attributes[1].required
+    @test only(node.attributes[1].rules).kind === :nonempty
+    @test node.attributes[2].value_kind === :real
+    @test !node.attributes[2].required
+    @test only(node.attributes[2].rules).kind === :finite
+    @test !node.allow_extra
+    node_nt = to_namedtuple(field_only).node_schema
+    @test node_nt.kind === Symbol("oodi/field")
+    @test [attr.name for attr in node_nt.attributes] == [:name, :scale]
+    @test node_nt.attributes[2].rules[1].kind === :finite
     @test to_namedtuple(listings[1]).package_version == "0.4.0"
     @test to_namedtuple(listings[1]).fields[1].element.units == "m"
 

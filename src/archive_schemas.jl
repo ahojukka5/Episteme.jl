@@ -215,8 +215,8 @@ end
     SchemaListing
 
 Inspection view of one embedded schema: identity, compatibility, portable
-field structure, and replacement/migration pointers. Payloads are never
-loaded.
+field structure, optional [`NodeSchema`](@ref), and replacement/migration
+pointers. Payloads are never loaded.
 """
 struct SchemaListing
     schema::SchemaRef
@@ -224,6 +224,7 @@ struct SchemaListing
     compatibility::Symbol
     fields::Tuple{Vararg{SchemaField}}
     field_names::Tuple{Vararg{Symbol}}
+    node_schema::Union{Nothing,NodeSchema}
     has_node_schema::Bool
     documentation::String
     package_version::String
@@ -287,9 +288,10 @@ end
     list_schemas(graph, registry)
 
 Generic structural inspection of embedded schemas. Listings include
-portable [`SchemaField`](@ref) facts so a reader without the owning
-package can inspect types, units, rank/shape, and references. Domain
-payload packages are not required.
+portable [`SchemaField`](@ref) facts and the optional [`NodeSchema`](@ref)
+so a reader without the owning package can inspect types, units,
+rank/shape, references, and SemanticNode attributes. Domain payload
+packages are not required.
 """
 function list_schemas(registry::SchemaRegistry)
     listings = SchemaListing[]
@@ -326,13 +328,15 @@ end
 function _schema_listing(entry::SchemaDefinition)
     fields = Tuple(find_schema_fields(entry))
     names = ntuple(i -> fields[i].name, length(fields))
+    node = entry.node_schema
     return SchemaListing(
         entry.schema,
         entry.namespace,
         entry.compatibility,
         fields,
         names,
-        entry.node_schema !== nothing,
+        node,
+        node !== nothing,
         entry.documentation,
         entry.package_version,
         entry.replaces,
@@ -1023,6 +1027,7 @@ to_namedtuple(listing::SchemaListing) = (
     compatibility = listing.compatibility,
     fields = Tuple(to_namedtuple.(listing.fields)),
     field_names = listing.field_names,
+    node_schema = listing.node_schema === nothing ? nothing : to_namedtuple(listing.node_schema),
     has_node_schema = listing.has_node_schema,
     documentation = listing.documentation,
     package_version = listing.package_version,
