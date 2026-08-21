@@ -95,6 +95,10 @@ resolve_namespace(registry, :oodicore).namespace.id === :episteme
 Display-name changes do not need an alias. Changing `id` without keeping
 the UUID, or claiming another package's UUID, is a conflict.
 
+An alias `canonical_id` must name a live non-alias claim. Alias short
+names, including those listed only in a canonical claim's `aliases`
+tuple, are unique across the registry.
+
 ## Listing
 
 `list_namespaces(graph)` (also `RevisionManifest` and a registry) returns
@@ -120,6 +124,7 @@ list_namespaces(inspect(graph, revision_id), registry)
 | `:namespace_identity_missing` | registry UUID present; object omitted it |
 | `:namespace_id_split` | same UUID, different short names, no alias |
 | `:namespace_alias_unresolved` | alias `canonical_id` is missing |
+| `:namespace_alias_not_canonical` | alias `canonical_id` is itself an alias |
 | `:namespace_alias_uuid_mismatch` | alias UUID does not match canonical |
 | `:namespace_alias_role_mismatch` | alias role does not match canonical |
 | `:duplicate_namespace_claim` | two claims (active or alias) for one short name |

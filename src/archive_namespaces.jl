@@ -407,6 +407,23 @@ function _validate_namespace_claim!(diagnostics, claim::NamespaceClaim)
     return diagnostics
 end
 
+function _register_alias_owner!(diagnostics, owners, alias_id::Symbol, owner_id::Symbol)
+    previous = get(owners, alias_id, nothing)
+    if previous === nothing
+        owners[alias_id] = owner_id
+        return diagnostics
+    end
+    previous === owner_id && return diagnostics
+    push!(diagnostics, error_diagnostic(
+        :namespace_identity_conflict,
+        "alias :$alias_id is claimed by both :$previous and :$owner_id";
+        alias = alias_id,
+        namespace = owner_id,
+        other_namespace = previous,
+    ))
+    return diagnostics
+end
+
 function _validate_namespace_registry!(diagnostics, registry::NamespaceRegistry)
     seen_ids = Dict{Symbol,NamespaceClaim}()
     for claim in ordered_claims(registry)
@@ -440,6 +457,13 @@ function _validate_namespace_registry!(diagnostics, registry::NamespaceRegistry)
                     namespace = claim.namespace.id,
                     canonical_id = claim.canonical_id,
                 ))
+            elseif canonical.status === :alias
+                push!(diagnostics, error_diagnostic(
+                    :namespace_alias_not_canonical,
+                    "alias :$(claim.namespace.id) names :$(claim.canonical_id) which is itself an alias";
+                    namespace = claim.namespace.id,
+                    canonical_id = claim.canonical_id,
+                ))
             else
                 other = canonical.namespace.package_uuid
                 if !isempty(other) && !isempty(uuid) && uuid != other
@@ -464,18 +488,42 @@ function _validate_namespace_registry!(diagnostics, registry::NamespaceRegistry)
                 end
             end
         end
-        for alias_id in claim.aliases
-            other = find_claim(registry, alias_id)
-            other === nothing && continue
-            other.status === :alias && other.canonical_id === claim.namespace.id && continue
-            other.namespace.id === claim.namespace.id && continue
-            push!(diagnostics, error_diagnostic(
-                :namespace_identity_conflict,
-                "alias :$alias_id of :$(claim.namespace.id) collides with another claim";
-                namespace = claim.namespace.id,
-                alias = alias_id,
-            ))
+    end
+
+    alias_owners = Dict{Symbol,Symbol}()
+    for claim in ordered_claims(registry)
+        if claim.status === :alias
+            _register_alias_owner!(
+                diagnostics,
+                alias_owners,
+                claim.namespace.id,
+                claim.canonical_id,
+            )
+        else
+            for alias_id in claim.aliases
+                _register_alias_owner!(
+                    diagnostics,
+                    alias_owners,
+                    alias_id,
+                    claim.namespace.id,
+                )
+            end
         end
+    end
+    for (alias_id, owner_id) in alias_owners
+        other = find_claim(registry, alias_id)
+        other === nothing && continue
+        if other.status === :alias
+            other.canonical_id === owner_id && continue
+        elseif other.namespace.id === owner_id
+            continue
+        end
+        push!(diagnostics, error_diagnostic(
+            :namespace_identity_conflict,
+            "alias :$alias_id of :$owner_id collides with another claim";
+            namespace = owner_id,
+            alias = alias_id,
+        ))
     end
 
     for (uuid, ids) in by_uuid
