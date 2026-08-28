@@ -17,6 +17,7 @@ include("archive_profile_root_validation.jl")
 include("archive_purge.jl")
 include("portable_document.jl")
 include("content_integrity.jl")
+include("external_integrity.jl")
 
 export report, validate, readiness
 export AbstractEpistemeReport, AbstractValidationReport, AbstractReadinessReport
@@ -75,5 +76,8 @@ export validate_portable, capture_portable, restore_semantic
 export from_namedtuple, portable_sexpr
 export CanonicalHashPolicy, CANONICAL_HASH_ALGORITHMS, CANONICAL_CONTENT_VERSION
 export canonical_content, canonical_bytes, canonical_digest, canonical_content_id
+export ExternalIntegrityRecord, ExternalVerificationReport
+export EXTERNAL_VERIFICATION_LEVELS, EXTERNAL_VERIFIED_LEVELS
+export external_file_content_id, capture_external_integrity, verify_external
 
 end # module Episteme

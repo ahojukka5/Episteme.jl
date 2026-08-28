@@ -49,3 +49,108 @@
     @test_throws ArgumentError canonical_content_id(DummyObject())
     @test_throws ArgumentError CanonicalHashPolicy(; algorithm = :md5)
 end
+
+@testset "tiered local external artifact verification" begin
+    mktempdir() do dir
+        path = joinpath(dir, "artifact.bin")
+        original = repeat(collect(UInt8(0):UInt8(255)), 16)
+        write(path, original)
+        requirement = ExternalRequirement(
+            ObjectId("external-1");
+            artifact = ArtifactRef(:binary; path = path, description = "authoritative bytes"),
+        )
+        record = capture_external_integrity(
+            requirement;
+            sample_bytes = 16,
+            sample_count = 3,
+        )
+        @test isvalid(validate(record))
+        @test record.size == 4096
+        @test startswith(record.content_id.value, "sha256:")
+        @test length(record.sample_offsets) == 3
+
+        metadata = verify_external(record; level = :metadata)
+        @test isvalid(metadata)
+        @test metadata.requested_level === :metadata
+        @test metadata.verified_level === :metadata
+        @test metadata.bytes_checked == 0
+
+        sample = verify_external(record; level = :sample)
+        @test isvalid(sample)
+        @test sample.verified_level === :sample
+        @test sample.bytes_checked == 48
+        @test sample.bytes_checked < sample.total_bytes
+
+        full = verify_external(record; level = :full)
+        @test isvalid(full)
+        @test full.verified_level === :full
+        @test full.bytes_checked == full.total_bytes == 4096
+
+        # Same-size mutation outside the deterministic sample is invisible to
+        # metadata and sample checks but is caught by full verification.
+        open(path, "r+") do io
+            seek(io, 100)
+            write(io, UInt8(0xff))
+        end
+        @test isvalid(verify_external(record; level = :metadata))
+        @test isvalid(verify_external(record; level = :sample))
+        changed = verify_external(record; level = :full)
+        @test !isvalid(changed)
+        @test changed.verified_level === :metadata
+        @test any(d -> d.code === :external_hash_mismatch, changed.diagnostics)
+
+        # Restore and mutate a byte that is definitely in the first sample.
+        open(path, "r+") do io
+            seek(io, 100)
+            write(io, original[101])
+            seek(io, 0)
+            write(io, UInt8(0x7f))
+        end
+        sampled_change = verify_external(record; level = :sample)
+        @test !isvalid(sampled_change)
+        @test sampled_change.verified_level === :metadata
+        @test any(d -> d.code === :external_sample_mismatch, sampled_change.diagnostics)
+
+        # Size changes fail before any content bytes are hashed.
+        open(path, "a") do io
+            write(io, UInt8(0x00))
+        end
+        resized = verify_external(record; level = :full)
+        @test !isvalid(resized)
+        @test resized.verified_level === :none
+        @test resized.bytes_checked == 0
+        @test any(d -> d.code === :external_size_mismatch, resized.diagnostics)
+
+        rm(path)
+        missing = verify_external(record; level = :metadata)
+        @test !isvalid(missing)
+        @test missing.verified_level === :none
+        @test any(d -> d.code === :external_artifact_missing, missing.diagnostics)
+
+        # Capture must honor an already-declared strong external content id.
+        write(path, original)
+        wrong = ExternalRequirement(
+            ObjectId("external-2");
+            content_id = ContentId("sha256:" * repeat("0", 64)),
+            artifact = ArtifactRef(:binary; path = path),
+        )
+        @test_throws ArgumentError capture_external_integrity(wrong)
+
+        declared = ExternalRequirement(
+            ObjectId("external-3");
+            content_id = external_file_content_id(path),
+            artifact = ArtifactRef(:binary; path = path),
+        )
+        declared_record = capture_external_integrity(declared; sample_bytes = 8, sample_count = 1)
+        @test declared_record.content_id == declared.content_id
+
+        @test_throws ArgumentError verify_external(record; level = :bogus)
+        @test_throws ArgumentError capture_external_integrity(requirement; sample_bytes = 0)
+        @test_throws ArgumentError capture_external_integrity(
+            ExternalRequirement(
+                ObjectId("remote");
+                artifact = ArtifactRef(:binary; uri = "https://example.invalid/file"),
+            ),
+        )
+    end
+end
