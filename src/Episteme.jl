@@ -12,6 +12,7 @@ include("archive_checkout.jl")
 include("archive_namespaces.jl")
 include("archive_schemas.jl")
 include("archive_profile.jl")
+include("archive_profile_root_validation.jl")
 include("archive_purge.jl")
 include("portable_document.jl")
 
