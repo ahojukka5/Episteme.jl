@@ -18,6 +18,7 @@ include("archive_purge.jl")
 include("portable_document.jl")
 include("content_integrity.jl")
 include("external_integrity.jl")
+include("revision_integrity.jl")
 
 export report, validate, readiness
 export AbstractEpistemeReport, AbstractValidationReport, AbstractReadinessReport
@@ -79,5 +80,8 @@ export canonical_content, canonical_bytes, canonical_digest, canonical_content_i
 export ExternalIntegrityRecord, ExternalVerificationReport
 export EXTERNAL_VERIFICATION_LEVELS, EXTERNAL_VERIFIED_LEVELS
 export external_file_content_id, capture_external_integrity, verify_external
+export IntegrityDependencyRow, RevisionIntegrityManifest
+export INTEGRITY_DEPENDENCY_KINDS, INTEGRITY_AVAILABILITY
+export integrity_manifest
 
 end # module Episteme
