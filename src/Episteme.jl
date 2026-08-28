@@ -2,6 +2,7 @@ module Episteme
 
 using Dates
 using UUIDs
+using SHA
 using JLD2
 
 include("introspection.jl")
@@ -15,6 +16,7 @@ include("archive_profile.jl")
 include("archive_profile_root_validation.jl")
 include("archive_purge.jl")
 include("portable_document.jl")
+include("content_integrity.jl")
 
 export report, validate, readiness
 export AbstractEpistemeReport, AbstractValidationReport, AbstractReadinessReport
@@ -71,5 +73,7 @@ export PortableEncoded, PortableNode, PortableSemanticDocument
 export portable_encode, portable_decode, is_portable_value
 export validate_portable, capture_portable, restore_semantic
 export from_namedtuple, portable_sexpr
+export CanonicalHashPolicy, CANONICAL_HASH_ALGORITHMS, CANONICAL_CONTENT_VERSION
+export canonical_content, canonical_bytes, canonical_digest, canonical_content_id
 
 end # module Episteme

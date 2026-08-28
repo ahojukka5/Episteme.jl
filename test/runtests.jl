@@ -222,4 +222,5 @@ struct DummyObject end
     include("archive_purge.jl")
     include("archive_profile.jl")
     include("archive_profile_root_validation.jl")
+    include("content_integrity.jl")
 end
