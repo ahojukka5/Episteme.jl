@@ -19,6 +19,8 @@ include("portable_document.jl")
 include("content_integrity.jl")
 include("external_integrity.jl")
 include("revision_integrity.jl")
+include("archive_integrity_persistence.jl")
+include("archive_integrity_semantics.jl")
 
 export report, validate, readiness
 export AbstractEpistemeReport, AbstractValidationReport, AbstractReadinessReport
@@ -83,5 +85,7 @@ export external_file_content_id, capture_external_integrity, verify_external
 export IntegrityDependencyRow, RevisionIntegrityManifest
 export INTEGRITY_DEPENDENCY_KINDS, INTEGRITY_AVAILABILITY
 export integrity_manifest
+export AH5_INTEGRITY_FEATURE, AH5_INTEGRITY_KEY
+export ArchiveIntegrityInspection
 
 end # module Episteme
