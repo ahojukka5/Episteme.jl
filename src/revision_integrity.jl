@@ -108,8 +108,8 @@ function _integrity_row_sort_key(row::IntegrityDependencyRow)
     )
 end
 
-function _append_integrity_diagnostics!(all, local)
-    append!(all, local)
+function _append_integrity_diagnostics!(all, local_diagnostics)
+    append!(all, local_diagnostics)
     return all
 end
 
