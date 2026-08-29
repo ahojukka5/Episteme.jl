@@ -226,4 +226,5 @@ struct DummyObject end
     include("revision_integrity.jl")
     include("archive_integrity_persistence.jl")
     include("archive_integrity_binding.jl")
+    include("capsule_plan.jl")
 end

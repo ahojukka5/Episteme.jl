@@ -21,6 +21,7 @@ include("external_integrity.jl")
 include("revision_integrity.jl")
 include("archive_integrity_persistence.jl")
 include("archive_integrity_semantics.jl")
+include("capsule_plan.jl")
 
 export report, validate, readiness
 export AbstractEpistemeReport, AbstractValidationReport, AbstractReadinessReport
@@ -87,5 +88,6 @@ export INTEGRITY_DEPENDENCY_KINDS, INTEGRITY_AVAILABILITY
 export integrity_manifest
 export AH5_INTEGRITY_FEATURE, AH5_INTEGRITY_KEY
 export ArchiveIntegrityInspection
+export CAPSULE_TARGETS, CapsulePlan, plan_capsule
 
 end # module Episteme
