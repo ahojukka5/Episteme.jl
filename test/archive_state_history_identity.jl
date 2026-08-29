@@ -58,3 +58,5 @@ end
             d.code === :namespace_identity_conflict, view.diagnostics)
     end
 end
+
+include("archive_run_history.jl")

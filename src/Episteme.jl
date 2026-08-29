@@ -22,6 +22,8 @@ include("revision_integrity.jl")
 include("archive_integrity_persistence.jl")
 include("archive_integrity_semantics.jl")
 include("archive_state_history.jl")
+include("archive_run_history.jl")
+include("archive_run_history_semantics.jl")
 include("capsule_plan.jl")
 
 export report, validate, readiness
@@ -91,6 +93,8 @@ export AH5_INTEGRITY_FEATURE, AH5_INTEGRITY_KEY
 export ArchiveIntegrityInspection
 export AH5_STATE_HISTORY_FEATURE, AH5_STATE_HISTORY_KEY
 export ArchiveStateHistory, ArchiveStateHistoryInspection, write_state_archive
+export AH5_RUN_HISTORY_FEATURE, AH5_RUN_HISTORY_KEY
+export ArchiveRunHistory, ArchiveRunHistoryInspection, write_run_archive, reconstruct_graph
 export CAPSULE_TARGETS, CapsulePlan, plan_capsule
 
 end # module Episteme
