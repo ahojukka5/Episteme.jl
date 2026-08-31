@@ -44,6 +44,21 @@ required revision/run/provenance closure.
 `plan.retention` exposes the deterministic `PurgePlan`, including retained and
 omitted revisions/runs and per-object reachability classifications.
 
+## Frozen retained-source signature
+
+A valid plan also contains `plan.source_signature`, a canonical SHA-256 identity
+of the **retained compacted metadata closure at planning time**. It covers object
+envelopes/references, revision and head records, run/activity/staged/restart
+provenance, retained events, write transactions, log-stream metadata, and the
+selected external requirements.
+
+This makes a `CapsulePlan` a real planning checkpoint rather than only a view
+whose nested vectors could continue changing with the source graph. Physical
+materialization recomputes the retained closure and signature immediately before
+writing; a later mutation to retained scientific/provenance metadata therefore
+fails closed even when object/revision ids and retention counts are unchanged.
+Unrelated omitted branches are not part of this signature.
+
 ## Integrity coverage of retained content
 
 Capsule construction is stricter than ordinary archive inspection. Every
@@ -83,15 +98,17 @@ Supported targets are `:inspect`, `:replay`, `:restart`, and `:rerun`.
 Verification uses the existing `:metadata`, `:sample`, and `:full` levels.
 
 `report`, `validate`, `readiness`, and `to_namedtuple` expose the source
-revision, requested target, verification level, retention counts,
-classifications, external dependencies, integrity report, and readiness result.
+revision, requested target, verification level, frozen source signature,
+retention counts, classifications, external dependencies, integrity report, and
+readiness result.
 
-## Next slice
+## Physical materialization
 
-Once a `CapsulePlan` is valid, the next #35 layer can call #31 compaction and
-write a new JLD2-backed AH5 capsule using the existing schema and integrity
-persistence contracts. That writer must preserve the source archive identity
-and root revision ids and must not mutate the source archive.
+Issue #87 consumes only a valid frozen plan, re-runs #31 compaction, verifies the
+source signature, filters schema/external metadata to the retained closure, and
+writes a new JLD2-backed AH5 capsule. The capsule preserves the source archive
+identity separately from its own new archive identity and never mutates the
+source archive.
 
 Portable-document embedding, software-environment/execution-context manifests,
 and trusted native payload replay remain separate later layers.
