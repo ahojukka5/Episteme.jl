@@ -13,6 +13,11 @@ integrity closures are structurally trustworthy. `ready` is deliberately
 separate: it describes whether the planned capsule satisfies the requested
 pipeline target.
 
+`source_signature` freezes the exact retained metadata closure at planning
+time. It is recomputed before physical materialization so later mutations to
+objects, run/activity/restart provenance, events, writes, or log metadata fail
+closed rather than silently changing the planned capsule.
+
 No file is written and the source `ArchiveGraph` is never mutated.
 """
 struct CapsulePlan <: AbstractValidationReport
@@ -23,6 +28,7 @@ struct CapsulePlan <: AbstractValidationReport
     integrity::RevisionIntegrityManifest
     retention::PurgePlan
     externals::Vector{ExternalRequirement}
+    source_signature::Union{Nothing,ContentId}
     valid::Bool
     ready::Bool
     readiness_report::ReadinessReport
@@ -97,6 +103,25 @@ function _capsule_externals(manifest::RevisionManifest)
     end
     sort!(values; by = _capsule_external_key)
     return values
+end
+
+function _capsule_source_snapshot(graph::ArchiveGraph, externals)
+    reqs = _externals_vector(externals)
+    ordered_external = sort!(ExternalRequirement[reqs...]; by = _capsule_external_key)
+    return (
+        objects = Tuple(_state_object_storage(object) for object in ordered_objects(graph)),
+        revisions = Tuple(_state_revision_storage(revision) for revision in ordered_revisions(graph)),
+        heads = Tuple(_state_head_storage(head) for head in ordered_heads(graph)),
+        runs = Tuple(_run_record_storage(run) for run in ordered_runs(graph)),
+        events = Tuple(_event_record_storage(event) for event in graph.events),
+        writes = Tuple(_write_record_storage(write) for write in ordered_writes(graph)),
+        log_streams = Tuple(_log_stream_storage(stream) for stream in ordered_log_streams(graph)),
+        externals = Tuple(_capsule_external_key(req) for req in ordered_external),
+    )
+end
+
+function _capsule_source_signature(graph::ArchiveGraph, externals)
+    return canonical_content_id(_capsule_source_snapshot(graph, externals))
 end
 
 function _integrity_object_keys(integrity::RevisionIntegrityManifest)
@@ -254,6 +279,34 @@ function plan_capsule(
         level = verification,
     )
     diagnostics = _capsule_validation_diagnostics(manifest, integrity, retention)
+    selected_externals = _capsule_externals(manifest)
+    source_signature = nothing
+    compacted = compact_archive(
+        graph,
+        [RetentionRoot(revision_id)];
+        policy = policy,
+        externals = reqs,
+    )
+    if compacted.graph === nothing
+        _append_capsule_diagnostics!(diagnostics, compacted.report.diagnostics)
+    else
+        try
+            source_signature = _capsule_source_signature(compacted.graph, selected_externals)
+        catch err
+            _push_capsule_diagnostic!(diagnostics, error_diagnostic(
+                :capsule_source_signature_unavailable,
+                "retained capsule metadata cannot be frozen into a canonical source signature";
+                revision_id = revision_id.value,
+                reason = sprint(showerror, err),
+            ))
+        end
+    end
+    source_signature === nothing && _push_capsule_diagnostic!(diagnostics, error_diagnostic(
+        :capsule_source_signature_missing,
+        "capsule plan has no frozen retained-source signature";
+        revision_id = revision_id.value,
+    ))
+
     valid = !any(diagnostic -> diagnostic.severity === :error, diagnostics)
     ready_report = _capsule_target_readiness(manifest, requested_target, diagnostics)
     return CapsulePlan(
@@ -263,7 +316,8 @@ function plan_capsule(
         manifest,
         integrity,
         retention,
-        _capsule_externals(manifest),
+        selected_externals,
+        source_signature,
         valid,
         isready(ready_report),
         ready_report,
@@ -272,14 +326,22 @@ function plan_capsule(
 end
 
 function validate(plan::CapsulePlan)
+    diagnostics = copy(plan.diagnostics)
+    plan.source_signature === nothing && _push_capsule_diagnostic!(diagnostics, error_diagnostic(
+        :capsule_source_signature_missing,
+        "capsule plan has no frozen retained-source signature";
+        revision_id = plan.source_revision.value,
+    ))
+    valid = !any(diagnostic -> diagnostic.severity === :error, diagnostics)
     return ValidationReport(
         :capsule_plan,
-        plan.valid,
-        copy(plan.diagnostics),
+        valid,
+        diagnostics,
         (;
             revision_id = plan.source_revision.value,
             target = plan.target,
             verification = plan.verification,
+            source_signature = plan.source_signature === nothing ? nothing : plan.source_signature.value,
             retained_objects = plan.retention.retained_objects,
             omitted_objects = plan.retention.omitted_objects,
             external_objects = length(plan.externals),
@@ -296,17 +358,18 @@ end
 function report(plan::CapsulePlan)
     return ObjectReport(
         :capsule_plan,
-        "Capsule plan for revision $(plan.source_revision.value): valid=$(plan.valid), target=:$(plan.target), ready=$(plan.ready).",
+        "Capsule plan for revision $(plan.source_revision.value): valid=$(isvalid(plan)), target=:$(plan.target), ready=$(plan.ready).",
         (;
             revision_id = plan.source_revision.value,
             target = plan.target,
             verification = plan.verification,
+            source_signature = plan.source_signature === nothing ? nothing : plan.source_signature.value,
             retained_objects = plan.retention.retained_objects,
             omitted_objects = plan.retention.omitted_objects,
             retained_revisions = length(plan.retention.retained_revisions),
             retained_runs = length(plan.retention.retained_runs),
             external_objects = length(plan.externals),
-            valid = plan.valid,
+            valid = isvalid(plan),
             ready = plan.ready,
         ),
         copy(plan.diagnostics),
@@ -327,7 +390,8 @@ to_namedtuple(plan::CapsulePlan) = (
     source_revision = plan.source_revision.value,
     target = plan.target,
     verification = plan.verification,
-    valid = plan.valid,
+    source_signature = plan.source_signature === nothing ? nothing : plan.source_signature.value,
+    valid = isvalid(plan),
     ready = plan.ready,
     retained_objects = plan.retention.retained_objects,
     omitted_objects = plan.retention.omitted_objects,
