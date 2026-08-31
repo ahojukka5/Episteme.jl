@@ -28,6 +28,8 @@ include("archive_run_history_semantics.jl")
 include("archive_event_history.jl")
 include("archive_event_history_semantics.jl")
 include("capsule_plan.jl")
+include("capsule_archive.jl")
+include("capsule_archive_semantics.jl")
 
 export report, validate, readiness
 export AbstractEpistemeReport, AbstractValidationReport, AbstractReadinessReport
@@ -101,5 +103,8 @@ export ArchiveRunHistory, ArchiveRunHistoryInspection, write_run_archive, recons
 export AH5_EVENT_HISTORY_FEATURE, AH5_EVENT_HISTORY_KEY
 export ArchiveEventHistory, ArchiveEventHistoryInspection, write_event_archive
 export CAPSULE_TARGETS, CapsulePlan, plan_capsule
+export AH5_CAPSULE_FEATURE, AH5_CAPSULE_KEY
+export CapsuleArchiveManifest, CapsuleArchiveInspection, CapsuleArchiveResult
+export write_capsule_archive
 
 end # module Episteme
