@@ -222,6 +222,7 @@ struct DummyObject end
     include("archive_purge.jl")
     include("archive_profile.jl")
     include("archive_profile_root_validation.jl")
+    include("archive_external_preflight.jl")
     include("content_integrity.jl")
     include("revision_integrity.jl")
     include("archive_integrity_persistence.jl")
