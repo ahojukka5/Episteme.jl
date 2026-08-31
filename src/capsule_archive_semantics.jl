@@ -17,21 +17,36 @@ function _capsule_archive_profile(profile::ArchiveProfile, capsule_archive_id)
     return result
 end
 
-function _capsule_run_signature(run)
-    run === nothing && return nothing
-    run isa RunRecord || throw(ArgumentError("capsule manifest run must be RunRecord or nothing"))
-    return _run_record_storage(run)
+function _refuse_capsule_source_signature_mismatch(
+    source_graph::ArchiveGraph,
+    plan::CapsulePlan,
+    externals,
+)
+    expected = plan.source_signature
+    expected === nothing && throw(ArgumentError(
+        "capsule plan has no frozen retained-source signature",
+    ))
+    compacted = compact_archive(
+        source_graph,
+        [RetentionRoot(plan.source_revision)];
+        policy = plan.retention.policy,
+        externals = externals,
+    )
+    compacted.graph === nothing && throw(ArgumentError(
+        "cannot re-freeze capsule source metadata: $(Tuple(d.code for d in compacted.report.diagnostics))",
+    ))
+    capsule_externals = _capsule_external_requirements(compacted.plan, externals)
+    actual = _capsule_source_signature(compacted.graph, capsule_externals)
+    actual == expected || throw(ArgumentError(
+        "capsule retained-source signature no longer matches source graph",
+    ))
+    return expected
 end
 
-function _refuse_capsule_run_mismatch(source::RevisionManifest, planned::RevisionManifest)
-    _capsule_run_signature(source.run) == _capsule_run_signature(planned.run) ||
-        throw(ArgumentError("capsule plan producing-run provenance no longer matches source graph"))
-    return planned
-end
-
-# The main writer already re-checks state closure and retention. This String
-# specialization adds exact producing-run/activity/staged/restart binding before
-# delegating to the canonical AbstractString implementation.
+# The canonical writer re-checks state closure, compaction, schema/external sets,
+# and integrity binding. This String specialization additionally proves that the
+# entire retained metadata closure is still byte-for-byte logically identical
+# to the snapshot frozen when CapsulePlan was created.
 function write_capsule_archive(
     path::String,
     source_graph::ArchiveGraph,
@@ -43,8 +58,7 @@ function write_capsule_archive(
     capsule_archive_id = nothing,
     profile = nothing,
 )
-    source_manifest = inspect(source_graph, plan.source_revision; externals = externals)
-    _refuse_capsule_run_mismatch(source_manifest, plan.manifest)
+    _refuse_capsule_source_signature_mismatch(source_graph, plan, externals)
     return invoke(
         write_capsule_archive,
         Tuple{AbstractString,ArchiveGraph,CapsulePlan,SchemaRegistry},
@@ -125,4 +139,75 @@ function inspect_archive(path::String, ::Type{CapsuleArchiveManifest})
         )
     end
     return view
+end
+
+"""
+    readiness(view::CapsuleArchiveInspection, target::PipelineTarget)
+
+Capsule-level readiness includes physical payload availability, not merely the
+reconstructed metadata graph. This first materialization slice is inspectable
+but deliberately not replay/restart/rerun ready because scientific payload
+bytes are not embedded.
+"""
+function readiness(view::CapsuleArchiveInspection, target::PipelineTarget)
+    target.name in CAPSULE_TARGETS || return ReadinessReport(
+        :capsule_archive,
+        target,
+        false,
+        [error_diagnostic(
+            :unsupported_target,
+            "capsule readiness target :$(target.name) is not one of $CAPSULE_TARGETS";
+            target = target.name,
+        )],
+        (; path = view.path),
+    )
+    if !isvalid(view) || view.manifest === nothing
+        return ReadinessReport(
+            :capsule_archive,
+            target,
+            false,
+            copy(view.diagnostics),
+            (; path = view.path),
+        )
+    end
+    target.name === :inspect && return ReadinessReport(
+        :capsule_archive,
+        target,
+        true,
+        DiagnosticMessage[],
+        (;
+            path = view.path,
+            capsule_archive_id = view.manifest.capsule_archive_id,
+            payloads_embedded = view.manifest.payloads_embedded,
+        ),
+    )
+    if !view.manifest.payloads_embedded
+        return ReadinessReport(
+            :capsule_archive,
+            target,
+            false,
+            [error_diagnostic(
+                :capsule_payloads_not_embedded,
+                "capsule does not embed scientific payload bytes required for :$(target.name)";
+                target = target.name,
+                capsule_archive_id = view.manifest.capsule_archive_id,
+            )],
+            (;
+                path = view.path,
+                capsule_archive_id = view.manifest.capsule_archive_id,
+                payloads_embedded = false,
+            ),
+        )
+    end
+    return ReadinessReport(
+        :capsule_archive,
+        target,
+        false,
+        [error_diagnostic(
+            :capsule_payload_readiness_unimplemented,
+            "payload-bearing capsule readiness is not implemented in this slice";
+            target = target.name,
+        )],
+        (; path = view.path),
+    )
 end
