@@ -93,11 +93,19 @@ function _capsule_schema_registry_from_listings(listings::Vector{SchemaListing})
     return SchemaRegistry(definitions)
 end
 
+function _capsule_schema_ref_set(graph::ArchiveGraph)
+    return Set(_integrity_schema_key(ref) for ref in _capsule_required_schema_refs(graph))
+end
+
+function _capsule_listing_schema_set(listings::Vector{SchemaListing})
+    return Set(_integrity_schema_key(listing.schema) for listing in listings)
+end
+
 # The base capsule inspector proves each optional layer is internally valid.
 # This String specialization additionally re-binds persisted integrity trust
 # records to the reconstructed graph + embedded schemas + external requirements,
-# so a crafted state/schema mutation cannot survive as a valid capsule merely
-# because both layers remain individually parseable.
+# checks minimality, and rejects payload-completeness claims this v1 slice could
+# not have produced.
 function inspect_archive(path::String, ::Type{CapsuleArchiveManifest})
     view = invoke(
         inspect_archive,
@@ -122,6 +130,28 @@ function inspect_archive(path::String, ::Type{CapsuleArchiveManifest})
             schemas,
             core.externals,
         )
+
+        manifest = view.manifest
+        manifest === nothing && throw(ArgumentError("capsule manifest disappeared during inspection"))
+        manifest.payloads_embedded && push!(diagnostics, error_diagnostic(
+            :capsule_payload_claim_unsupported,
+            "this capsule profile slice cannot claim embedded scientific payload bytes";
+            capsule_archive_id = manifest.capsule_archive_id,
+        ))
+        manifest.external_objects == length(core.externals) || push!(diagnostics, error_diagnostic(
+            :capsule_manifest_count_mismatch,
+            "capsule external-object count disagrees with persisted external requirements";
+            manifest = manifest.external_objects,
+            records = length(core.externals),
+        ))
+        expected_schemas = _capsule_schema_ref_set(graph)
+        stored_schemas = _capsule_listing_schema_set(core.schemas)
+        expected_schemas == stored_schemas || push!(diagnostics, error_diagnostic(
+            :capsule_schema_set_mismatch,
+            "capsule embedded schema set is not the exact retained metadata schema closure";
+            expected = Tuple(sort!(collect(expected_schemas))),
+            stored = Tuple(sort!(collect(stored_schemas))),
+        ))
     catch err
         push!(diagnostics, error_diagnostic(
             :capsule_integrity_binding_mismatch,
@@ -129,6 +159,9 @@ function inspect_archive(path::String, ::Type{CapsuleArchiveManifest})
             path = path,
             reason = sprint(showerror, err),
         ))
+    end
+
+    if any(d -> d.severity === :error, diagnostics)
         return CapsuleArchiveInspection(
             path,
             true,
