@@ -157,7 +157,7 @@ end
         @test find_revision(reconstructed, revision_id) !== nothing
         @test find_revision(reconstructed, unrelated_revision) === nothing
         @test !any(object -> object.object_id == ObjectId("capsule-unrelated-field"), reconstructed.objects)
-        @test length(reconstructed.events) == length(base_events = result.graph.events)
+        @test length(reconstructed.events) == length(result.graph.events)
         @test event_timeline(reconstructed) == event_timeline(result.graph)
         @test length(reconstructed.writes) == length(result.graph.writes)
         @test length(reconstructed.log_streams) == length(result.graph.log_streams)
