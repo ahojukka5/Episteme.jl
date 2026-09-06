@@ -17,6 +17,7 @@
         key = "$(AH5_STATE_HISTORY_KEY)/objects/1"
         JLD2.jldopen(path, "r+") do file
             raw = file[key]
+            delete!(file, key)
             file[key] = merge(raw, (; package_uuid = ""))
         end
 
@@ -42,12 +43,20 @@ end
             schema = SchemaRef(:episteme, "state", "1.0.0"),
         )
         graph = ArchiveGraph([object]; revisions = [RevisionRecord(r1)])
+        schema = SchemaDefinition(
+            object.schema;
+            namespace = episteme_namespace(),
+            fields = [SchemaField(:value, LogicalType(:string); required = false)],
+            documentation = "forensic reserved-namespace fixture",
+            package_version = "0.1.0",
+        )
         path = joinpath(dir, "reserved.ah5")
-        write_state_archive(path, graph)
+        write_state_archive(path, graph; schemas = SchemaRegistry([schema]))
 
         key = "$(AH5_STATE_HISTORY_KEY)/objects/1"
         JLD2.jldopen(path, "r+") do file
             raw = file[key]
+            delete!(file, key)
             file[key] = merge(raw, (; package_uuid = "00000000-0000-0000-0000-000000000000"))
         end
 

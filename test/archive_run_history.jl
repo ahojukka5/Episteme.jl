@@ -204,6 +204,7 @@ end
         key = "$(AH5_RUN_HISTORY_KEY)/1"
         JLD2.jldopen(path, "r+") do file
             raw = file[key]
+            delete!(file, key)
             file[key] = merge(raw, (; parent_run_id = "missing-parent-run"))
         end
 

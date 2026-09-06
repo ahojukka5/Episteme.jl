@@ -144,11 +144,12 @@ end
             revisions = [RevisionRecord(r1)],
         )
         path = joinpath(dir, "crafted.ah5")
-        write_state_archive(path, graph)
+        write_state_archive(path, graph; schemas = SchemaRegistry([_mesh_def()]))
 
         key = "$(AH5_STATE_HISTORY_KEY)/heads/1"
         JLD2.jldopen(path, "r+") do file
             raw = file[key]
+            delete!(file, key)
             file[key] = merge(raw, (; revision_id = "missing-revision"))
         end
 

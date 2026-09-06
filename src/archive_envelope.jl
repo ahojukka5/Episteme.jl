@@ -317,7 +317,10 @@ struct ObjectRef
     revision_id::Union{Nothing,RevisionId}
 end
 
-ObjectRef(object_id::ObjectId) = ObjectRef(object_id, nothing)
+ObjectRef(
+    object_id::ObjectId;
+    revision_id::Union{Nothing,RevisionId} = nothing,
+) = ObjectRef(object_id, revision_id)
 
 """
     ArchiveReference(name, target)

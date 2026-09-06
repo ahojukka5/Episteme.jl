@@ -516,7 +516,10 @@ function _portable_node_from_namedtuple(nt)
 end
 
 function _value_from_namedtuple(nt::NamedTuple)
-    kind = nt.portable_kind
+    # `plain=true` JLD2 reads may restore symbolic tags as strings. Normalize
+    # the storage tag before dispatching so portable payloads round-trip
+    # independently of JLD2's concrete scalar representation.
+    kind = Symbol(nt.portable_kind)
     kind === :bool && return nt.value
     kind === :integer && return Int(nt.value)
     kind === :real && return Float64(nt.value)
@@ -543,8 +546,9 @@ _value_from_namedtuple(value) = throw(ArgumentError(
 
 function _dict_key_from_namedtuple(key)
     key isa NamedTuple || return key
-    key.portable_kind === :symbol && return Symbol(key.value)
-    key.portable_kind === :string && return String(key.value)
+    kind = Symbol(key.portable_kind)
+    kind === :symbol && return Symbol(key.value)
+    kind === :string && return String(key.value)
     throw(ArgumentError("unsupported portable dict key"))
 end
 

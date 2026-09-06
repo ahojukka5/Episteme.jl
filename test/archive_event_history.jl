@@ -123,7 +123,7 @@ end
         raw_payload = JLD2.jldopen(path, "r"; plain = true) do file
             file["$(AH5_EVENT_HISTORY_KEY)/events/1"].payload
         end
-        @test raw_payload.portable_kind === :namedtuple
+        @test Symbol(raw_payload.portable_kind) === :namedtuple
     end
 end
 
@@ -186,6 +186,7 @@ end
         key = "$(AH5_EVENT_HISTORY_KEY)/events/2"
         JLD2.jldopen(path, "r+") do file
             raw = file[key]
+            delete!(file, key)
             file[key] = merge(raw, (; sequence = 1))
         end
 
