@@ -48,7 +48,7 @@ HDF5.jl remains a later optional
 extension for capabilities that need direct or parallel HDF5 access. See
 [`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md),
 [`docs/archive-ownership.md`](docs/archive-ownership.md),
-[`docs/semantic-tree-poc.md`](docs/semantic-tree-poc.md),
+[`docs/semantic-tree.md`](docs/semantic-tree.md),
 [`docs/declarative-contracts.md`](docs/declarative-contracts.md),
 [`docs/archive-envelope.md`](docs/archive-envelope.md),
 [`docs/archive-namespaces.md`](docs/archive-namespaces.md),
