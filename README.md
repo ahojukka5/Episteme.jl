@@ -41,7 +41,10 @@ readiness(x, target)    # Can it move to the requested next stage?
 semantic-tree, identity, reference, and archive-record vocabulary.
 
 Physical `.ah5` I/O is Episteme's JLD2-backed archive/profile
-(`write_archive` / `inspect_archive`). HDF5.jl remains a later optional
+(`write_archive` / `inspect_archive`). JLD2 is a weak dependency: the
+package itself is stdlib-only, and the archive writers and readers become
+available when the caller runs `using JLD2` to load `EpistemeJLD2Ext`.
+HDF5.jl remains a later optional
 extension for capabilities that need direct or parallel HDF5 access. See
 [`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md),
 [`docs/archive-ownership.md`](docs/archive-ownership.md),
@@ -230,6 +233,18 @@ pkg> add https://github.com/ahojukka5/Episteme.jl
 # or
 pkg> dev /path/to/Episteme.jl
 ```
+
+Episteme's own dependencies are stdlib only (`Dates`, `SHA`, `UUIDs`), so a
+package that wants the shared semantics does not pay for the archive track.
+AH5 persistence lives in a package extension:
+
+```julia
+using Episteme            # semantics, schemas, identities, records: stdlib only
+using Episteme, JLD2      # adds write_archive / inspect_archive via EpistemeJLD2Ext
+```
+
+Without JLD2 the persistence entry points fail closed with an error naming the
+function and the missing package; they never silently do nothing.
 
 ## Running tests
 

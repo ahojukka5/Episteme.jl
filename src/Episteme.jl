@@ -3,7 +3,6 @@ module Episteme
 using Dates
 using UUIDs
 using SHA
-using JLD2
 
 include("introspection.jl")
 include("semantic_tree.jl")
@@ -12,6 +11,9 @@ include("archive_envelope.jl")
 include("archive_checkout.jl")
 include("archive_namespaces.jl")
 include("archive_schemas.jl")
+# Fail-closed owner stubs for every AH5 entry point that opens a file.
+# EpistemeJLD2Ext adds the real methods when JLD2 is loaded.
+include("archive_persistence.jl")
 include("archive_profile.jl")
 include("archive_profile_root_validation.jl")
 include("archive_external_preflight.jl")

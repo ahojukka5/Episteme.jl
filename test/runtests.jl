@@ -1,6 +1,12 @@
 using Test
 using Episteme
 
+include("archive_without_jld2.jl")
+
+# JLD2 is a weak dependency: loading it here activates EpistemeJLD2Ext, so
+# the whole suite runs against the archive API in its JLD2-present form.
+using JLD2
+
 struct DummyObject end
 
 @testset "Episteme.jl" begin
@@ -229,4 +235,5 @@ struct DummyObject end
     include("archive_integrity_binding.jl")
     include("archive_state_history.jl")
     include("capsule_plan.jl")
+    include("archive_persistence_extension.jl")
 end
