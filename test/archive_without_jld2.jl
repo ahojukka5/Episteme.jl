@@ -18,6 +18,8 @@
             () -> write_state_archive(path, graph),
             () -> write_run_archive(path, graph),
             () -> write_event_archive(path, graph),
+            () -> write_capsule_archive(path, graph),
+            () -> inspect_archive(path, CapsuleManifest),
         )
             err = try
                 operation()

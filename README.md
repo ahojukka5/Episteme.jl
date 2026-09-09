@@ -57,8 +57,9 @@ extension for capabilities that need direct or parallel HDF5 access. See
 [`docs/archive-lifecycle.md`](docs/archive-lifecycle.md),
 [`docs/archive-events.md`](docs/archive-events.md),
 [`docs/portable-documents.md`](docs/portable-documents.md),
-[`docs/archive-checkout.md`](docs/archive-checkout.md), and
-[`docs/archive-purge.md`](docs/archive-purge.md).
+[`docs/archive-checkout.md`](docs/archive-checkout.md),
+[`docs/archive-purge.md`](docs/archive-purge.md), and
+[`docs/capsule-archives.md`](docs/capsule-archives.md).
 
 ## Why shared generic functions avoid name conflicts
 
