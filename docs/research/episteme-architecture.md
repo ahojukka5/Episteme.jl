@@ -67,7 +67,7 @@ Reject **end state (B)** as the locked architecture: a permanently minimal `Oodi
 | Layer | What exists | Where |
 | --- | --- | --- |
 | Introspection generics | `report`, `validate`, `readiness` | `src/introspection.jl` |
-| Semantic tree | `SemanticNode`, `NodeRef`; any Julia value is a legal attribute (#12) | `src/semantic_tree.jl`, `docs/semantic-tree-poc.md` |
+| Semantic tree | `SemanticNode`, `NodeRef`; any Julia value is a legal attribute (#12) | `src/semantic_tree.jl`, `docs/semantic-tree.md` |
 | Local schemas | `NodeSchema`, `AttributeSchema`, `ValidationRule`, `NodeValidationRule` | `src/declarative.jl`, `docs/declarative-contracts.md` |
 | Script contract | `script_node`; stored, never executed | same |
 | Archive identities | `ObjectId`, `RevisionId`, `ContentId`, `RunId`, `WorkflowHeadId`, `SoftwareEnvironmentId`, `ExecutionContextId` | `src/archive_envelope.jl`, `docs/archive-envelope.md` |
@@ -1395,7 +1395,7 @@ These do not block accepting the topology-(A) decision. Commit/execute (former Q
 - [`docs/archive-ownership.md`](../../docs/archive-ownership.md) (#25)
 - [`docs/archive-envelope.md`](../../docs/archive-envelope.md) (#26)
 - [`docs/declarative-contracts.md`](../../docs/declarative-contracts.md)
-- [`docs/semantic-tree-poc.md`](../../docs/semantic-tree-poc.md)
+- [`docs/semantic-tree.md`](../../docs/semantic-tree.md)
 - [`research/jld2-ah5-spike/FINDINGS.md`](../../research/jld2-ah5-spike/FINDINGS.md) (#47)
 - [`src/Episteme.jl`](../../src/Episteme.jl), [`src/archive_envelope.jl`](../../src/archive_envelope.jl), [`src/introspection.jl`](../../src/introspection.jl)
 - Issues [#5](https://github.com/ahojukka5/OodiCore.jl/issues/5), [#12](https://github.com/ahojukka5/OodiCore.jl/issues/12), [#24](https://github.com/ahojukka5/OodiCore.jl/issues/24), [#25](https://github.com/ahojukka5/OodiCore.jl/issues/25), [#26](https://github.com/ahojukka5/OodiCore.jl/issues/26), [#34](https://github.com/ahojukka5/OodiCore.jl/issues/34), [#47](https://github.com/ahojukka5/OodiCore.jl/issues/47), [#48](https://github.com/ahojukka5/OodiCore.jl/issues/48)
