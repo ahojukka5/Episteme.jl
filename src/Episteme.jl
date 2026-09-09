@@ -30,6 +30,10 @@ include("archive_run_history_semantics.jl")
 include("archive_event_history.jl")
 include("archive_event_history_semantics.jl")
 include("capsule_plan.jl")
+include("capsule_archive.jl")
+include("capsule_archive_metadata.jl")
+
+export write_capsule_archive, CapsuleManifest, CapsuleArchiveResult, ArchiveCapsuleInspection
 
 export report, validate, readiness
 export AbstractEpistemeReport, AbstractValidationReport, AbstractReadinessReport

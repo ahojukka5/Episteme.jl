@@ -86,12 +86,12 @@ Verification uses the existing `:metadata`, `:sample`, and `:full` levels.
 revision, requested target, verification level, retention counts,
 classifications, external dependencies, integrity report, and readiness result.
 
-## Next slice
+## Materialization
 
-Once a `CapsulePlan` is valid, the next #35 layer can call #31 compaction and
-write a new JLD2-backed AH5 capsule using the existing schema and integrity
-persistence contracts. That writer must preserve the source archive identity
-and root revision ids and must not mutate the source archive.
+Once a `CapsulePlan` is valid, [`write_capsule_archive`](capsule-archives.md)
+can compact its retained closure and write a standalone metadata-only AH5
+capsule. The writer revalidates the source binding, preserves the source
+identity explicitly, and assigns the new file a distinct archive identity.
 
 Portable-document embedding, software-environment/execution-context manifests,
 and trusted native payload replay remain separate later layers.

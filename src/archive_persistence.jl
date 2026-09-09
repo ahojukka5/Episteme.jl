@@ -44,6 +44,23 @@ function write_archive(args...; kwargs...)
 end
 
 """
+    write_capsule_archive(path, source_graph, plan, schemas;
+                          source_archive_id, namespaces=nothing,
+                          externals=(), profile=nothing, kwargs...)
+
+Materialize a standalone metadata-only AH5 capsule from a valid `CapsulePlan`.
+Revalidate and compact the source, retain its required schemas and external
+declarations, and persist state, run, event, write, log and integrity metadata.
+The new archive identity differs from `source_archive_id`. Scientific payload
+bytes and raw log bytes are not embedded. Existing destinations are refused.
+
+Requires JLD2: run `using JLD2` to activate `EpistemeJLD2Ext`.
+"""
+function write_capsule_archive(args...; kwargs...)
+    throw(_missing_jld2_error("write_capsule_archive"))
+end
+
+"""
     inspect_archive(path) -> ArchiveInspection
     inspect_archive(path, RevisionIntegrityManifest) -> ArchiveIntegrityInspection
     inspect_archive(path, ArchiveStateHistory) -> ArchiveStateHistoryInspection
