@@ -226,109 +226,14 @@ function is_hdf5_container(path::AbstractString)
     end
 end
 
-"""
-    write_archive(path; graph=nothing, namespaces=nothing, schemas=nothing,
-                  externals=(), profile=nothing, kwargs...)
+# The core AH5 `write_archive` and `inspect_archive` are implemented in
+# EpistemeJLD2Ext; the fail-closed owner stubs are in archive_persistence.jl.
+# Everything in this file that shapes, validates, or decodes records is
+# JLD2-free and stays here.
 
-Create a JLD2-backed AH5 file. The path is created by JLD2. Existing
-paths are refused. Domain payloads are not written. Logical metadata is
-validated before the file is created; inspectable groups follow
-`profile.roots`. Records are stored as `plain=true`-safe values.
-"""
-function write_archive(
-    path::AbstractString;
-    graph = nothing,
-    namespaces = nothing,
-    schemas = nothing,
-    externals = ExternalRequirement[],
-    profile = nothing,
-    kwargs...,
-)
-    ispath(path) && throw(ArgumentError("archive already exists: $path"))
-    graph === nothing || graph isa ArchiveGraph || throw(ArgumentError(
-        "graph must be ArchiveGraph or nothing, got $(typeof(graph))",
-    ))
-    namespaces === nothing || namespaces isa NamespaceRegistry || throw(ArgumentError(
-        "namespaces must be NamespaceRegistry or nothing, got $(typeof(namespaces))",
-    ))
-    schemas === nothing || schemas isa SchemaRegistry || throw(ArgumentError(
-        "schemas must be SchemaRegistry or nothing, got $(typeof(schemas))",
-    ))
-    profile_record = profile === nothing ? ArchiveProfile(; kwargs...) : profile
-    profile === nothing || isempty(kwargs) || throw(ArgumentError(
-        "pass either profile= or ArchiveProfile keywords, not both",
-    ))
-    profile_record isa ArchiveProfile || throw(ArgumentError(
-        "profile must be ArchiveProfile, got $(typeof(profile_record))",
-    ))
-    profile_record = _published_profile(profile_record)
-    _refuse_invalid_profile(profile_record)
-    _refuse_invalid_payload(graph, namespaces, schemas)
-
-    objects = graph === nothing ? ArchiveObject[] : graph.objects
-    ns_listings = namespaces === nothing && graph === nothing ?
-        NamespaceListing[] : list_namespaces(objects, namespaces)
-    schema_listings = schemas === nothing ? SchemaListing[] : list_schemas(schemas)
-    history = graph === nothing ? ArchiveHistorySummary() : ArchiveHistorySummary(graph)
-    provenance = graph === nothing ? ArchiveProvenanceSummary() : ArchiveProvenanceSummary(graph)
-    external_values = _typed_vector(ExternalRequirement, externals, "external requirements")
-    roots = profile_record.roots
-
-    JLD2.jldopen(path, "w") do file
-        file[AH5_PROFILE_KEY] = _profile_storage(profile_record)
-        _write_indexed!(file, roots.namespaces, ns_listings, _namespace_listing_storage)
-        _write_indexed!(file, roots.schemas, schema_listings, _schema_listing_storage)
-        file[roots.history] = _history_storage(history)
-        file[roots.provenance] = _provenance_storage(provenance)
-        _write_indexed!(file, roots.externals, external_values, _external_storage)
-    end
-    return path
-end
-
-"""
-    inspect_archive(path) -> ArchiveInspection
-
-Read AH5 profile metadata without domain packages or payload load.
-Forensic JLD2 `plain=true` is the default reader. The tiny profile is
-validated first; unsupported versions or required features return an
-identified archive without decoding remaining roots. Full Julia-native
-object reconstruction is not this API.
-"""
-function inspect_archive(path::AbstractString)
-    diagnostics = DiagnosticMessage[]
-    empty = _empty_inspection(path, diagnostics)
-    if !ispath(path)
-        push!(diagnostics, error_diagnostic(
-            :missing_archive,
-            "archive path does not exist: $path";
-            path = String(path),
-        ))
-        return empty
-    end
-    if !is_hdf5_container(path)
-        push!(diagnostics, error_diagnostic(
-            :not_ah5_archive,
-            "file is not an HDF5-format AH5 archive";
-            path = String(path),
-        ))
-        return empty
-    end
-
-    try
-        return JLD2.jldopen(path, "r"; plain = true) do file
-            return _inspect_open_archive(path, file, diagnostics)
-        end
-    catch err
-        push!(diagnostics, error_diagnostic(
-            :not_ah5_archive,
-            "file is HDF5-format but has no readable AH5 profile";
-            path = String(path),
-            reason = sprint(showerror, err),
-        ))
-        return empty
-    end
-end
-
+# `is_ah5_archive` needs no JLD2 API of its own, but it answers the question by
+# reading the profile, so without the extension it fails closed through the
+# `inspect_archive` stub rather than reporting a misleading `false`.
 function is_ah5_archive(path::AbstractString)
     inspection = inspect_archive(path)
     return inspection.identified

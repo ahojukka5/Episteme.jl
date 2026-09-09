@@ -74,7 +74,7 @@ Allowed edges:
 
 ```text
 domain package     ->  Episteme     (hard or weak, package choice)
-Episteme           ->  JLD2         (hard, v1 persistence)
+Episteme           ->  JLD2         (weak; EpistemeJLD2Ext, v1 persistence)
 EpistemeHDF5Ext    ->  Episteme + HDF5.jl   (later; bulk /data, MPI)
 EpistemeXDMFExt    ->  Episteme + XML       (optional view layer)
 EpistemeMPIExt     ->  Episteme + MPI       (optional; typically with HDF5Ext)
@@ -208,12 +208,17 @@ Episteme = "7c15cd61-9c6a-4671-bc94-9960963998ac"
 ```
 
 ```julia
-using Episteme          # identities, tree, schemas, JLD2-backed AH5 profile
+using Episteme          # identities, tree, schemas: stdlib only
+using Episteme, JLD2    # AH5 profile I/O; loads EpistemeJLD2Ext
 # later HPC: using Episteme, HDF5   loads EpistemeHDF5Ext
 ```
 
 Provider-free cores still must not load CAD, mesh, FEM, MPI, or a vendor
-SDK. `using Episteme` loads JLD2; that is the accepted v1 product.
+SDK. JLD2 is a `[weakdeps]` package, so `using Episteme` loads no
+non-stdlib code and a consumer that calls no archive API pays nothing for
+the persistence track. `using JLD2` activates `EpistemeJLD2Ext`, which owns
+every writer and reader that opens a file; without it those entry points
+fail closed with an error naming the function.
 
 ## Schema and codec registration
 
