@@ -20,8 +20,9 @@ Episteme.jl = semantics + schemas + history/provenance
 ```
 
 The JLD2-backed `.ah5` profile (`write_archive` / `inspect_archive`) is in
-this package. HDF5.jl remains later optional extension work for
-direct/bulk/parallel HDF5 needs.
+this package, behind the `EpistemeJLD2Ext` package extension: the archive API
+becomes available when the caller runs `using JLD2`. HDF5.jl remains later
+optional extension work for direct/bulk/parallel HDF5 needs.
 
 See [`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md),
 [`docs/archive-ownership.md`](docs/archive-ownership.md), and
@@ -100,8 +101,13 @@ science into the shared layer.
 
 Do not add domain-specific simulation, geometry, meshing, solver, accelerator,
 visualization, device, or model-serving stacks merely because one consumer uses
-them. JLD2 is part of the accepted persistence story. HDF5.jl and MPI remain
-optional future extensions for bulk and parallel archive I/O.
+them. JLD2 is part of the accepted persistence story, but it is a `[weakdeps]`
+package: `[deps]` is stdlib only (`Dates`, `SHA`, `UUIDs`), and every AH5 entry
+point that opens a file lives in `ext/EpistemeJLD2Ext*.jl` with a fail-closed
+stub in `src/archive_persistence.jl`. Keep it that way. A downstream package
+that only wants the shared semantics must not inherit the archive track's
+dependency weight. HDF5.jl and MPI remain optional future extensions for bulk
+and parallel archive I/O.
 
 Dependencies must flow one way: domain packages may depend on Episteme;
 Episteme must not depend on domain packages.

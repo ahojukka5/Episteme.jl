@@ -620,66 +620,8 @@ function _read_run_history(file)
     return ArchiveRunHistory(runs)
 end
 
-"""
-    write_run_archive(path, graph; kwargs...)
-
-Create an AH5 archive with both authoritative state-history and run/activity
-provenance records. Event/write/log provenance remains a later extension.
-"""
-function write_run_archive(
-    path::AbstractString,
-    graph::ArchiveGraph;
-    namespaces = nothing,
-    schemas = nothing,
-    externals = ExternalRequirement[],
-    profile = nothing,
-    kwargs...,
-)
-    ispath(path) && throw(ArgumentError("archive already exists: $path"))
-    reqs = _externals_vector(externals)
-    state = _state_history_from_graph(graph)
-    runs = RunRecord[ordered_runs(graph)...]
-    ns_listings = list_namespaces(graph, namespaces)
-    schema_listings = schemas === nothing ? SchemaListing[] : list_schemas(schemas)
-    diagnostics = _validate_state_history(
-        state;
-        externals = reqs,
-        namespaces = ns_listings,
-        schemas = schema_listings,
-    )
-    append!(diagnostics, _validate_run_history(
-        state,
-        runs;
-        externals = reqs,
-        namespaces = ns_listings,
-        schemas = schema_listings,
-    ))
-    any(diagnostic -> diagnostic.severity === :error, diagnostics) && throw(ArgumentError(
-        "refusing to persist invalid run history: $(Tuple(d.code for d in diagnostics if d.severity === :error))",
-    ))
-
-    profile_record = _profile_with_run_history(profile, kwargs)
-    _refuse_run_history_root_collision(profile_record)
-    created = false
-    try
-        write_state_archive(
-            path,
-            graph;
-            namespaces = namespaces,
-            schemas = schemas,
-            externals = reqs,
-            profile = profile_record,
-        )
-        created = true
-        JLD2.jldopen(path, "r+") do file
-            _write_run_history!(file, ArchiveRunHistory(runs))
-        end
-    catch
-        created && ispath(path) && rm(path; force = true)
-        rethrow()
-    end
-    return path
-end
+# `write_run_archive` for this AH5 layer is implemented in EpistemeJLD2Ext;
+# the fail-closed owner stub is in archive_persistence.jl.
 
 function _empty_run_history_inspection(path, identified, declared, state, externals, diagnostics)
     valid = identified && !any(diagnostic -> diagnostic.severity === :error, diagnostics)
@@ -689,82 +631,8 @@ function _empty_run_history_inspection(path, identified, declared, state, extern
     )
 end
 
-"""
-    inspect_archive(path, ArchiveRunHistory) -> ArchiveRunHistoryInspection
-
-Forensically reconstruct state plus authoritative run/activity/restart
-provenance. The existing revision `inspect` and readiness contracts are reused.
-"""
-function inspect_archive(path::AbstractString, ::Type{ArchiveRunHistory})
-    state_view = inspect_archive(path, ArchiveStateHistory)
-    diagnostics = copy(state_view.diagnostics)
-    if !state_view.identified
-        return _empty_run_history_inspection(
-            path, false, false, nothing, state_view.externals, diagnostics,
-        )
-    end
-    if !isvalid(state_view)
-        return _empty_run_history_inspection(
-            path, true, false, nothing, state_view.externals, diagnostics,
-        )
-    end
-
-    core = inspect_archive(path)
-    declared = core.profile !== nothing && AH5_RUN_HISTORY_FEATURE in core.profile.features
-    declared || return _empty_run_history_inspection(
-        path, true, false, state_view.state, state_view.externals, diagnostics,
-    )
-    state_view.state === nothing && push!(diagnostics, error_diagnostic(
-        :run_history_state_missing,
-        "AH5 run-history feature requires authoritative state-history records",
-    ))
-    any(d -> d.severity === :error, diagnostics) && return _empty_run_history_inspection(
-        path, true, true, nothing, state_view.externals, diagnostics,
-    )
-
-    history = nothing
-    try
-        JLD2.jldopen(path, "r"; plain = true) do file
-            _jld2_get(file, _count_key(AH5_RUN_HISTORY_KEY)) === nothing && throw(ArgumentError(
-                "AH5 profile declares run history but $(AH5_RUN_HISTORY_KEY)/count is missing",
-            ))
-            history = _read_run_history(file)
-        end
-        append!(diagnostics, _validate_run_history(
-            state_view.state,
-            history.runs;
-            externals = state_view.externals,
-            namespaces = core.namespaces,
-            schemas = core.schemas,
-        ))
-        core.history.runs == length(history.runs) || push!(diagnostics, error_diagnostic(
-            :run_history_summary_mismatch,
-            "run-history record count does not match AH5 history summary";
-            summary = core.history.runs,
-            records = length(history.runs),
-        ))
-    catch err
-        push!(diagnostics, error_diagnostic(
-            :corrupt_run_history,
-            "AH5 run-history metadata is corrupt";
-            path = String(path),
-            reason = sprint(showerror, err),
-        ))
-        history = nothing
-    end
-
-    valid = history !== nothing && !any(d -> d.severity === :error, diagnostics)
-    return ArchiveRunHistoryInspection(
-        String(path),
-        true,
-        true,
-        valid,
-        valid ? state_view.state : nothing,
-        valid ? history.runs : RunRecord[],
-        copy(state_view.externals),
-        diagnostics,
-    )
-end
+# `inspect_archive` for this AH5 layer is implemented in EpistemeJLD2Ext;
+# the fail-closed owner stub is in archive_persistence.jl.
 
 """
     reconstruct_graph(view::ArchiveRunHistoryInspection) -> ArchiveGraph

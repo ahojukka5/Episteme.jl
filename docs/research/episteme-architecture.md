@@ -1,5 +1,25 @@
 # Episteme Architecture Study
 
+## Dependency amendment — 2026-09-09
+
+The current loading contract supersedes this study's original D5 decision:
+JLD2 is a weak dependency, and `EpistemeJLD2Ext` owns AH5 file I/O within
+Episteme. `using Episteme` loads only stdlib dependencies; callers activate
+persistence explicitly with `using JLD2`. Without activation, archive readers
+and writers fail with an actionable error and do not create files.
+
+AH5 remains Episteme's persistence profile. Semantics, schemas, identities,
+history records, validation, and record encoding remain in the same package.
+This loading boundary does not introduce another contracts package, another
+archive package, or a second storage backend. HDF5/MPI extensions and the
+execution orchestration runtime remain later work.
+
+The dated study below preserves the original decision and its rationale,
+including superseded hard-JLD2 and no-extension statements. For the current
+dependency graph and activation instructions, use
+[Archive ownership](../archive-ownership.md) and
+[AH5 profile](../archive-profile.md).
+
 | Field | Value |
 | --- | --- |
 | Title | Long-term architecture for Episteme: a semantic runtime for scientific research |
