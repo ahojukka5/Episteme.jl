@@ -28,6 +28,10 @@ external row records `verified_level` and `bytes_checked`, preserving #73's
 rule that a metadata or sampled check must never be presented as full-byte
 verification.
 
+`report(manifest)` includes `external_bytes_checked`, the sum of the external
+rows' byte counts. It is zero for an empty manifest or a revision containing
+only embedded objects and schemas; those cases do not require external I/O.
+
 ## Schema integrity
 
 Each exact schema referenced by selected objects produces one schema row. Its
