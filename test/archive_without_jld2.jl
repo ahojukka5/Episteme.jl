@@ -22,6 +22,8 @@
             () -> inspect_archive(path, CapsuleManifest),
             () -> inspect_archive(path, SoftwareEnvironmentRegistry),
             () -> write_archive(path; software_environments=SoftwareEnvironmentRegistry()),
+            () -> inspect_archive(path, ExecutionContextRegistry),
+            () -> write_archive(path; execution_contexts=ExecutionContextRegistry()),
         )
             err = try
                 operation()

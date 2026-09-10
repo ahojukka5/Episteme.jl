@@ -10,6 +10,7 @@ function Episteme.write_state_archive(
     externals = ExternalRequirement[],
     profile = nothing,
     software_environments = nothing,
+    execution_contexts = nothing,
     kwargs...,
 )
     ispath(path) && throw(ArgumentError("archive already exists: $path"))
@@ -39,6 +40,7 @@ function Episteme.write_state_archive(
             externals = reqs,
             profile = profile_record,
             software_environments = software_environments,
+            execution_contexts = execution_contexts,
         )
         created = true
         JLD2.jldopen(path, "r+") do file

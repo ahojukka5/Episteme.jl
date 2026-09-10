@@ -60,7 +60,8 @@ extension for capabilities that need direct or parallel HDF5 access. See
 [`docs/archive-checkout.md`](docs/archive-checkout.md),
 [`docs/archive-purge.md`](docs/archive-purge.md),
 [`docs/capsule-archives.md`](docs/capsule-archives.md), and
-[`docs/software-environments.md`](docs/software-environments.md).
+[`docs/software-environments.md`](docs/software-environments.md), and
+[`docs/execution-contexts.md`](docs/execution-contexts.md).
 
 ## Why shared generic functions avoid name conflicts
 

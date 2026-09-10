@@ -80,5 +80,6 @@ include("EpistemeJLD2Ext_archive_run_history.jl")
 include("EpistemeJLD2Ext_archive_event_history.jl")
 include("EpistemeJLD2Ext_capsule_archive.jl")
 include("EpistemeJLD2Ext_archive_software_environments.jl")
+include("EpistemeJLD2Ext_archive_execution_contexts.jl")
 
 end # module EpistemeJLD2Ext

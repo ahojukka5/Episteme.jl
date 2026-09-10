@@ -21,6 +21,7 @@ include("archive_purge.jl")
 include("portable_document.jl")
 include("content_integrity.jl")
 include("software_environment.jl")
+include("execution_context.jl")
 include("external_integrity.jl")
 include("revision_integrity.jl")
 include("archive_integrity_persistence.jl")
@@ -34,6 +35,7 @@ include("capsule_plan.jl")
 include("capsule_archive.jl")
 include("capsule_archive_metadata.jl")
 include("archive_software_environments.jl")
+include("archive_execution_contexts.jl")
 
 export write_capsule_archive, CapsuleManifest, CapsuleArchiveResult, ArchiveCapsuleInspection
 
@@ -51,6 +53,8 @@ export AbstractArchiveId, ObjectId, RevisionId, ContentId, RunId, WorkflowHeadId
 export SoftwareEnvironmentId, ExecutionContextId
 export SoftwareComponent, SoftwareEnvironment
 export SoftwareEnvironmentRegistry, find_software_environment
+export ExecutionContext, ExecutionContextRegistry, find_execution_context
+export ArchiveExecutionContextInspection
 export ArchiveSoftwareEnvironmentInspection
 export DocumentId, PlanId, ActivityId, AgentId
 export ArchiveNamespace, SchemaRef, KnownSchema, ProvenanceRefs

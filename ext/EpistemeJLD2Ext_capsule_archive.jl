@@ -2,7 +2,7 @@ function Episteme.write_capsule_archive(
     path::AbstractString, source::ArchiveGraph, plan::CapsulePlan, schemas::SchemaRegistry;
     source_archive_id::AbstractString, namespaces = nothing,
     externals = ExternalRequirement[], profile = nothing,
-    software_environments = nothing, kwargs...,
+    software_environments = nothing, execution_contexts = nothing, kwargs...,
 )
     (ispath(path) || islink(path)) && throw(ArgumentError("archive already exists: $path"))
     compacted = Episteme._compact_capsule_source(source, plan, schemas; externals = externals)
@@ -23,13 +23,17 @@ function Episteme.write_capsule_archive(
         write_event_archive(staged_path, graph;
             namespaces = namespaces, schemas = retained_schemas,
             externals = retained_externals, profile = record,
-            software_environments = software_environments)
+            software_environments = software_environments, execution_contexts = execution_contexts)
         JLD2.jldopen(staged_path, "r+") do file
             Episteme._write_indexed!(file, Episteme.AH5_INTEGRITY_KEY, integrity,
                 Episteme._integrity_manifest_storage)
             file[Episteme.AH5_CAPSULE_KEY] = Episteme._capsule_manifest_storage(manifest)
         end
         view = inspect_archive(staged_path, CapsuleManifest)
+        if execution_contexts !== nothing
+            isvalid(inspect_archive(staged_path, ExecutionContextRegistry)) ||
+                throw(ArgumentError("new capsule failed execution context validation"))
+        end
         if software_environments !== nothing
             isvalid(inspect_archive(staged_path, SoftwareEnvironmentRegistry)) ||
                 throw(ArgumentError("new capsule failed software environment validation"))
