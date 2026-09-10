@@ -1,3 +1,18 @@
+@testset "event payload empty collections survive plain storage" begin
+    mktempdir() do dir
+        run = RunRecord(RunId("empty-payload"))
+        for (index, payload) in enumerate(((;), (nested=(;), values=(), data=Int[])))
+            event = EventRecord(:empty, run.id; sequence=0, source="test", payload)
+            graph = ArchiveGraph(ArchiveObject[]; runs=[run], events=[event])
+            path = joinpath(dir, "$index.ah5")
+            write_event_archive(path, graph)
+            view = inspect_archive(path, ArchiveEventHistory)
+            @test isvalid(view)
+            @test canonical_content_id(only(view.events).payload) == canonical_content_id(payload)
+        end
+    end
+end
+
 @testset "GitHub credential shapes cannot enter event archives" begin
     # Synthetic fixtures only; never use live credentials in regression tests.
     candidates = [prefix * repeat("A", 36) for prefix in
