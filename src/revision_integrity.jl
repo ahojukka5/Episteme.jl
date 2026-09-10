@@ -404,7 +404,8 @@ end
 
 function report(manifest::RevisionIntegrityManifest)
     external_bytes = sum(
-        row.bytes_checked for row in manifest.dependencies if row.kind === :external
+        (row.bytes_checked for row in manifest.dependencies if row.kind === :external);
+        init = Int64(0),
     )
     return ObjectReport(
         :revision_integrity,

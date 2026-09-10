@@ -26,6 +26,10 @@
     @test schema_row.schema == SchemaRef(:delone, "mesh", "1.0.0")
     @test startswith(schema_row.content_id.value, "sha256:")
     @test schema_row.verified_level === :none
+    description = report(result)
+    @test description.subject === :revision_integrity
+    @test description.metadata.external_bytes_checked === Int64(0)
+    @test description.metadata.dependencies == to_namedtuple(result).dependencies
 
     same = integrity_manifest(ArchiveGraph([mesh]; revisions = [RevisionRecord(r1)]), r1, registry)
     @test to_namedtuple(result).dependencies == to_namedtuple(same).dependencies
@@ -128,6 +132,7 @@ end
         @test external.verified_level === :sample
         @test external.bytes_checked > 0
         @test external.bytes_checked < record.size
+        @test report(sampled).metadata.external_bytes_checked == external.bytes_checked
 
         no_record = integrity_manifest(
             graph,
@@ -153,4 +158,16 @@ end
         missing_external = only(row for row in missing.dependencies if row.kind === :external)
         @test missing_external.verified_level === :none
     end
+end
+
+@testset "empty revision integrity reports zero external bytes" begin
+    manifest = RevisionIntegrityManifest(
+        RevisionId("empty-revision"), :metadata, true,
+        IntegrityDependencyRow[], DiagnosticMessage[],
+    )
+    description = report(manifest)
+    @test description.metadata.external_bytes_checked === Int64(0)
+    @test description.metadata.dependencies == ()
+    @test isempty(description.artifacts)
+    @test isempty(description.diagnostics)
 end
