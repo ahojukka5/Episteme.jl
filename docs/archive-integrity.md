@@ -19,6 +19,8 @@ must not claim to have inspected the integrity records.
 The optional records are requested explicitly:
 
 ```julia
+using Episteme, JLD2
+
 core = inspect_archive(path)
 integrity = inspect_archive(path, RevisionIntegrityManifest)
 ```
@@ -67,5 +69,6 @@ does not recompute hashes or re-open external artifacts. A fresh verification
 still requires rebuilding or checking the revision integrity manifest at the
 requested strength.
 
-Payload persistence, reproduction-capsule packaging, migrations, and digital
-signatures remain separate layers.
+[Metadata capsules](capsule-archives.md) can publish this evidence together
+with selected history and schema records. Scientific payload packaging,
+semantic migrations, and digital signatures remain separate work.

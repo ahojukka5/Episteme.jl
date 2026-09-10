@@ -45,6 +45,9 @@ observed byte mismatch (`:external_sample_mismatch` or
 
 ## Scope boundary
 
-This slice verifies local `ArtifactRef.path` files only. It does not fetch
-remote URIs, persist integrity manifests in AH5, or aggregate a complete
-revision/capsule dependency-integrity report. Those remain later #42 work.
+These functions verify local `ArtifactRef.path` files only; they do not fetch
+remote URIs. [Revision integrity](revision-integrity.md) aggregates their
+results with the selected revision's object and schema dependencies.
+[AH5 integrity persistence](archive-integrity.md) stores successful manifests,
+and [capsule planning](capsule-planning.md) uses that evidence for its selected
+closure. Reading persisted evidence does not re-verify current external bytes.
