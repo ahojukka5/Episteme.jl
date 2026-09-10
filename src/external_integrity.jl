@@ -205,6 +205,10 @@ function verify_external(
     level::Symbol = :full,
 )
     requested = _verification_level(level)
+    record_report = validate(record)
+    if !isvalid(record_report)
+        return _external_report(record, requested, :none, false, 0, record_report.diagnostics)
+    end
     diagnostics = DiagnosticMessage[]
     path = record.artifact.path
     if path === nothing
@@ -286,12 +290,20 @@ function validate(record::ExternalIntegrityRecord)
         "external integrity sample_bytes must be positive";
         object_id = record.object_id.value,
     ))
+    if (record.size > 0 && isempty(record.sample_offsets)) ||
+       (record.size == 0 && !isempty(record.sample_offsets))
+        push!(diagnostics, error_diagnostic(
+            :invalid_external_integrity,
+            "external sample ranges must be nonempty exactly when the file is nonempty";
+            object_id = record.object_id.value,
+        ))
+    end
     previous = Int64(-1)
     for offset in record.sample_offsets
-        if offset < 0 || offset > record.size || offset <= previous
+        if offset < 0 || offset >= record.size || offset <= previous
             push!(diagnostics, error_diagnostic(
                 :invalid_external_integrity,
-                "external sample offsets must be strictly increasing and within the file";
+                "external sample offsets must be strictly increasing and before end of file";
                 object_id = record.object_id.value,
                 offset = offset,
             ))
