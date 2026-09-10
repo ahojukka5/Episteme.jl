@@ -38,3 +38,34 @@
     second_run = RunRecord(RunId("second"); software_environment=environment.id)
     @test first_run.software_environment == second_run.software_environment == environment.id
 end
+
+@testset "portable software environment registry" begin
+    component = SoftwareComponent("library", "Released library"; version="1.0.0",
+        source_identity="git-tree-sha1:" * repeat("d", 40), dirty=false,
+        dependencies=(), features=())
+    first = SoftwareEnvironment((component,); julia_version="1.12.7")
+    second = SoftwareEnvironment((component,); julia_version="1.11.9")
+    records = [second, first, first]
+    registry = SoftwareEnvironmentRegistry(records)
+    empty!(records)
+    @test length(registry.environments) == 2
+    @test find_software_environment(registry, first.id) === first
+    @test find_software_environment(registry, SoftwareEnvironmentId("missing")) === nothing
+    @test to_namedtuple(registry) == to_namedtuple(SoftwareEnvironmentRegistry((first, second)))
+    restored = from_namedtuple(SoftwareEnvironmentRegistry, to_namedtuple(registry))
+    @test to_namedtuple(restored) == to_namedtuple(registry)
+    @test find_software_environment(restored, first.id).components[1].repository === nothing
+    @test isvalid(validate(restored))
+    @test !isempty(report(restored).diagnostics)
+    @test isempty(SoftwareEnvironmentRegistry().environments)
+    portable = to_namedtuple(first)
+    @test_throws ArgumentError from_namedtuple(SoftwareEnvironment,
+        merge(portable, (; julia_version="1.13.0")))
+    @test_throws ArgumentError from_namedtuple(SoftwareEnvironment,
+        merge(portable, (; id=second.id.value)))
+    @test_throws ArgumentError from_namedtuple(SoftwareEnvironment,
+        merge(portable, (; format="episteme-software-environment-v2")))
+    altered = merge(portable.components[1], (; dirty=true))
+    @test_throws ArgumentError from_namedtuple(SoftwareEnvironment,
+        merge(portable, (; components=(altered,))))
+end
