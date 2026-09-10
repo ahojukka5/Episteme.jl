@@ -32,6 +32,12 @@ A successful metadata or sample check is intentionally **not** reported as a
 full verification. Same-size changes outside sampled ranges can pass a sample
 check; a full check detects them.
 
+Every verification level first validates the expected record. A nonempty file
+requires at least one sample range; offsets must increase strictly and start
+before end of file, and the sample block size must be positive. An empty file
+has no sample ranges. Malformed records return `:invalid_external_integrity`,
+verified level `:none`, and zero bytes checked before accessing the file.
+
 Missing external data (`:external_artifact_missing`) is distinct from an
 observed byte mismatch (`:external_sample_mismatch` or
 `:external_hash_mismatch`) and from a size mismatch
