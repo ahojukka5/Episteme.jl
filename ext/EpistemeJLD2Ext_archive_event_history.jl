@@ -9,6 +9,7 @@ function Episteme.write_event_archive(
     schemas = nothing,
     externals = ExternalRequirement[],
     profile = nothing,
+    software_environments = nothing,
     kwargs...,
 )
     ispath(path) && throw(ArgumentError("archive already exists: $path"))
@@ -56,6 +57,7 @@ function Episteme.write_event_archive(
             schemas = schemas,
             externals = reqs,
             profile = profile_record,
+            software_environments = software_environments,
         )
         created = true
         JLD2.jldopen(path, "r+") do file

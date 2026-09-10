@@ -86,8 +86,9 @@ end
 """
     SoftwareEnvironmentId(value)
 
-Reference to an immutable software-environment object owned by issue #37.
-Episteme does not store the manifest here.
+Reference to an immutable `SoftwareEnvironment` record. The id can be shared
+by many run and revision provenance records; `SoftwareEnvironmentRegistry`
+stores the manifests separately.
 """
 struct SoftwareEnvironmentId <: AbstractArchiveId
     value::String

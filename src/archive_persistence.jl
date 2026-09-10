@@ -23,7 +23,7 @@ end
 
 """
     write_archive(path; graph=nothing, namespaces=nothing, schemas=nothing,
-                  externals=(), profile=nothing, kwargs...)
+                  externals=(), profile=nothing, software_environments=nothing, kwargs...)
     write_archive(path, manifest::RevisionIntegrityManifest; kwargs...)
     write_archive(path, manifests::AbstractVector{<:RevisionIntegrityManifest}; kwargs...)
 
@@ -37,6 +37,10 @@ successful revision integrity manifests under the optional
 `episteme/integrity` feature. If the integrity append fails, the
 newly-created file is removed rather than published partially.
 
+Pass `software_environments=registry` to persist shared immutable software
+records. Supplied registries must cover object, run and staged references.
+Omitting the registry preserves historical unknown provenance.
+
 Requires JLD2: run `using JLD2` to load `EpistemeJLD2Ext`.
 """
 function write_archive(args...; kwargs...)
@@ -46,7 +50,8 @@ end
 """
     write_capsule_archive(path, source_graph, plan, schemas;
                           source_archive_id, namespaces=nothing,
-                          externals=(), profile=nothing, kwargs...)
+                          externals=(), profile=nothing,
+                          software_environments=nothing, kwargs...)
 
 Materialize a standalone metadata-only AH5 capsule from a valid `CapsulePlan`.
 Revalidate and compact the source, retain its required schemas and external
@@ -66,6 +71,7 @@ end
     inspect_archive(path, ArchiveStateHistory) -> ArchiveStateHistoryInspection
     inspect_archive(path, ArchiveRunHistory) -> ArchiveRunHistoryInspection
     inspect_archive(path, ArchiveEventHistory) -> ArchiveEventHistoryInspection
+    inspect_archive(path, SoftwareEnvironmentRegistry) -> ArchiveSoftwareEnvironmentInspection
 
 Read AH5 profile metadata without domain packages or payload load.
 Forensic JLD2 `plain=true` is the default reader. The tiny profile is
@@ -78,7 +84,9 @@ manifests, authoritative state history, run/activity/restart provenance, or
 event/write/log provenance — and each root is decoded only when the profile
 explicitly declares its feature. Old archives without an optional feature
 remain valid and return empty records. Scientific payloads and raw log bytes
-are never loaded.
+are never loaded. Software environment inspection verifies recorded content
+identities and authoritative provenance references. Missing historical records
+produce an explicit unknown-provenance diagnostic.
 
 Requires JLD2: run `using JLD2` to load `EpistemeJLD2Ext`.
 """
