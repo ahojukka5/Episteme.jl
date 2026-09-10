@@ -23,7 +23,8 @@ end
 
 """
     write_archive(path; graph=nothing, namespaces=nothing, schemas=nothing,
-                  externals=(), profile=nothing, software_environments=nothing, kwargs...)
+                  externals=(), profile=nothing, software_environments=nothing,
+                  execution_contexts=nothing, kwargs...)
     write_archive(path, manifest::RevisionIntegrityManifest; kwargs...)
     write_archive(path, manifests::AbstractVector{<:RevisionIntegrityManifest}; kwargs...)
 
@@ -40,6 +41,11 @@ newly-created file is removed rather than published partially.
 Pass `software_environments=registry` to persist shared immutable software
 records. Supplied registries must cover object, run and staged references.
 Omitting the registry preserves historical unknown provenance.
+
+Pass `execution_contexts=registry` for explicit hardware/numerical/RNG facts.
+Its registry must cover object, run, staged, restart and event context references.
+Use `inspect_archive(path, ExecutionContextRegistry)` to inspect and validate
+these records independently of scientific payloads.
 
 Requires JLD2: run `using JLD2` to load `EpistemeJLD2Ext`.
 """

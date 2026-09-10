@@ -232,6 +232,8 @@ struct DummyObject end
     include("archive_external_preflight.jl")
     include("content_integrity.jl")
     include("software_environment.jl")
+    include("execution_context.jl")
+    include("archive_execution_contexts.jl")
     include("revision_integrity.jl")
     include("archive_integrity_persistence.jl")
     include("archive_integrity_binding.jl")
@@ -241,5 +243,6 @@ struct DummyObject end
     include("capsule_archive_provenance.jl")
     include("archive_software_environment_integrity.jl")
     include("archive_software_environment_staged.jl")
+    include("archive_execution_context_coverage.jl")
     include("archive_persistence_extension.jl")
 end

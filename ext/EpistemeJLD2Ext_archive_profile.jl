@@ -14,6 +14,7 @@ function Episteme.write_archive(
     externals = ExternalRequirement[],
     profile = nothing,
     software_environments = nothing,
+    execution_contexts = nothing,
     kwargs...,
 )
     ispath(path) && throw(ArgumentError("archive already exists: $path"))
@@ -42,6 +43,14 @@ function Episteme.write_archive(
     elseif Episteme.AH5_SOFTWARE_ENVIRONMENTS_FEATURE in profile_record.features
         throw(ArgumentError("declared software environment feature requires a registry"))
     end
+    if execution_contexts !== nothing
+        execution_contexts isa ExecutionContextRegistry || throw(ArgumentError(
+            "execution_contexts must be ExecutionContextRegistry or nothing"))
+        profile_record = Episteme._execution_profile(profile_record)
+        Episteme._refuse_missing_execution_contexts(graph, execution_contexts)
+    elseif Episteme.AH5_EXECUTION_CONTEXTS_FEATURE in profile_record.features
+        throw(ArgumentError("declared execution context feature requires a registry"))
+    end
     _refuse_invalid_profile(profile_record)
     _refuse_invalid_payload(graph, namespaces, schemas)
 
@@ -63,6 +72,9 @@ function Episteme.write_archive(
         _write_indexed!(file, roots.externals, external_values, _external_storage)
         if software_environments !== nothing
             Episteme._write_software_environments!(file, software_environments)
+        end
+        if execution_contexts !== nothing
+            Episteme._write_execution_contexts!(file, execution_contexts)
         end
     end
     return path
