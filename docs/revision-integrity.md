@@ -42,8 +42,12 @@ The selected schema definition is validated before hashing, and object/schema
 namespace UUID disagreement fails closed. A missing exact schema is distinct
 from a missing object or unavailable external artifact.
 
-## Deliberate non-goals
+## Persistence and capsules
 
-This slice does not yet persist the integrity manifest into AH5 and does not
-package a reproduction capsule. Those are the next layers after #75; migration
-execution and signatures remain separate concerns.
+[AH5 integrity persistence](archive-integrity.md) stores clean, successful
+manifests through the JLD2 extension. Inspection reads the recorded result;
+fresh verification requires checking the current dependencies again.
+[Capsule planning](capsule-planning.md) and
+[metadata capsule publication](capsule-archives.md) consume this evidence.
+Published metadata capsules do not embed scientific payload bytes or promise
+execution readiness. Migration execution and signatures remain separate concerns.

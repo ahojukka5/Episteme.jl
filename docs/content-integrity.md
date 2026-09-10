@@ -1,10 +1,10 @@
 # Canonical logical content identity
 
-This is the first implementation slice of issue #42, tracked by #71. It
-defines domain-neutral canonical hashing for shared Episteme metadata and
-portable logical values. External-file verification, integrity manifests,
-and `:metadata` / `:sample` / `:full` verification policies remain later
-#42 slices.
+Episteme provides domain-neutral canonical hashing for shared metadata and
+portable logical values. This guide describes logical content identity;
+[external-file verification](external-integrity.md),
+[revision dependency manifests](revision-integrity.md), and
+[AH5 integrity persistence](archive-integrity.md) build on that contract.
 
 ## Identity model
 
@@ -64,12 +64,18 @@ migration/replacement relations. Package release version and namespace display
 name are excluded because they are provenance/human labels rather than schema
 content.
 
-## Deliberate non-goals of this slice
+## Verification and persistence
 
-- hashing external authoritative files;
-- persisting integrity manifests in AH5;
-- revision/capsule dependency verification;
-- verification cost policies;
-- digital signatures or PKI.
+Use `capture_external_integrity` and `verify_external` for authoritative local
+files. Their explicit `:metadata`, `:sample`, and `:full` levels report the
+strength and byte cost actually established. A logical metadata hash alone
+does not verify the external bytes that metadata describes.
 
-Those remain under parent issue #42.
+`integrity_manifest` checks a selected revision's dependency closure. Successful
+manifests can be persisted in AH5 through the JLD2 extension; reading a stored
+result does not repeat the verification. [Metadata capsules](capsule-archives.md)
+can retain this evidence, but do not embed scientific payload bytes or establish
+execution readiness.
+
+Semantic migration chains remain tracked by issue #41. Digital signatures and
+PKI are outside the content-integrity contract in issue #42.
