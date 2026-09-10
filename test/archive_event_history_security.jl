@@ -1,3 +1,35 @@
+@testset "GitHub credential shapes cannot enter event archives" begin
+    # Synthetic fixtures only; never use live credentials in regression tests.
+    candidates = [prefix * repeat("A", 36) for prefix in
+        ("ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_")]
+    push!(candidates, "ghs_12345_" * repeat("A", 12) * "." * repeat("B", 12))
+    for candidate in candidates
+        graph, _, _ = _event_history_fixture()
+        run = only(graph.runs)
+        event = EventRecord(:credential_probe, run.id;
+            sequence = 1, source = "test", message = "received " * candidate)
+        @test !isvalid(validate(event))
+        @test !occursin(candidate, repr(validate(event)))
+        nested = EventRecord(:credential_probe, run.id;
+            sequence = 1, source = "test",
+            payload = (details = (values = [candidate],),))
+        invalid_graph = ArchiveGraph(graph.objects;
+            heads = graph.heads, revisions = graph.revisions, runs = graph.runs,
+            events = [nested])
+        mktempdir() do dir
+            path = joinpath(dir, "credential.ah5")
+            @test_throws ArgumentError write_event_archive(path, invalid_graph;
+                schemas = SchemaRegistry([_mesh_def()]))
+            @test !ispath(path)
+        end
+    end
+    for message in ("GitHub uses ghp_ and github_pat_ prefixes", "commit " * repeat("a", 40))
+        event = EventRecord(:note, RunId("run"); sequence = 1,
+            source = "test", message = message)
+        @test isvalid(validate(event))
+    end
+end
+
 @testset "event history rejects credential-like writer tokens" begin
     mktempdir() do dir
         graph, _, _ = _event_history_fixture()
