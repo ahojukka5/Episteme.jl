@@ -197,6 +197,13 @@ function _validate_event_payload_persistence!(diagnostics, event::EventRecord)
     return diagnostics
 end
 
+# Plain JLD2 reads can omit zero-size tuple fields. Persist portable storage
+# sequences as vectors so empty records/tuples/arrays retain their structure.
+_event_payload_jld2_storage(value) = value
+_event_payload_jld2_storage(value::Tuple) = Any[_event_payload_jld2_storage(item) for item in value]
+_event_payload_jld2_storage(value::NamedTuple) =
+    (; (key => _event_payload_jld2_storage(item) for (key, item) in pairs(value))...)
+
 function _event_payload_storage(event::EventRecord)
     captured, ok, diagnostics = _capture_event_payload(event.payload)
     ok && isempty(diagnostics) || throw(ArgumentError(
@@ -213,7 +220,7 @@ function _event_payload_storage(event::EventRecord)
     isempty(secret_diagnostics) || throw(ArgumentError(
         "event payload contains credential-like content",
     ))
-    return _portable_value_namedtuple(captured)
+    return _event_payload_jld2_storage(_portable_value_namedtuple(captured))
 end
 
 function _restore_event_payload(value)
