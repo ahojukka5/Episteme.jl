@@ -20,6 +20,7 @@ include("archive_external_preflight.jl")
 include("archive_purge.jl")
 include("portable_document.jl")
 include("content_integrity.jl")
+include("software_environment.jl")
 include("external_integrity.jl")
 include("revision_integrity.jl")
 include("archive_integrity_persistence.jl")
@@ -47,6 +48,7 @@ export ValidationRule, AttributeSchema, NodeSchema, NodeValidationRule
 export script_node, validated_node, check_validation_rule, check_node_validation_rule
 export AbstractArchiveId, ObjectId, RevisionId, ContentId, RunId, WorkflowHeadId
 export SoftwareEnvironmentId, ExecutionContextId
+export SoftwareComponent, SoftwareEnvironment
 export DocumentId, PlanId, ActivityId, AgentId
 export ArchiveNamespace, SchemaRef, KnownSchema, ProvenanceRefs
 export schema_kind, schema_status, resolve_schema, SCHEMA_COMPATIBILITY
