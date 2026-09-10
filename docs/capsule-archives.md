@@ -58,4 +58,7 @@ it does not declare execution readiness.
 The existing [planning coverage rules](capsule-planning.md) still apply:
 retained scientific objects outside the selected revision's integrity closure
 must be addressed before the plan can be materialized. Payload packaging,
-software-environment manifests, migrations and signatures remain later layers.
+migrations and signatures remain later layers. Optional
+[software-environment records](software-environments.md) can be supplied through
+`software_environments=registry`; the capsule preserves those records and checks
+that its retained provenance references resolve before publication.

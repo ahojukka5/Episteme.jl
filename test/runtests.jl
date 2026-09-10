@@ -227,6 +227,7 @@ struct DummyObject end
     include("archive_checkout.jl")
     include("archive_purge.jl")
     include("archive_profile.jl")
+    include("archive_software_environments.jl")
     include("archive_profile_root_validation.jl")
     include("archive_external_preflight.jl")
     include("content_integrity.jl")
@@ -238,5 +239,7 @@ struct DummyObject end
     include("capsule_plan.jl")
     include("capsule_archive.jl")
     include("capsule_archive_provenance.jl")
+    include("archive_software_environment_integrity.jl")
+    include("archive_software_environment_staged.jl")
     include("archive_persistence_extension.jl")
 end

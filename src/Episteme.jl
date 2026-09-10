@@ -33,6 +33,7 @@ include("archive_event_history_semantics.jl")
 include("capsule_plan.jl")
 include("capsule_archive.jl")
 include("capsule_archive_metadata.jl")
+include("archive_software_environments.jl")
 
 export write_capsule_archive, CapsuleManifest, CapsuleArchiveResult, ArchiveCapsuleInspection
 
@@ -50,6 +51,7 @@ export AbstractArchiveId, ObjectId, RevisionId, ContentId, RunId, WorkflowHeadId
 export SoftwareEnvironmentId, ExecutionContextId
 export SoftwareComponent, SoftwareEnvironment
 export SoftwareEnvironmentRegistry, find_software_environment
+export ArchiveSoftwareEnvironmentInspection
 export DocumentId, PlanId, ActivityId, AgentId
 export ArchiveNamespace, SchemaRef, KnownSchema, ProvenanceRefs
 export schema_kind, schema_status, resolve_schema, SCHEMA_COMPATIBILITY

@@ -155,7 +155,9 @@ ArchiveHistorySummary() = ArchiveHistorySummary(0, 0, 0, 0, 0, 0, 0, ())
     ArchiveProvenanceSummary
 
 Software-environment and execution-context identities observed on
-envelope records. Full manifests are issues #37 and #43.
+object envelopes, runs and staged records. Shared software manifests are
+available through `SoftwareEnvironmentRegistry`; execution-context manifests
+remain separate work.
 """
 struct ArchiveProvenanceSummary
     software_environments::Tuple{Vararg{String}}
@@ -175,7 +177,17 @@ function ArchiveProvenanceSummary(graph::ArchiveGraph)
             push!(contexts, ctx.value)
         end
     end
-    return ArchiveProvenanceSummary(Tuple(software), Tuple(contexts))
+    for run in ordered_runs(graph)
+        run.software_environment === nothing || push!(software, run.software_environment.value)
+        run.execution_context === nothing || push!(contexts, run.execution_context.value)
+        for staged in run.staged
+            sw = staged.provenance.software_environment
+            ctx = staged.provenance.execution_context
+            sw === nothing || push!(software, sw.value)
+            ctx === nothing || push!(contexts, ctx.value)
+        end
+    end
+    return ArchiveProvenanceSummary(Tuple(unique(software)), Tuple(unique(contexts)))
 end
 
 ArchiveProvenanceSummary() = ArchiveProvenanceSummary((), ())

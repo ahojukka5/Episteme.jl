@@ -20,6 +20,8 @@
             () -> write_event_archive(path, graph),
             () -> write_capsule_archive(path, graph),
             () -> inspect_archive(path, CapsuleManifest),
+            () -> inspect_archive(path, SoftwareEnvironmentRegistry),
+            () -> write_archive(path; software_environments=SoftwareEnvironmentRegistry()),
         )
             err = try
                 operation()
