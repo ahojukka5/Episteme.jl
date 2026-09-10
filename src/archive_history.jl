@@ -584,6 +584,9 @@ end
 function _looks_like_secret_value(text::AbstractString)
     occursin(r"-----BEGIN [A-Z ]*PRIVATE KEY-----", text) && return true
     occursin(r"(?i)\bbearer\s+[A-Za-z0-9._\-+/=]{20,}", text) && return true
+    # GitHub credentials use underscore prefixes, including fine-grained PATs
+    # and installation tokens whose payload may contain JWT separators.
+    occursin(r"(?i)\b(gh[pousr]_|github_pat_)[A-Za-z0-9_.\-]{16,}", text) && return true
     occursin(r"(?i)\b(sk|ghp|gho|xox[baprs])-[A-Za-z0-9]{16,}", text) && return true
     return false
 end
