@@ -123,3 +123,74 @@ function validate(environment::SoftwareEnvironment)
 end
 
 report(environment::SoftwareEnvironment) = validate(environment)
+
+"""Restore recorded component facts without probing installed software."""
+function from_namedtuple(::Type{SoftwareComponent}, nt)
+    return SoftwareComponent(nt.id, nt.name; uuid=nt.uuid, version=nt.version,
+        repository=nt.repository, source_identity=nt.source_identity,
+        dirty=nt.dirty, dependencies=nt.dependencies, features=nt.features)
+end
+
+"""Restore an environment, rejecting unsupported formats and altered content."""
+function from_namedtuple(::Type{SoftwareEnvironment}, nt)
+    nt.format == "episteme-software-environment-v1" || throw(ArgumentError(
+        "unsupported software environment format: $(nt.format)"))
+    environment = SoftwareEnvironment(
+        (from_namedtuple(SoftwareComponent, component) for component in nt.components);
+        julia_version=nt.julia_version, julia_build=nt.julia_build, features=nt.features)
+    environment.id.value == nt.id || throw(ArgumentError(
+        "software environment content does not match its recorded identity"))
+    return environment
+end
+
+"""
+    SoftwareEnvironmentRegistry(environments=())
+
+Immutable, deterministically ordered shared environment records. Repeated
+identical records are stored once; runs and revisions refer to them by id.
+"""
+struct SoftwareEnvironmentRegistry
+    environments::Tuple{Vararg{SoftwareEnvironment}}
+
+    function SoftwareEnvironmentRegistry(environments=())
+        records = Dict{String,SoftwareEnvironment}()
+        for environment in _typed_vector(SoftwareEnvironment, environments, "environments")
+            key = environment.id.value
+            if haskey(records, key)
+                to_namedtuple(records[key]) == to_namedtuple(environment) ||
+                    throw(ArgumentError("conflicting software environment records for $key"))
+            else
+                records[key] = environment
+            end
+        end
+        return new(Tuple(records[key] for key in sort!(collect(keys(records)))))
+    end
+end
+
+"""Look up a recorded environment by identity; return `nothing` when absent."""
+function find_software_environment(registry::SoftwareEnvironmentRegistry, id::SoftwareEnvironmentId)
+    for environment in registry.environments
+        environment.id == id && return environment
+    end
+    return nothing
+end
+
+to_namedtuple(registry::SoftwareEnvironmentRegistry) = (
+    environments=Tuple(to_namedtuple(environment) for environment in registry.environments),
+)
+
+function from_namedtuple(::Type{SoftwareEnvironmentRegistry}, nt)
+    return SoftwareEnvironmentRegistry(
+        from_namedtuple(SoftwareEnvironment, environment) for environment in nt.environments)
+end
+
+function validate(registry::SoftwareEnvironmentRegistry)
+    diagnostics = DiagnosticMessage[]
+    for environment in registry.environments
+        append!(diagnostics, validate(environment).diagnostics)
+    end
+    return ValidationReport(:software_environment_registry, true, diagnostics,
+        (; environment_count=length(registry.environments)))
+end
+
+report(registry::SoftwareEnvironmentRegistry) = validate(registry)

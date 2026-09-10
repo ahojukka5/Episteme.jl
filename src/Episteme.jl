@@ -49,6 +49,7 @@ export script_node, validated_node, check_validation_rule, check_node_validation
 export AbstractArchiveId, ObjectId, RevisionId, ContentId, RunId, WorkflowHeadId
 export SoftwareEnvironmentId, ExecutionContextId
 export SoftwareComponent, SoftwareEnvironment
+export SoftwareEnvironmentRegistry, find_software_environment
 export DocumentId, PlanId, ActivityId, AgentId
 export ArchiveNamespace, SchemaRef, KnownSchema, ProvenanceRefs
 export schema_kind, schema_status, resolve_schema, SCHEMA_COMPATIBILITY
