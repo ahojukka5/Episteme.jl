@@ -230,6 +230,7 @@ struct DummyObject end
     include("archive_profile_root_validation.jl")
     include("archive_external_preflight.jl")
     include("content_integrity.jl")
+    include("software_environment.jl")
     include("revision_integrity.jl")
     include("archive_integrity_persistence.jl")
     include("archive_integrity_binding.jl")
