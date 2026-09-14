@@ -20,6 +20,7 @@ include("archive_external_preflight.jl")
 include("archive_purge.jl")
 include("portable_document.jl")
 include("content_integrity.jl")
+include("schema_migration.jl")
 include("software_environment.jl")
 include("execution_context.jl")
 include("external_integrity.jl")
@@ -68,6 +69,9 @@ export episteme_namespace, is_reserved_shared_namespace, is_reserved_archive_are
 export owns_kind, find_claim, resolve_namespace, list_namespaces, ordered_claims
 export SchemaField, SchemaMigrationRef, SchemaDefinition, SchemaRegistry, SchemaListing
 export SCHEMA_CARDINALITIES, known_schemas, list_schemas, ordered_schemas
+export SchemaMigrationStep, SchemaMigrationRegistry, MigrationPlan, MigrationResult
+export MIGRATION_AXES, MIGRATION_PLAN_STATUSES
+export plan_migration, migrate_payload, migrate_object
 export ObjectRef, ArchiveReference
 export LogicalType, LogicalArraySpec, LOGICAL_SCALAR_KINDS
 export ArchiveObject, WorkflowHead, ArchiveGraph, ArchiveCatalog

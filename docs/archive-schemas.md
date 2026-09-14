@@ -7,8 +7,11 @@ interpret its portable/shared records and any domain payload that opts
 into schema-based generic inspection.
 
 Physical `/episteme/schemas` spelling is in
-[`archive-profile.md`](archive-profile.md). Migration *execution* is issue
-[#41](https://github.com/ahojukka5/Episteme.jl/issues/41).
+[`archive-profile.md`](archive-profile.md). Semantic migration *planning
+and in-memory apply* are in [`schema-migration.md`](schema-migration.md)
+(issue [#103](https://github.com/ahojukka5/Episteme.jl/issues/103),
+parent [#41](https://github.com/ahojukka5/Episteme.jl/issues/41)). AH5
+archive rewriting remains a later #41 slice.
 
 JLD2 `/_types` describes Julia representation. It is not the scientific
 schema registry and is not consulted for schema identity.
@@ -98,6 +101,7 @@ registry itself is valid.
 
 ## What this is not
 
-- running domain migrations (#41)
+- running domain migrations that invent scientific values
+- writing a migrated `.ah5` file (later #41)
 - treating JLD2 struct reconstruction as scientific compatibility
 - requiring every live Julia value to have a portable schema
