@@ -68,7 +68,11 @@ end
             inputs = [DerivedInputRef(mesh.object_id, r1; content_id = mesh.content_id)],
             retention = :debug,
         ),
-        _derived_record(note, :annotation; inputs = [DerivedInputRef(mesh.object_id, r1)]),
+        _derived_record(
+            note,
+            :annotation;
+            inputs = [DerivedInputRef(mesh.object_id, r1; content_id = mesh.content_id)],
+        ),
     ]
     @test isvalid(validate(records, graph))
     explained = report(records[1])
@@ -152,6 +156,22 @@ end
     missing = validate([dangling], graph)
     @test !isvalid(missing)
     @test any(d -> d.code === :dangling_derived_input, missing.diagnostics)
+
+    omitted = _derived_record(
+        top, :derived;
+        inputs = [DerivedInputRef(mesh.object_id, r1)],
+    )
+    omitted_id = validate([omitted], graph)
+    @test !isvalid(omitted_id)
+    @test any(d -> d.code === :missing_derived_input_content_id, omitted_id.diagnostics)
+
+    mismatched = _derived_record(
+        top, :derived;
+        inputs = [DerivedInputRef(mesh.object_id, r1; content_id = ContentId("other-bytes"))],
+    )
+    wrong = validate([mismatched], graph)
+    @test !isvalid(wrong)
+    @test any(d -> d.code === :derived_input_content_mismatch, wrong.diagnostics)
 end
 
 @testset "purge distinguishes derived retention classes" begin
@@ -188,4 +208,90 @@ end
     @test pinned.object_id in ids
     @test vis.object_id ∉ ids
     @test replaceable.object_id ∉ ids
+end
+
+@testset "purge keeps required derived ancestry of retained products" begin
+    r1 = RevisionId(REV_1)
+    mesh = _obj(:delone, "mesh", ID_MESH, REV_1; content = "mesh-bytes", uuid = UUID_DELONE)
+    parent = _obj(:oodi, "field", ID_FIELD, REV_1; content = "parent-bytes", uuid = UUID_OODI)
+    mid = _obj(:example, "model-state", ID_SECTOR, REV_1; content = "mid-bytes")
+    child = _obj(:example, "model-state", ID_MODEL, REV_1; content = "child-bytes")
+    sibling = _obj(:example, "model-state", ID_POST, REV_1; content = "sibling-bytes")
+    run = _derived_run(r1, :postprocess)
+    graph = ArchiveGraph(
+        [mesh, parent, mid, child, sibling];
+        revisions = [RevisionRecord(r1)],
+        runs = [run],
+    )
+    records = [
+        _derived_record(mesh, :primary; retention = :forensic),
+        _derived_record(
+            parent, :debug;
+            inputs = [DerivedInputRef(mesh.object_id, r1; content_id = mesh.content_id)],
+            retention = :debug,
+        ),
+        _derived_record(
+            mid, :visualization;
+            inputs = [DerivedInputRef(parent.object_id, r1; content_id = parent.content_id)],
+            retention = :visualization,
+        ),
+        _derived_record(
+            child, :derived;
+            inputs = [DerivedInputRef(mid.object_id, r1; content_id = mid.content_id)],
+            retention = :pinned,
+        ),
+        _derived_record(
+            sibling, :visualization;
+            inputs = [DerivedInputRef(mesh.object_id, r1; content_id = mesh.content_id)],
+            retention = :replaceable,
+        ),
+    ]
+    @test isvalid(validate(records, graph))
+    plan = plan_purge(graph, [RetentionRoot(r1)]; derived = records)
+    class_of(id) = only(c.class for c in plan.classifications if c.object_id == id)
+    @test class_of(mesh.object_id) === :reachable
+    @test class_of(parent.object_id) === :reachable
+    @test class_of(mid.object_id) === :reachable
+    @test class_of(child.object_id) === :reachable
+    @test class_of(sibling.object_id) === :replaceable
+    @test isvalid(validate(plan))
+
+    compacted = compact_archive(graph, [RetentionRoot(r1)]; derived = records)
+    @test compacted.source_unchanged
+    @test compacted.graph !== nothing
+    ids = Set(object.object_id for object in compacted.graph.objects)
+    @test mesh.object_id in ids
+    @test parent.object_id in ids
+    @test mid.object_id in ids
+    @test child.object_id in ids
+    @test sibling.object_id ∉ ids
+end
+
+@testset "purge fails closed when a retained derived input is omitted" begin
+    r1 = RevisionId(REV_1)
+    parent = _obj(:oodi, "field", ID_FIELD, REV_1; content = "parent-bytes", uuid = UUID_OODI)
+    child = _obj(:example, "model-state", ID_MODEL, REV_1; content = "child-bytes")
+    run = _derived_run(r1, :postprocess)
+    graph = ArchiveGraph(
+        [parent, child];
+        revisions = [RevisionRecord(r1)],
+        runs = [run],
+    )
+    records = [
+        _derived_record(parent, :visualization; retention = :visualization),
+        _derived_record(
+            child, :derived;
+            inputs = [DerivedInputRef(parent.object_id, r1; content_id = parent.content_id)],
+            retention = :pinned,
+        ),
+    ]
+    @test isvalid(validate(records, graph))
+    root = RetentionRoot(child.object_id, r1)
+    plan = plan_purge(graph, [root]; derived = records)
+    @test !isvalid(validate(plan))
+    @test any(d -> d.code === :derived_retention_input_omitted, plan.diagnostics)
+    compacted = compact_archive(graph, [root]; derived = records)
+    @test compacted.source_unchanged
+    @test compacted.graph === nothing
+    @test any(d -> d.code === :derived_retention_input_omitted, compacted.report.diagnostics)
 end

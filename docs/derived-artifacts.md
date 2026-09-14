@@ -53,11 +53,18 @@ plan_purge(graph, roots; derived = records)
 compact_archive(graph, roots; derived = records)
 ```
 
+Retention is ancestry-safe over the supplied records. A pinned or
+forensic product keeps required derived inputs even when those inputs
+are declared `:visualization`, `:replaceable`, or `:debug`. If a
+required input is still omitted, `compact_archive` fails closed rather
+than publishing a retained child without its provenance.
+
 ## Ancestry
 
-Inputs are exact object/revision/`ContentId` references.
+Inputs are exact object/revision references. When the archived input
+has a `ContentId`, `DerivedInputRef` must carry the same identity.
 `derived_ancestry` walks derived-from-derived chains.
 `validate(records, graph)` fails closed on dangling inputs, missing
-run/activity, content-identity mismatch, or cycles.
+run/activity, missing or mismatched content identity, or cycles.
 
 Package SemVer and payload arrays are not part of this contract.

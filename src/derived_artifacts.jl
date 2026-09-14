@@ -30,7 +30,8 @@ const ARTIFACT_STATUSES = (:complete, :failed, :incomplete)
     DerivedInputRef(object_id, revision_id; content_id=nothing)
 
 Exact scientific input to a derived product. The revision is required so
-later analysis cannot silently retarget a movable head.
+later analysis cannot silently retarget a movable head. When the archived
+envelope has a `ContentId`, that identity is required here as well.
 """
 struct DerivedInputRef
     object_id::ObjectId
@@ -301,8 +302,25 @@ function _validate_derived_artifact!(diagnostics, record::DerivedArtifactRecord,
             ))
             continue
         end
-        if input.content_id !== nothing && target.content_id !== nothing &&
-                input.content_id != target.content_id
+        if target.content_id !== nothing && input.content_id === nothing
+            push!(diagnostics, error_diagnostic(
+                :missing_derived_input_content_id,
+                "derived artifact $(record.object_id.value) input $(input.object_id.value) omits archived ContentId";
+                object_id = record.object_id.value,
+                input_object_id = input.object_id.value,
+                input_revision_id = input.revision_id.value,
+                envelope_content_id = target.content_id.value,
+            ))
+        elseif input.content_id !== nothing && target.content_id === nothing
+            push!(diagnostics, error_diagnostic(
+                :derived_input_content_mismatch,
+                "derived input ContentId does not match archived envelope $(input.object_id.value)";
+                object_id = record.object_id.value,
+                input_object_id = input.object_id.value,
+                declared_content_id = input.content_id.value,
+                envelope_content_id = nothing,
+            ))
+        elseif input.content_id !== nothing && input.content_id != target.content_id
             push!(diagnostics, error_diagnostic(
                 :derived_input_content_mismatch,
                 "derived input ContentId does not match archived envelope $(input.object_id.value)";

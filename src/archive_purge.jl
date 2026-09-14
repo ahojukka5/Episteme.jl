@@ -652,16 +652,63 @@ function _reachability(
     return state
 end
 
+function _derived_retention_keep_keys(state, artifacts, policy)
+    index = _derived_index(artifacts)
+    keep = Set{Tuple{String,String}}()
+    visiting = Set{Tuple{String,String}}()
+    function mark!(record)
+        key = _derived_identity_key(record)
+        key in keep && return nothing
+        key in visiting && return nothing
+        push!(visiting, key)
+        push!(keep, key)
+        for input in record.inputs
+            parent = get(index, _derived_identity_key(input), nothing)
+            parent === nothing && continue
+            mark!(parent)
+        end
+        delete!(visiting, key)
+        return nothing
+    end
+    for record in artifacts
+        _entry_key(record.object_id, record.revision_id) in state.objects || continue
+        _keep_derived_artifact(record, policy) && mark!(record)
+    end
+    return keep
+end
+
+function _diagnose_derived_retention!(state, graph, artifacts)
+    for record in artifacts
+        _entry_key(record.object_id, record.revision_id) in state.objects || continue
+        for input in record.inputs
+            target = find_object(graph, input.object_id, input.revision_id)
+            omitted = target === nothing || _object_key(target) ∉ state.objects
+            omitted || continue
+            _push_diagnostic!(state.diagnostics, error_diagnostic(
+                :derived_retention_input_omitted,
+                "retained derived artifact $(record.object_id.value) would omit required input $(input.object_id.value) @ $(input.revision_id.value)";
+                object_id = record.object_id.value,
+                revision_id = record.revision_id.value,
+                input_object_id = input.object_id.value,
+                input_revision_id = input.revision_id.value,
+            ))
+        end
+    end
+    return state
+end
+
 function _drop_purgeable_derived!(state, graph, policy, artifacts)
     isempty(artifacts) && return state
+    keep_keys = _derived_retention_keep_keys(state, artifacts, policy)
     for object in graph.objects
         key = _object_key(object)
         key in state.objects || continue
         record = _match_derived_artifact(artifacts, object)
         record === nothing && continue
-        _keep_derived_artifact(record, policy) && continue
+        _derived_identity_key(record) in keep_keys && continue
         delete!(state.objects, key)
     end
+    _diagnose_derived_retention!(state, graph, artifacts)
     return state
 end
 
@@ -680,7 +727,10 @@ end
 Dry-run reachability. Does not mutate `graph` and does not write files.
 Unresolved required dependencies are recorded on `plan.diagnostics`.
 Declared derived-artifact retention can drop reachable visualization,
-replaceable, or debug products unless policy keeps them.
+replaceable, or debug products unless policy keeps them. A retained,
+pinned, or forensic derived product also keeps required derived inputs
+from the supplied records. If a required input is still omitted,
+compaction fails closed instead of publishing broken provenance.
 """
 function plan_purge(
     graph::ArchiveGraph,
