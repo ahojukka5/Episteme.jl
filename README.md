@@ -59,7 +59,8 @@ extension for capabilities that need direct or parallel HDF5 access. See
 [`docs/portable-documents.md`](docs/portable-documents.md),
 [`docs/archive-checkout.md`](docs/archive-checkout.md),
 [`docs/archive-purge.md`](docs/archive-purge.md),
-[`docs/capsule-archives.md`](docs/capsule-archives.md), and
+[`docs/schema-migration.md`](docs/schema-migration.md),
+[`docs/capsule-archives.md`](docs/capsule-archives.md),
 [`docs/software-environments.md`](docs/software-environments.md), and
 [`docs/execution-contexts.md`](docs/execution-contexts.md).
 
@@ -176,6 +177,9 @@ Selected concrete types:
 - `canonical_content_id` / `integrity_manifest` / `verify_integrity` —
   logical content identity, revision dependency manifests, and live
   re-verification of persisted AH5 integrity evidence.
+- `plan_migration` / `migrate_object` — semantic schema-migration chains
+  in memory; domain packages own `migrate_payload`, and the source
+  object is never rewritten.
 
 Tree operations:
 

@@ -92,7 +92,7 @@ datasets from in-file AH5 identity.
 ## What this is not
 
 - HDF5.jl bulk `/data` or MPI/parallel writes (`EpistemeHDF5Ext`)
-- payload codecs or domain migrations (#41)
+- payload codecs or AH5 archive rewriting of migrated objects (#41)
 - content-hash verification (#42)
 - software-environment or execution-context *manifest* capture (#37, #43)
 - file-path `checkout` of payload bytes (#33)
