@@ -28,7 +28,11 @@ kept merely because they share a snapshot.
 
 Pinned log streams and pinned events always survive and keep their run.
 Ancestor *revision records* of retained revisions are always kept so
-parent edges remain valid. Identities are not rewritten.
+parent edges remain valid. Identities are not rewritten: retained objects
+keep their `ObjectId`, `RevisionId`, and `ContentId`. `verify_integrity`
+can confirm that a compacted graph still matches a previously captured
+revision integrity manifest. A later logical edit must mint a new
+`ContentId` rather than reuse the old one.
 
 ## Reachability
 

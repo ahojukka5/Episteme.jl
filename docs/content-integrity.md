@@ -73,9 +73,12 @@ does not verify the external bytes that metadata describes.
 
 `integrity_manifest` checks a selected revision's dependency closure. Successful
 manifests can be persisted in AH5 through the JLD2 extension; reading a stored
-result does not repeat the verification. [Metadata capsules](capsule-archives.md)
-can retain this evidence, but do not embed scientific payload bytes or establish
-execution readiness.
+result does not repeat the verification. Use `verify_integrity` to compare that
+expected identity set with a freshly built live manifest. Unchanged content
+keeps the same `ContentId` across `compact_archive` and AH5 state-history
+repacking; a changed logical value must receive a new identity.
+[Metadata capsules](capsule-archives.md) can retain stored evidence, but do not
+embed scientific payload bytes or establish execution readiness.
 
 Semantic migration chains remain tracked by issue #41. Digital signatures and
 PKI are outside the content-integrity contract in issue #42.

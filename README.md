@@ -173,6 +173,9 @@ Selected concrete types:
   `.ah5` profile identity and generic file inspection.
 - `RetentionRoot` / `plan_purge` / `compact_archive` — explicit
   reachability-based purge into a new graph; the source is never mutated.
+- `canonical_content_id` / `integrity_manifest` / `verify_integrity` —
+  logical content identity, revision dependency manifests, and live
+  re-verification of persisted AH5 integrity evidence.
 
 Tree operations:
 

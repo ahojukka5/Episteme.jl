@@ -45,9 +45,12 @@ from a missing object or unavailable external artifact.
 ## Persistence and capsules
 
 [AH5 integrity persistence](archive-integrity.md) stores clean, successful
-manifests through the JLD2 extension. Inspection reads the recorded result;
-fresh verification requires checking the current dependencies again.
+manifests through the JLD2 extension. Inspection reads the recorded result.
+`verify_integrity` rebuilds the current dependency report at an explicit
+`:metadata`, `:sample`, or `:full` level and checks whether each `ContentId`
+was preserved. A metadata or sample live check is never reported as `:full`.
 [Capsule planning](capsule-planning.md) and
 [metadata capsule publication](capsule-archives.md) consume this evidence.
 Published metadata capsules do not embed scientific payload bytes or promise
-execution readiness. Migration execution and signatures remain separate concerns.
+execution readiness. Migration execution remains issue #41; signatures remain
+out of scope.
