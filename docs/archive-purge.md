@@ -71,6 +71,13 @@ the target is not presented as valid.
 `readiness(result, PipelineTarget(:inspect))` is true only for a
 verified compacted graph.
 
+Declared [`DerivedArtifactRecord`](derived-artifacts.md) retention is
+optional extra policy: pass `derived=records` to drop visualization,
+replaceable, or debug products that were otherwise reachable. Pinned
+and forensic derived products stay, and they keep required derived
+inputs from that record set. A retained child cannot omit a required
+derived parent. The source graph is still not mutated.
+
 ## What this is not
 
 - ordinary write-time deletion

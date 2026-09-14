@@ -12,6 +12,8 @@ const REACHABILITY_CLASSES = (
     :duplicated_content,
     :external,
     :purgeable_debug,
+    :purgeable_visualization,
+    :replaceable,
 )
 
 """
@@ -617,11 +619,15 @@ function _content_size(content_id, sizes)
     return 0
 end
 
+_reachability(graph::ArchiveGraph, roots, policy::RetentionPolicy, externals) =
+    _reachability(graph, roots, policy, externals, DerivedArtifactRecord[])
+
 function _reachability(
     graph::ArchiveGraph,
     roots,
     policy::RetentionPolicy,
     externals,
+    artifacts,
 )
     state = _Reachability()
     for root in roots
@@ -642,6 +648,67 @@ function _reachability(
         end
     end
     _close_reachability!(state, graph, policy, externals)
+    _drop_purgeable_derived!(state, graph, policy, artifacts)
+    return state
+end
+
+function _derived_retention_keep_keys(state, artifacts, policy)
+    index = _derived_index(artifacts)
+    keep = Set{Tuple{String,String}}()
+    visiting = Set{Tuple{String,String}}()
+    function mark!(record)
+        key = _derived_identity_key(record)
+        key in keep && return nothing
+        key in visiting && return nothing
+        push!(visiting, key)
+        push!(keep, key)
+        for input in record.inputs
+            parent = get(index, _derived_identity_key(input), nothing)
+            parent === nothing && continue
+            mark!(parent)
+        end
+        delete!(visiting, key)
+        return nothing
+    end
+    for record in artifacts
+        _entry_key(record.object_id, record.revision_id) in state.objects || continue
+        _keep_derived_artifact(record, policy) && mark!(record)
+    end
+    return keep
+end
+
+function _diagnose_derived_retention!(state, graph, artifacts)
+    for record in artifacts
+        _entry_key(record.object_id, record.revision_id) in state.objects || continue
+        for input in record.inputs
+            target = find_object(graph, input.object_id, input.revision_id)
+            omitted = target === nothing || _object_key(target) ∉ state.objects
+            omitted || continue
+            _push_diagnostic!(state.diagnostics, error_diagnostic(
+                :derived_retention_input_omitted,
+                "retained derived artifact $(record.object_id.value) would omit required input $(input.object_id.value) @ $(input.revision_id.value)";
+                object_id = record.object_id.value,
+                revision_id = record.revision_id.value,
+                input_object_id = input.object_id.value,
+                input_revision_id = input.revision_id.value,
+            ))
+        end
+    end
+    return state
+end
+
+function _drop_purgeable_derived!(state, graph, policy, artifacts)
+    isempty(artifacts) && return state
+    keep_keys = _derived_retention_keep_keys(state, artifacts, policy)
+    for object in graph.objects
+        key = _object_key(object)
+        key in state.objects || continue
+        record = _match_derived_artifact(artifacts, object)
+        record === nothing && continue
+        _derived_identity_key(record) in keep_keys && continue
+        delete!(state.objects, key)
+    end
+    _diagnose_derived_retention!(state, graph, artifacts)
     return state
 end
 
@@ -654,11 +721,16 @@ function _sorted_run_ids(ids::Set{String})
 end
 
 """
-    plan_purge(graph, roots; policy=RetentionPolicy(), externals=(), content_sizes=nothing)
-        -> PurgePlan
+    plan_purge(graph, roots; policy=RetentionPolicy(), externals=(),
+               content_sizes=nothing, derived=()) -> PurgePlan
 
 Dry-run reachability. Does not mutate `graph` and does not write files.
 Unresolved required dependencies are recorded on `plan.diagnostics`.
+Declared derived-artifact retention can drop reachable visualization,
+replaceable, or debug products unless policy keeps them. A retained,
+pinned, or forensic derived product also keeps required derived inputs
+from the supplied records. If a required input is still omitted,
+compaction fails closed instead of publishing broken provenance.
 """
 function plan_purge(
     graph::ArchiveGraph,
@@ -666,9 +738,11 @@ function plan_purge(
     policy::RetentionPolicy = RetentionPolicy(),
     externals = ExternalRequirement[],
     content_sizes = nothing,
+    derived = DerivedArtifactRecord[],
 )
     reqs = _externals_vector(externals)
-    state = _reachability(graph, roots, policy, reqs)
+    artifacts = _derived_artifact_vector(derived)
+    state = _reachability(graph, roots, policy, reqs, artifacts)
     classifications = PurgeClassification[]
     retained_content = Set{String}()
     omitted_content = Set{String}()
@@ -676,12 +750,16 @@ function plan_purge(
     for object in ordered_objects(graph)
         key = _object_key(object)
         cid = object.content_id
+        record = _match_derived_artifact(artifacts, object)
         if key in state.objects
             class = :reachable
             if cid !== nothing
                 push!(retained_content, cid.value)
                 content_rows[cid.value] = get(content_rows, cid.value, 0) + 1
             end
+        elseif record !== nothing && !_keep_derived_artifact(record, policy)
+            class = _derived_purge_class(record)
+            cid === nothing || push!(omitted_content, cid.value)
         else
             class = :unreachable
             cid === nothing || push!(omitted_content, cid.value)
@@ -823,7 +901,7 @@ end
 
 """
     compact_archive(graph, roots; policy=RetentionPolicy(), externals=(),
-                    content_sizes=nothing) -> PurgeResult
+                    content_sizes=nothing, derived=()) -> PurgeResult
 
 Build a new compacted graph from `roots`. `graph` is not mutated. If
 verification fails, `result.graph === nothing` and the source is still
@@ -835,10 +913,19 @@ function compact_archive(
     policy::RetentionPolicy = RetentionPolicy(),
     externals = ExternalRequirement[],
     content_sizes = nothing,
+    derived = DerivedArtifactRecord[],
 )
     reqs = _externals_vector(externals)
-    state = _reachability(graph, roots, policy, reqs)
-    plan = plan_purge(graph, roots; policy = policy, externals = reqs, content_sizes = content_sizes)
+    artifacts = _derived_artifact_vector(derived)
+    state = _reachability(graph, roots, policy, reqs, artifacts)
+    plan = plan_purge(
+        graph,
+        roots;
+        policy = policy,
+        externals = reqs,
+        content_sizes = content_sizes,
+        derived = artifacts,
+    )
     compacted = _build_compacted(graph, state, policy)
     report = _verify_compacted(
         compacted,
