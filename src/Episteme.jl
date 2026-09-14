@@ -8,6 +8,7 @@ include("introspection.jl")
 include("semantic_tree.jl")
 include("declarative.jl")
 include("archive_envelope.jl")
+include("derived_artifacts.jl")
 include("archive_checkout.jl")
 include("archive_namespaces.jl")
 include("archive_schemas.jl")
@@ -100,6 +101,8 @@ export write_archive, inspect_archive, is_ah5_archive, is_hdf5_container
 export HDF5_SIGNATURE
 export RetentionPolicy, RetentionRoot, PurgeClassification, PurgePlan, PurgeResult
 export plan_purge, compact_archive
+export ARTIFACT_ROLES, ARTIFACT_RETENTION, ARTIFACT_STATUSES
+export DerivedInputRef, DerivedArtifactRecord, derived_ancestry
 export PortableEncoded, PortableNode, PortableSemanticDocument
 export portable_encode, portable_decode, is_portable_value
 export validate_portable, capture_portable, restore_semantic

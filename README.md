@@ -59,6 +59,7 @@ extension for capabilities that need direct or parallel HDF5 access. See
 [`docs/portable-documents.md`](docs/portable-documents.md),
 [`docs/archive-checkout.md`](docs/archive-checkout.md),
 [`docs/archive-purge.md`](docs/archive-purge.md),
+[`docs/derived-artifacts.md`](docs/derived-artifacts.md),
 [`docs/schema-migration.md`](docs/schema-migration.md),
 [`docs/capsule-archives.md`](docs/capsule-archives.md),
 [`docs/software-environments.md`](docs/software-environments.md), and
@@ -174,6 +175,9 @@ Selected concrete types:
   `.ah5` profile identity and generic file inspection.
 - `RetentionRoot` / `plan_purge` / `compact_archive` — explicit
   reachability-based purge into a new graph; the source is never mutated.
+- `DerivedArtifactRecord` / `derived_ancestry` — payload-free provenance
+  for derived, debug, and visualization products, including purge
+  retention classes.
 - `canonical_content_id` / `integrity_manifest` / `verify_integrity` —
   logical content identity, revision dependency manifests, and live
   re-verification of persisted AH5 integrity evidence.
