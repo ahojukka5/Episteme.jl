@@ -65,9 +65,18 @@ stored in this optional root.
 ## Trust boundary
 
 Persistence records the result of a prior integrity check; generic inspection
-does not recompute hashes or re-open external artifacts. A fresh verification
-still requires rebuilding or checking the revision integrity manifest at the
-requested strength.
+does not recompute hashes or re-open external artifacts.
+
+```julia
+using Episteme, JLD2
+
+stored = inspect_archive(path, RevisionIntegrityManifest)
+live = verify_integrity(path, graph, schemas; externals, external_integrity)
+```
+
+`stored` is historical evidence. `live` is the current check at the requested
+level; it reports whether identities were preserved and never inherits a stored
+`:full` result from a weaker or failed live check.
 
 [Metadata capsules](capsule-archives.md) can publish this evidence together
 with selected history and schema records. Scientific payload packaging,

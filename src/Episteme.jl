@@ -26,6 +26,7 @@ include("external_integrity.jl")
 include("revision_integrity.jl")
 include("archive_integrity_persistence.jl")
 include("archive_integrity_semantics.jl")
+include("integrity_reverification.jl")
 include("archive_state_history.jl")
 include("archive_run_history.jl")
 include("archive_run_history_semantics.jl")
@@ -107,6 +108,8 @@ export external_file_content_id, capture_external_integrity, verify_external
 export IntegrityDependencyRow, RevisionIntegrityManifest
 export INTEGRITY_DEPENDENCY_KINDS, INTEGRITY_AVAILABILITY
 export integrity_manifest
+export IntegrityIdentityDelta, IntegrityVerificationReport, ArchiveIntegrityVerification
+export INTEGRITY_IDENTITY_OUTCOMES, verify_integrity
 export AH5_INTEGRITY_FEATURE, AH5_INTEGRITY_KEY
 export ArchiveIntegrityInspection
 export AH5_STATE_HISTORY_FEATURE, AH5_STATE_HISTORY_KEY

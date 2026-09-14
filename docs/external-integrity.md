@@ -50,4 +50,5 @@ remote URIs. [Revision integrity](revision-integrity.md) aggregates their
 results with the selected revision's object and schema dependencies.
 [AH5 integrity persistence](archive-integrity.md) stores successful manifests,
 and [capsule planning](capsule-planning.md) uses that evidence for its selected
-closure. Reading persisted evidence does not re-verify current external bytes.
+closure. Reading persisted evidence does not re-verify current external bytes;
+`verify_integrity` performs that live check at an explicit requested level.
