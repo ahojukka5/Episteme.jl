@@ -262,6 +262,85 @@ end
     @test any(d -> d.code === :stale_content, content_ready.diagnostics)
 end
 
+@testset "exact revision payload lookup does not use the moving object payload" begin
+    geom = ArchiveObject(
+        ObjectId(ID_GEOM),
+        RevisionId(REV_1);
+        content_id = ContentId("geom-g0"),
+        namespace = FIX_NS,
+        kind = schema_kind(GEOM_SCHEMA),
+        schema = GEOM_SCHEMA,
+    )
+    graph = ArchiveGraph(
+        [geom];
+        heads = [_head(REV_1)],
+        revisions = [RevisionRecord(RevisionId(REV_1))],
+    )
+    disc = OperationSpec(
+        Symbol("fixture/discretize");
+        name = :discretize,
+        inputs = (:geometry,),
+        outputs = (:mesh,),
+        input_ports = [OperationPort(:geometry; schema = GEOM_SCHEMA)],
+        readiness_target = :discretize,
+    )
+    pinned = Plan(
+        PlanId("plan-pinned-r1");
+        operations = [disc],
+        bindings = [PlanBinding(
+            :geometry;
+            object_id = ObjectId(ID_GEOM),
+            revision_id = RevisionId(REV_1),
+            content_id = ContentId("geom-g0"),
+            schema = GEOM_SCHEMA,
+        )],
+    )
+    moving = Plan(
+        PlanId("plan-moving");
+        operations = [disc],
+        bindings = [PlanBinding(
+            :geometry;
+            object_id = ObjectId(ID_GEOM),
+            schema = GEOM_SCHEMA,
+        )],
+    )
+
+    store = WorkingStore()
+    r1 = FixtureGeometry("g0", 4)
+    r2 = FixtureGeometry("g1", 8)
+    store_payload!(store, geom.object_id, r1; revision_id = geom.revision_id)
+    store_payload!(store, geom.object_id, r2)
+
+    present = execute!(graph, pinned; head = :main, store = store)
+    @test present.status === :completed
+    @test !isempty(present.staged)
+    mesh = fetch_payload(store, present.staged[1].object_id)
+    @test mesh isa FixtureMesh
+    @test mesh.geometry_token == "g0"
+
+    delete!(store.payloads, geom.object_id.value * "@" * geom.revision_id.value)
+    missing = readiness(
+        pinned, graph, PipelineTarget(:execute; head = graph.heads[1], store = store),
+    )
+    @test !isready(missing)
+    diag = only(d for d in missing.diagnostics if d.code === :missing_revision_payload)
+    @test occursin(ID_GEOM, diag.message)
+    @test occursin(REV_1, diag.message)
+    failed = execute!(graph, pinned; head = :main, store = store)
+    @test failed.status === :failed
+    @test isempty(failed.staged)
+
+    moving_ready = readiness(
+        moving, graph, PipelineTarget(:execute; head = graph.heads[1], store = store),
+    )
+    @test isready(moving_ready)
+    moved = execute!(graph, moving; head = :main, store = store)
+    @test moved.status === :completed
+    @test !isempty(moved.staged)
+    moved_mesh = fetch_payload(store, moved.staged[1].object_id)
+    @test moved_mesh.geometry_token == "g1"
+end
+
 @testset "successful geometry-mesh-solve execute stages then commit" begin
     geom, store = _root_geometry()
     disc = OperationSpec(
