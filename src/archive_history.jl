@@ -2,7 +2,7 @@
 # Dual-history records: plan, run, activity, event, revision
 #
 # Structural types and the durable run/commit/restart contract (#27).
-# No execute!/commit! runtime and no file I/O.
+# Logical execute!/commit! runtime lives in archive_execution.jl.
 # ---------------------------------------------------------------------------
 
 const EPISTEME_DOCUMENT_KIND = Symbol("episteme/document")
@@ -56,41 +56,116 @@ episteme_plan_schema(version::AbstractString = "1.0.0") =
     SchemaRef(:episteme, "plan", version)
 
 """
+    OperationPort(role; kind=nothing, schema=nothing, required=true)
+
+Named input or output of an [`OperationSpec`](@ref). `kind` and `schema`
+are expected identity contracts, not executable domain logic.
+"""
+struct OperationPort
+    role::Symbol
+    kind::Union{Nothing,Symbol}
+    schema::Union{Nothing,SchemaRef}
+    required::Bool
+end
+
+function OperationPort(
+    role::Symbol;
+    kind = nothing,
+    schema = nothing,
+    required::Bool = true,
+)
+    kind === nothing || kind isa Symbol || throw(ArgumentError(
+        "port kind must be a Symbol or nothing, got $(typeof(kind))",
+    ))
+    schema === nothing || schema isa SchemaRef || throw(ArgumentError(
+        "port schema must be SchemaRef or nothing, got $(typeof(schema))",
+    ))
+    return OperationPort(role, kind, schema, required)
+end
+
+function _operation_ports(values, roles::Vector{Symbol}, what::AbstractString)
+    if values === nothing || (values isa AbstractVector && isempty(values))
+        return OperationPort[OperationPort(role) for role in roles]
+    end
+    ports = _typed_vector(OperationPort, values, what)
+    port_roles = [port.role for port in ports]
+    port_roles == roles || throw(ArgumentError(
+        "$what roles $(Tuple(port_roles)) must match declared roles $(Tuple(roles))",
+    ))
+    return ports
+end
+
+"""
     OperationSpec(kind; inputs=(), outputs=(), effects=(), default_reuse=:forbid,
-                  idempotency_key=nothing)
+                  idempotency_key=nothing, name=kind, input_ports=(),
+                  output_ports=(), environment=nothing, execution_context=nothing,
+                  validation_target=nothing, readiness_target=nothing)
 
 One domain-owned operation declaration used by a [`Plan`](@ref) or
 [`ActivityRecord`](@ref). Episteme does not implement the operation.
 `idempotency_key` is domain-owned data; it is never an [`ActivityId`](@ref).
+`name` is the plan-local step identity and defaults to `kind`.
 """
 struct OperationSpec
     kind::Symbol
+    name::Symbol
     inputs::Vector{Symbol}
     outputs::Vector{Symbol}
     effects::Tuple{Vararg{Symbol}}
     default_reuse::Symbol
     idempotency_key::Union{Nothing,String}
+    input_ports::Vector{OperationPort}
+    output_ports::Vector{OperationPort}
+    environment::Union{Nothing,SoftwareEnvironmentId}
+    execution_context::Union{Nothing,ExecutionContextId}
+    validation_target::Union{Nothing,Symbol}
+    readiness_target::Union{Nothing,Symbol}
 end
 
 function OperationSpec(
     kind::Symbol;
+    name = kind,
     inputs = Symbol[],
     outputs = Symbol[],
     effects = (),
     default_reuse::Symbol = :forbid,
     idempotency_key = nothing,
+    input_ports = nothing,
+    output_ports = nothing,
+    environment = nothing,
+    execution_context = nothing,
+    validation_target = nothing,
+    readiness_target = nothing,
 )
     default_reuse in OPERATION_REUSE_POLICIES || throw(ArgumentError(
         "default_reuse must be one of $OPERATION_REUSE_POLICIES, got :$default_reuse",
     ))
+    name isa Symbol || throw(ArgumentError(
+        "operation name must be a Symbol, got $(typeof(name))",
+    ))
+    validation_target === nothing || validation_target isa Symbol || throw(ArgumentError(
+        "validation_target must be a Symbol or nothing",
+    ))
+    readiness_target === nothing || readiness_target isa Symbol || throw(ArgumentError(
+        "readiness_target must be a Symbol or nothing",
+    ))
     key = _optional_nonempty_string(idempotency_key)
+    input_roles = collect(Symbol, inputs)
+    output_roles = collect(Symbol, outputs)
     return OperationSpec(
         kind,
-        collect(Symbol, inputs),
-        collect(Symbol, outputs),
+        name,
+        input_roles,
+        output_roles,
         Tuple(Symbol(effect) for effect in effects),
         default_reuse,
         key,
+        _operation_ports(input_ports, input_roles, "input_ports"),
+        _operation_ports(output_ports, output_roles, "output_ports"),
+        _optional_id(SoftwareEnvironmentId, environment),
+        _optional_id(ExecutionContextId, execution_context),
+        validation_target,
+        readiness_target,
     )
 end
 
@@ -103,15 +178,76 @@ function _optional_nonempty_string(value)
 end
 
 """
-    Plan(id; document_id=nothing, operations=(), schema=episteme_plan_schema())
+    PlanBinding(role; source=nothing, object_id=nothing, revision_id=nothing,
+                content_id=nothing, schema=nothing, kind=nothing,
+                artifact=nothing, required=true)
+
+Identity-bound assignment of a plan role. `source === nothing` is an
+external root. Otherwise `source` is the plan-local [`OperationSpec.name`]
+that produces the role. A path string is never identity; bind an external
+file through `artifact` plus `content_id`.
+"""
+struct PlanBinding
+    role::Symbol
+    source::Union{Nothing,Symbol}
+    object_id::Union{Nothing,ObjectId}
+    revision_id::Union{Nothing,RevisionId}
+    content_id::Union{Nothing,ContentId}
+    schema::Union{Nothing,SchemaRef}
+    kind::Union{Nothing,Symbol}
+    artifact::Union{Nothing,ArtifactRef}
+    required::Bool
+end
+
+function PlanBinding(
+    role::Symbol;
+    source = nothing,
+    object_id = nothing,
+    revision_id = nothing,
+    content_id = nothing,
+    schema = nothing,
+    kind = nothing,
+    artifact = nothing,
+    required::Bool = true,
+)
+    source === nothing || source isa Symbol || throw(ArgumentError(
+        "binding source must be a Symbol or nothing, got $(typeof(source))",
+    ))
+    schema === nothing || schema isa SchemaRef || throw(ArgumentError(
+        "binding schema must be SchemaRef or nothing, got $(typeof(schema))",
+    ))
+    kind === nothing || kind isa Symbol || throw(ArgumentError(
+        "binding kind must be a Symbol or nothing, got $(typeof(kind))",
+    ))
+    artifact === nothing || artifact isa ArtifactRef || throw(ArgumentError(
+        "binding artifact must be ArtifactRef or nothing, got $(typeof(artifact))",
+    ))
+    return PlanBinding(
+        role,
+        source,
+        _optional_id(ObjectId, object_id),
+        _optional_id(RevisionId, revision_id),
+        _optional_id(ContentId, content_id),
+        schema,
+        kind,
+        artifact,
+        required,
+    )
+end
+
+"""
+    Plan(id; document_id=nothing, operations=(), bindings=(),
+         schema=episteme_plan_schema())
 
 Resolved executable recipe identified by [`PlanId`](@ref). Distinct from the
-authored document and from a later [`RunRecord`](@ref).
+authored document and from a later [`RunRecord`](@ref). Bindings make
+producer/consumer dependencies inspectable without a distributed scheduler.
 """
 struct Plan
     id::PlanId
     document_id::Union{Nothing,DocumentId}
     operations::Vector{OperationSpec}
+    bindings::Vector{PlanBinding}
     schema::SchemaRef
 end
 
@@ -119,6 +255,7 @@ function Plan(
     id::PlanId;
     document_id = nothing,
     operations = OperationSpec[],
+    bindings = PlanBinding[],
     schema::SchemaRef = episteme_plan_schema(),
 )
     schema_kind(schema) === EPISTEME_PLAN_KIND || throw(ArgumentError(
@@ -128,6 +265,7 @@ function Plan(
         id,
         _optional_id(DocumentId, document_id),
         _typed_vector(OperationSpec, operations, "operations"),
+        _typed_vector(PlanBinding, bindings, "bindings"),
         schema,
     )
 end
@@ -739,20 +877,51 @@ end
 
 function validate(plan::Plan)
     diagnostics = DiagnosticMessage[]
+    seen_names = Dict{Symbol,Int}()
     for (i, spec) in enumerate(plan.operations)
-        spec.kind === Symbol("") || continue
+        if spec.kind === Symbol("")
+            push!(diagnostics, error_diagnostic(
+                :empty_operation_kind,
+                "plan operation $i has an empty kind";
+                plan_id = plan.id.value,
+                index = i,
+            ))
+        end
+        previous = get(seen_names, spec.name, 0)
+        if previous != 0
+            push!(diagnostics, error_diagnostic(
+                :duplicate_operation_name,
+                "plan operation name :$(spec.name) is used more than once";
+                plan_id = plan.id.value,
+                name = spec.name,
+                index = i,
+                other_index = previous,
+            ))
+        else
+            seen_names[spec.name] = i
+        end
+    end
+    names = Set(spec.name for spec in plan.operations)
+    for binding in plan.bindings
+        binding.source === nothing && continue
+        binding.source in names && continue
         push!(diagnostics, error_diagnostic(
-            :empty_operation_kind,
-            "plan operation $i has an empty kind";
+            :missing_producer,
+            "binding :$(binding.role) names unknown producer :$(binding.source)";
             plan_id = plan.id.value,
-            index = i,
+            role = binding.role,
+            source = binding.source,
         ))
     end
     return ValidationReport(
         EPISTEME_PLAN_KIND,
         isempty(diagnostics),
         diagnostics,
-        (; plan_id = plan.id.value, operations = length(plan.operations)),
+        (;
+            plan_id = plan.id.value,
+            operations = length(plan.operations),
+            bindings = length(plan.bindings),
+        ),
     )
 end
 
@@ -1035,19 +1204,47 @@ function _run_restart_readiness(run::RunRecord)
     )
 end
 
+to_namedtuple(port::OperationPort) = (
+    role = port.role,
+    kind = port.kind,
+    schema = port.schema === nothing ? nothing : to_namedtuple(port.schema),
+    required = port.required,
+)
+
 to_namedtuple(spec::OperationSpec) = (
     kind = spec.kind,
+    name = spec.name,
     inputs = Tuple(spec.inputs),
     outputs = Tuple(spec.outputs),
     effects = spec.effects,
     default_reuse = spec.default_reuse,
     idempotency_key = spec.idempotency_key,
+    input_ports = Tuple(to_namedtuple.(spec.input_ports)),
+    output_ports = Tuple(to_namedtuple.(spec.output_ports)),
+    environment = spec.environment === nothing ? nothing : spec.environment.value,
+    execution_context = spec.execution_context === nothing ? nothing :
+        spec.execution_context.value,
+    validation_target = spec.validation_target,
+    readiness_target = spec.readiness_target,
+)
+
+to_namedtuple(binding::PlanBinding) = (
+    role = binding.role,
+    source = binding.source,
+    object_id = binding.object_id === nothing ? nothing : binding.object_id.value,
+    revision_id = binding.revision_id === nothing ? nothing : binding.revision_id.value,
+    content_id = binding.content_id === nothing ? nothing : binding.content_id.value,
+    schema = binding.schema === nothing ? nothing : to_namedtuple(binding.schema),
+    kind = binding.kind,
+    artifact = binding.artifact === nothing ? nothing : to_namedtuple(binding.artifact),
+    required = binding.required,
 )
 
 to_namedtuple(plan::Plan) = (
     id = plan.id.value,
     document_id = plan.document_id === nothing ? nothing : plan.document_id.value,
     operations = Tuple(to_namedtuple.(plan.operations)),
+    bindings = Tuple(to_namedtuple.(plan.bindings)),
     schema = to_namedtuple(plan.schema),
 )
 
