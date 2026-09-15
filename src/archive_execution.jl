@@ -49,10 +49,18 @@ function store_payload!(store::WorkingStore, object_id::ObjectId, payload; revis
     return payload
 end
 
+"""
+    fetch_payload(store, object_id; revision_id=nothing)
+
+Return the stored domain payload for `object_id`.
+
+When `revision_id` is set, only the revision-keyed payload is returned.
+A missing exact revision does not fall back to the moving payload stored
+under the bare ObjectId.
+"""
 function fetch_payload(store::WorkingStore, object_id::ObjectId; revision_id = nothing)
     if revision_id !== nothing
-        exact = get(store.payloads, _payload_key(object_id, revision_id), nothing)
-        exact !== nothing && return exact
+        return get(store.payloads, _payload_key(object_id, revision_id), nothing)
     end
     return get(store.payloads, object_id.value, nothing)
 end
@@ -536,7 +544,22 @@ function _resolve_root_input(
     _append_identity_mismatch!(
         diagnostics, graph, spec, role, binding, object, head, expected_schema, expected_kind,
     )
-    payload = fetch_payload(store, object.object_id; revision_id = object.revision_id)
+    payload = if binding.revision_id !== nothing
+        fetch_payload(store, object.object_id; revision_id = binding.revision_id)
+    else
+        fetch_payload(store, object.object_id)
+    end
+    if binding.revision_id !== nothing && payload === nothing
+        push!(diagnostics, error_diagnostic(
+            :missing_revision_payload,
+            "operation :$(spec.name) input :$role has no payload for $(object.object_id.value)@$(binding.revision_id.value)",
+            operation = spec.name,
+            role = role,
+            object_id = object.object_id.value,
+            revision_id = binding.revision_id.value,
+        ))
+        return _ResolvedInput(nothing, diagnostics)
+    end
     if binding.artifact !== nothing
         append!(diagnostics, _verify_external_artifact(binding))
     end

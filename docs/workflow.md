@@ -95,6 +95,9 @@ readiness(plan, graph, PipelineTarget(:execute; head = :main, store = store))
 
 `plan_operation_order` is the inspectable dependency order. Cycles fail
 readiness. Missing, stale, or wrong-revision roots fail before `execute!`.
+An input bound to `object@revision` uses only that revision's payload; a
+missing exact payload fails closed and never substitutes the moving
+ObjectId payload.
 
 ## Execute, stage, commit
 
