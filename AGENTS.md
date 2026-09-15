@@ -227,10 +227,9 @@ runtime operation using them has not landed yet.
 
 Also out of scope in the current implementation:
 
-- `execute!` / `commit!` / `branch!` / `rerun!` runtime (lifecycle *records*,
-  in-memory `inspect` / `checkout` manifests, purge reachability, and
-  `validate` / `readiness` for them are in scope),
-- orchestration execution paths not yet implemented,
+- `branch!` / `rerun!` runtime (`execute!` / `commit!` / `restart!` /
+  `recover_writes!` are in-memory; they do not write `.ah5` files),
+- distributed scheduling and automatic persist-on-execute,
 - optional parallel/bulk archive I/O extensions not yet implemented,
 - speculative multi-backend storage abstractions without a real second backend,
 - domain constraint solvers and expression evaluators,

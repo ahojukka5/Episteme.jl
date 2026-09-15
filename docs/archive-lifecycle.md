@@ -1,9 +1,12 @@
 # Durable run, commit, and restart contract
 
 This is the logical lifecycle contract from issue
-[#27](https://github.com/ahojukka5/Episteme.jl/issues/27). It lives in
-Episteme as structured records, `validate`, and `readiness`. It does not
-implement `execute!` / `commit!` and it does not open files.
+[#27](https://github.com/ahojukka5/Episteme.jl/issues/27), with the
+in-memory runtime from
+[#107](https://github.com/ahojukka5/Episteme.jl/issues/107). Records,
+`validate`, and `readiness` remain domain-neutral. `execute!` / `commit!`
+/ `recover_writes!` mutate an [`ArchiveGraph`](@ref) in memory; they do
+not open files. See [`workflow.md`](workflow.md).
 
 Physical `.ah5` encoding, JLD2 append, and later HDF5.jl bulk I/O must
 preserve these rules. v1 persistence is JLD2-backed AH5.
@@ -141,7 +144,8 @@ and do not resume as if the effect completed.
 
 ## What this is not
 
-- `execute!` / `commit!` / `branch!` / `rerun!` runtime
+- automatic `.ah5` I/O inside `execute!` / `commit!`
+- `branch!` / `rerun!` runtime
 - JLD2 or HDF5 file I/O, begin/commit markers on disk, or OS file locks
 - domain checkpoint contents or solver-iteration revisions
 - parallel HDF5 or multi-writer bulk I/O

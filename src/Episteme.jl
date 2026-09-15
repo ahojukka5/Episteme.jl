@@ -38,6 +38,9 @@ include("capsule_archive.jl")
 include("capsule_archive_metadata.jl")
 include("archive_software_environments.jl")
 include("archive_execution_contexts.jl")
+include("archive_execution.jl")
+include("archive_provenance.jl")
+include("archive_reproduction.jl")
 
 export write_capsule_archive, CapsuleManifest, CapsuleArchiveResult, ArchiveCapsuleInspection
 
@@ -75,9 +78,19 @@ export plan_migration, migrate_payload, migrate_object
 export ObjectRef, ArchiveReference
 export LogicalType, LogicalArraySpec, LOGICAL_SCALAR_KINDS
 export ArchiveObject, WorkflowHead, ArchiveGraph, ArchiveCatalog
-export OperationSpec, Plan, RevisionRecord, RunRecord, ActivityRecord, EventRecord
+export OperationSpec, OperationPort, PlanBinding, Plan
+export RevisionRecord, RunRecord, ActivityRecord, EventRecord
 export StagedObject, CheckpointRef, RestartRequirement, WriteTransaction
 export EventBatch, LogStreamRecord
+export WorkingStore, BoundInput, StagedPayload, OperationOutcome
+export ExecutionInterrupted, RecoveryReport, ReproductionComparison
+export WORKFLOW_EVENT_KINDS, REPRODUCTION_KINDS
+export apply_operation, reuse_equivalent, staged_result
+export execute!, commit!, recover_writes!, restart!
+export plan_roots, plan_operation_order, plan_binding, plan_output_id
+export store_payload!, fetch_payload
+export producing_run, producing_activity, used_inputs, previous_revision, dependents
+export software_environment_of, validation_events, compare_reproduction
 export EPISTEME_DOCUMENT_KIND, EPISTEME_PLAN_KIND
 export episteme_document_schema, episteme_plan_schema
 export RUN_STATUSES, WRITE_PHASES, STAGED_ORIGINS, WRITE_SCOPES

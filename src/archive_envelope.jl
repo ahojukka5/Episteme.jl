@@ -1695,6 +1695,8 @@ function readiness(graph::ArchiveGraph, target::PipelineTarget)
         return _graph_commit_readiness(graph, target)
     elseif target.name === :restart
         return _graph_restart_readiness(graph, target)
+    elseif target.name === :execute
+        return _graph_execute_readiness(graph, target)
     end
     return ReadinessReport(
         :archive_graph,
@@ -1702,7 +1704,7 @@ function readiness(graph::ArchiveGraph, target::PipelineTarget)
         false,
         [error_diagnostic(
             :unsupported_target,
-            "archive graph readiness target :$(target.name) is not :commit or :restart";
+            "archive graph readiness target :$(target.name) is not :commit, :restart, or :execute";
             target = target.name,
         )],
         (; runs = length(graph.runs)),

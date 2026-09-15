@@ -19,9 +19,10 @@ Episteme.jl = semantics + schemas + history/provenance
 ```
 
 This package currently ships the semantics, schemas, archive vocabulary,
-and the JLD2-backed `.ah5` profile plus generic `inspect_archive`.
-The orchestration protocol (`execute!` / `commit!`) remains a later
-implementation step.
+the JLD2-backed `.ah5` profile plus generic `inspect_archive`, and an
+in-memory execution lifecycle (`execute!` / `commit!` / `recover_writes!`).
+Physical `.ah5` writes remain explicit via `write_archive`. See
+[`docs/workflow.md`](docs/workflow.md).
 
 ## Why this package exists
 
@@ -61,8 +62,9 @@ extension for capabilities that need direct or parallel HDF5 access. See
 [`docs/archive-purge.md`](docs/archive-purge.md),
 [`docs/schema-migration.md`](docs/schema-migration.md),
 [`docs/capsule-archives.md`](docs/capsule-archives.md),
-[`docs/software-environments.md`](docs/software-environments.md), and
-[`docs/execution-contexts.md`](docs/execution-contexts.md).
+[`docs/software-environments.md`](docs/software-environments.md),
+[`docs/execution-contexts.md`](docs/execution-contexts.md), and
+[`docs/workflow.md`](docs/workflow.md).
 
 ## Why shared generic functions avoid name conflicts
 
@@ -160,8 +162,13 @@ Selected concrete types:
 - `StagedObject` / `WriteTransaction` / `CheckpointRef` /
   `RestartRequirement` — durable run/commit/restart contract: staging
   before `commit!`, interrupted-write phases, and exact restart refs.
+- `OperationPort` / `PlanBinding` / `execute!` / `commit!` /
+  `recover_writes!` / `restart!` — in-memory lifecycle. Domain packages
+  bind behavior with `apply_operation(::Val{kind}, spec, inputs)`.
 - `revision_parents` / `revision_children` / `revision_ancestors` /
   `revision_descendants` — in-memory revision DAG walks.
+- `producing_run` / `producing_activity` / `used_inputs` /
+  `dependents` / `previous_revision` — provenance queries.
 - `promote_staged` — pure mapping of a run's staging set to envelope rows.
 - `EventBatch` / `LogStreamRecord` / `event_timeline` — durable
   human-readable event timeline and optional purgeable log streams.
