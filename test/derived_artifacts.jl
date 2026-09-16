@@ -174,6 +174,34 @@ end
     @test any(d -> d.code === :derived_input_content_mismatch, wrong.diagnostics)
 end
 
+@testset "failed derived products keep structural envelope validity" begin
+    r1 = RevisionId(REV_1)
+    mesh = _obj(:delone, "mesh", ID_MESH, REV_1; content = "mesh-bytes", uuid = UUID_DELONE)
+    note = _obj(:example, "model-state", ID_MODEL, REV_1; content = "note-bytes")
+    run = _derived_run(r1, :postprocess)
+    graph = ArchiveGraph(
+        [mesh, note];
+        revisions = [RevisionRecord(r1)],
+        runs = [run],
+    )
+    failed = DerivedArtifactRecord(
+        note.object_id,
+        note.revision_id,
+        :annotation;
+        inputs = [DerivedInputRef(mesh.object_id, r1; content_id = mesh.content_id)],
+        run_id = RunId("run-derived"),
+        activity_id = ActivityId("act-derived"),
+        operation = :postprocess,
+        status = :failed,
+        diagnostics = [error_diagnostic(:incomplete, "source was incomplete")],
+    )
+    report = validate([failed], graph)
+    @test isvalid(report)
+    @test !any(d -> d.code === :incomplete, report.diagnostics)
+    @test failed.status === :failed
+    @test failed.diagnostics[1].severity === :error
+end
+
 @testset "purge distinguishes derived retention classes" begin
     r1 = RevisionId(REV_1)
     mesh = _obj(:delone, "mesh", ID_MESH, REV_1; content = "mesh-bytes", uuid = UUID_DELONE)

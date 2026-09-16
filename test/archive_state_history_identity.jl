@@ -71,3 +71,4 @@ end
 include("archive_run_history.jl")
 include("archive_event_history.jl")
 include("archive_event_history_security.jl")
+include("archive_derived_artifacts.jl")

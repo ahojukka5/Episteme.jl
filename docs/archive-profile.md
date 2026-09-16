@@ -97,3 +97,7 @@ datasets from in-file AH5 identity.
 - software-environment or execution-context *manifest* capture (#37, #43)
 - file-path `checkout` of payload bytes (#33)
 - a new container format or sidecar identity file
+
+Optional derived/debug artifact records are a separate specialized
+inspector: `inspect_archive(path, ArchiveDerivedHistory)`. See
+[derived artifacts](derived-artifacts.md).

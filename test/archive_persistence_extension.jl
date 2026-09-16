@@ -26,6 +26,7 @@
             Episteme.write_state_archive,
             Episteme.write_run_archive,
             Episteme.write_event_archive,
+            Episteme.write_derived_archive,
         )
             thrown = try
                 f(:no_such_archive_argument, 0x1)
@@ -47,6 +48,7 @@
             Tuple{AbstractString,Type{ArchiveStateHistory}},
             Tuple{AbstractString,Type{ArchiveRunHistory}},
             Tuple{AbstractString,Type{ArchiveEventHistory}},
+            Tuple{AbstractString,Type{ArchiveDerivedHistory}},
             Tuple{AbstractString,Type{RevisionIntegrityManifest}},
         )
             method = which(inspect_archive, sig)
@@ -60,6 +62,10 @@
             Base.get_extension(Episteme, :EpistemeJLD2Ext)
         @test parentmodule(which(write_event_archive, Tuple{AbstractString,ArchiveGraph})) ===
             Base.get_extension(Episteme, :EpistemeJLD2Ext)
+        @test parentmodule(which(
+            write_derived_archive,
+            Tuple{AbstractString,ArchiveGraph,Vector{DerivedArtifactRecord}},
+        )) === Base.get_extension(Episteme, :EpistemeJLD2Ext)
         # The external-aware String specialization stays in the owner package.
         @test parentmodule(which(write_archive, Tuple{String})) === Episteme
     end
@@ -78,6 +84,7 @@
             :write_state_archive,
             :write_run_archive,
             :write_event_archive,
+            :write_derived_archive,
         )
             binding = Base.Docs.Binding(Episteme, name)
             @test haskey(registry, binding)
