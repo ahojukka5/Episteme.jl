@@ -26,6 +26,8 @@ using Episteme
 # owner-side helpers the file-opening entry points below call.
 using Episteme:
     _count_key,
+    _derived_history_counts_exist,
+    _empty_derived_history_inspection,
     _empty_event_history_inspection,
     _empty_inspection,
     _empty_integrity_inspection,
@@ -41,16 +43,19 @@ using Episteme:
     _jld2_get,
     _namespace_listing_storage,
     _profile_storage,
+    _profile_with_derived_artifacts,
     _profile_with_event_history,
     _profile_with_integrity,
     _profile_with_run_history,
     _profile_with_state_history,
     _provenance_storage,
     _published_profile,
+    _read_derived_history,
     _read_event_history,
     _read_indexed,
     _read_run_history,
     _read_state_history,
+    _refuse_derived_history_root_collision,
     _refuse_event_history_root_collision,
     _refuse_integrity_archive_mismatch,
     _refuse_integrity_root_collision,
@@ -64,9 +69,11 @@ using Episteme:
     _state_history_counts_exist,
     _state_history_from_graph,
     _typed_vector,
+    _validate_derived_history,
     _validate_event_history,
     _validate_run_history,
     _validate_state_history,
+    _write_derived_history!,
     _write_event_history!,
     _write_indexed!,
     _write_run_history!,
@@ -78,6 +85,7 @@ include("EpistemeJLD2Ext_archive_integrity_semantics.jl")
 include("EpistemeJLD2Ext_archive_state_history.jl")
 include("EpistemeJLD2Ext_archive_run_history.jl")
 include("EpistemeJLD2Ext_archive_event_history.jl")
+include("EpistemeJLD2Ext_archive_derived_artifacts.jl")
 include("EpistemeJLD2Ext_capsule_archive.jl")
 include("EpistemeJLD2Ext_archive_software_environments.jl")
 include("EpistemeJLD2Ext_archive_execution_contexts.jl")

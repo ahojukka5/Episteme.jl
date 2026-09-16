@@ -39,6 +39,7 @@ include("capsule_archive.jl")
 include("capsule_archive_metadata.jl")
 include("archive_software_environments.jl")
 include("archive_execution_contexts.jl")
+include("archive_derived_artifacts.jl")
 include("archive_execution.jl")
 include("archive_provenance.jl")
 include("archive_reproduction.jl")
@@ -138,6 +139,8 @@ export AH5_RUN_HISTORY_FEATURE, AH5_RUN_HISTORY_KEY
 export ArchiveRunHistory, ArchiveRunHistoryInspection, write_run_archive, reconstruct_graph
 export AH5_EVENT_HISTORY_FEATURE, AH5_EVENT_HISTORY_KEY
 export ArchiveEventHistory, ArchiveEventHistoryInspection, write_event_archive
+export AH5_DERIVED_ARTIFACTS_FEATURE, AH5_DERIVED_ARTIFACTS_KEY
+export ArchiveDerivedHistory, ArchiveDerivedHistoryInspection, write_derived_archive
 export CAPSULE_TARGETS, CapsulePlan, plan_capsule
 
 end # module Episteme
