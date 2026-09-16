@@ -1,11 +1,10 @@
 # Derived-artifact and debug provenance
 
-This is the first implementation slice of issue
-[#32](https://github.com/ahojukka5/Episteme.jl/issues/32), tracked by
-[#105](https://github.com/ahojukka5/Episteme.jl/issues/105). It gives
+Issue [#32](https://github.com/ahojukka5/Episteme.jl/issues/32) gives
 postprocessed, diagnostic, and debug products a shared provenance
-envelope. Domain packages still own payload types. AH5 persistence of
-these records is a later slice.
+envelope. Domain packages still own payload types. The in-memory record
+is `DerivedArtifactRecord`; the optional AH5 layer persists those records
+without embedding scientific payload bytes.
 
 ## Why this envelope exists
 
@@ -68,3 +67,28 @@ has a `ContentId`, `DerivedInputRef` must carry the same identity.
 run/activity, missing or mismatched content identity, or cycles.
 
 Package SemVer and payload arrays are not part of this contract.
+
+## AH5 persistence
+
+The optional feature is `:derived_artifact_records` at the fixed root
+`episteme/derived_artifacts`. A derived-artifact archive also includes
+authoritative state and run/activity records, because every derived
+product names exact inputs and a producing run/activity.
+
+```julia
+write_derived_archive(path, graph, records; schemas = schemas)
+view = inspect_archive(path, ArchiveDerivedHistory)
+graph2 = reconstruct_graph(view)
+derived_ancestry(view.artifacts[end], view)
+plan_purge(graph2, roots; derived = view.artifacts)
+```
+
+Parameters, units, value-shape, diagnostic context, and `ArtifactRef`
+metadata must be portable. Credential-like values are refused before
+publication. Large embedded or external products stay behind
+`ArtifactRef`; the writer does not load or copy those bytes.
+
+Old AH5 files that do not declare the feature remain readable and return
+an empty specialized view. A declared feature with missing or corrupt
+records fails closed. Event/write/log history and physical bulk `/data`
+embedding remain separate layers.

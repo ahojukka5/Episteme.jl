@@ -3,7 +3,7 @@
 #
 # Shared ancestry/retention envelope for postprocessed, diagnostic, and
 # debug products. Domain packages keep payload meaning. AH5 persistence
-# of these records is a later slice.
+# of these records is the optional derived-artifact history layer.
 # ---------------------------------------------------------------------------
 
 const ARTIFACT_ROLES = (
@@ -241,7 +241,6 @@ function derived_ancestry(record::DerivedArtifactRecord, artifacts)
 end
 
 function _validate_derived_artifact!(diagnostics, record::DerivedArtifactRecord, graph)
-    append!(diagnostics, record.diagnostics)
     object = find_object(graph, record.object_id, record.revision_id)
     if object === nothing
         push!(diagnostics, error_diagnostic(

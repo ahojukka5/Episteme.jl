@@ -77,6 +77,7 @@ end
     inspect_archive(path, ArchiveStateHistory) -> ArchiveStateHistoryInspection
     inspect_archive(path, ArchiveRunHistory) -> ArchiveRunHistoryInspection
     inspect_archive(path, ArchiveEventHistory) -> ArchiveEventHistoryInspection
+    inspect_archive(path, ArchiveDerivedHistory) -> ArchiveDerivedHistoryInspection
     inspect_archive(path, SoftwareEnvironmentRegistry) -> ArchiveSoftwareEnvironmentInspection
 
 Read AH5 profile metadata without domain packages or payload load.
@@ -86,11 +87,11 @@ identified archive without decoding remaining roots. Full Julia-native
 object reconstruction is not this API.
 
 The second-argument forms interpret one optional root each — integrity
-manifests, authoritative state history, run/activity/restart provenance, or
-event/write/log provenance — and each root is decoded only when the profile
-explicitly declares its feature. Old archives without an optional feature
-remain valid and return empty records. Scientific payloads and raw log bytes
-are never loaded. Software environment inspection verifies recorded content
+manifests, authoritative state history, run/activity/restart provenance,
+event/write/log provenance, or derived/debug artifact provenance — and each
+root is decoded only when the profile explicitly declares its feature. Old
+archives without an optional feature remain valid and return empty records.
+Scientific payloads and raw log bytes are never loaded. Software environment inspection verifies recorded content
 identities and authoritative provenance references. Missing historical records
 produce an explicit unknown-provenance diagnostic.
 
@@ -136,4 +137,18 @@ Requires JLD2: run `using JLD2` to load `EpistemeJLD2Ext`.
 """
 function write_event_archive(args...; kwargs...)
     throw(_missing_jld2_error("write_event_archive"))
+end
+
+"""
+    write_derived_archive(path, graph, artifacts; kwargs...)
+
+Create an AH5 archive with authoritative state, run/activity provenance, and
+payload-free derived/debug artifact records. Parameters, units, value-shape,
+and ArtifactRef metadata must be portable. Scientific payload bytes and
+large external files are not embedded.
+
+Requires JLD2: run `using JLD2` to load `EpistemeJLD2Ext`.
+"""
+function write_derived_archive(args...; kwargs...)
+    throw(_missing_jld2_error("write_derived_archive"))
 end
