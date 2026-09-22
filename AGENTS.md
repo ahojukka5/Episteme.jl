@@ -5,7 +5,9 @@ Guidance for AI agents and humans working on or with this package.
 ## 1. What this package is
 
 `Episteme.jl` is the semantic runtime and persistent scientific backbone for
-composable, reproducible, and eventually autonomous research.
+composable, reproducible, and eventually autonomous research. It is the
+renamed `OodiCore.jl`. There is no separate OodiCore repository. Issue
+and pull-request numbers from that name are Episteme.jl numbers.
 
 Domain packages own scientific payloads and operation semantics. Episteme owns
 the shared semantics, schemas/contracts, identities and history vocabulary,

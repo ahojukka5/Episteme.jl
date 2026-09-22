@@ -1,12 +1,12 @@
 # Shared scientific archive ownership
 
 Accepted topology: issue
-[#48](https://github.com/ahojukka5/OodiCore.jl/issues/48) /
-[PR #50](https://github.com/ahojukka5/OodiCore.jl/pull/50).
+[#48](https://github.com/ahojukka5/Episteme.jl/issues/48) /
+[PR #50](https://github.com/ahojukka5/Episteme.jl/pull/50).
 The package rename is issue
-[#51](https://github.com/ahojukka5/OodiCore.jl/issues/51).
+[#51](https://github.com/ahojukka5/Episteme.jl/issues/51).
 The logical envelope from
-[#26](https://github.com/ahojukka5/OodiCore.jl/issues/26)
+[#26](https://github.com/ahojukka5/Episteme.jl/issues/26)
 is documented in [`archive-envelope.md`](archive-envelope.md).
 
 This page supersedes the #25 two-package split (`OodiCore.jl` + standalone
@@ -288,14 +288,14 @@ Oodi #395, Stinespring #163, Lieb #65, Chappe #207) should:
 
 ## Related study
 
-Issue [#47](https://github.com/ahojukka5/OodiCore.jl/issues/47) studied
+Issue [#47](https://github.com/ahojukka5/Episteme.jl/issues/47) studied
 JLD2 as the Julia-native codec. The historical spike is not stored in
 this package. JLD2 is a weak dependency for the v1 `.ah5` profile.
 `using JLD2` activates the file I/O methods in `EpistemeJLD2Ext`.
 
-Issue [#48](https://github.com/ahojukka5/OodiCore.jl/issues/48) is the
+Issue [#48](https://github.com/ahojukka5/Episteme.jl/issues/48) is the
 long-term architecture study (accepted). Issue
-[#51](https://github.com/ahojukka5/OodiCore.jl/issues/51) is the rename.
-Issue [#23](https://github.com/ahojukka5/OodiCore.jl/issues/23) is the
+[#51](https://github.com/ahojukka5/Episteme.jl/issues/51) is the rename.
+Issue [#23](https://github.com/ahojukka5/Episteme.jl/issues/23) is the
 unmerged General registration of `OodiCore`; the next registration should
 be for `Episteme`.
