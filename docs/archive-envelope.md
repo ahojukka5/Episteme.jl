@@ -1,7 +1,7 @@
 # Shared archive envelope
 
 This is the logical object/reference/schema-version contract from issue
-[#26](https://github.com/ahojukka5/OodiCore.jl/issues/26). It lives entirely
+[#26](https://github.com/ahojukka5/Episteme.jl/issues/26). It lives entirely
 in Episteme and does not open files. Physical `.ah5` encoding is the
 JLD2-backed AH5 profile; see [`archive-profile.md`](archive-profile.md),
 [`archive-ownership.md`](archive-ownership.md) and
