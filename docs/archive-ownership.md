@@ -31,7 +31,8 @@ frameworks.
 JLD2 / `.ah5` writers land in the persistence PRs. The profile writer
 (`write_archive`) and generic `inspect_archive` are issue #40.
 
-See [`research/episteme-architecture.md`](research/episteme-architecture.md).
+The historical architecture study is not stored in this package. The
+current contract is this page and [`archive-profile.md`](archive-profile.md).
 
 ## v1 mental model
 
@@ -288,10 +289,9 @@ Oodi #395, Stinespring #163, Lieb #65, Chappe #207) should:
 ## Related study
 
 Issue [#47](https://github.com/ahojukka5/OodiCore.jl/issues/47) studied
-JLD2 as the Julia-native codec. Findings are in
-[`research/jld2-ah5-spike/FINDINGS.md`](../research/jld2-ah5-spike/FINDINGS.md).
-JLD2 is a weak dependency for the v1 `.ah5` profile. `using JLD2` activates
-the file I/O methods in `EpistemeJLD2Ext`.
+JLD2 as the Julia-native codec. The historical spike is not stored in
+this package. JLD2 is a weak dependency for the v1 `.ah5` profile.
+`using JLD2` activates the file I/O methods in `EpistemeJLD2Ext`.
 
 Issue [#48](https://github.com/ahojukka5/OodiCore.jl/issues/48) is the
 long-term architecture study (accepted). Issue
