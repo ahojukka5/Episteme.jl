@@ -24,9 +24,11 @@ this package, behind the `EpistemeJLD2Ext` package extension: the archive API
 becomes available when the caller runs `using JLD2`. HDF5.jl remains later
 optional extension work for direct/bulk/parallel HDF5 needs.
 
-See [`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md),
-[`docs/archive-ownership.md`](docs/archive-ownership.md), and
-[`docs/archive-profile.md`](docs/archive-profile.md).
+The current archive contract is
+[`docs/archive-ownership.md`](docs/archive-ownership.md) and
+[`docs/archive-profile.md`](docs/archive-profile.md). The historical
+architecture study and the JLD2/AH5 spike are not stored in this
+package.
 
 ## 2. What it owns
 

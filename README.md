@@ -47,7 +47,6 @@ package itself is stdlib-only, and the archive writers and readers become
 available when the caller runs `using JLD2` to load `EpistemeJLD2Ext`.
 HDF5.jl remains a later optional
 extension for capabilities that need direct or parallel HDF5 access. See
-[`docs/research/episteme-architecture.md`](docs/research/episteme-architecture.md),
 [`docs/archive-ownership.md`](docs/archive-ownership.md),
 [`docs/semantic-tree.md`](docs/semantic-tree.md),
 [`docs/declarative-contracts.md`](docs/declarative-contracts.md),
