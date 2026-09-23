@@ -262,12 +262,24 @@ function plan_output_id(plan::Plan, spec::OperationSpec, role::Symbol)
 end
 
 function _producer_of(plan::Plan, role::Symbol)
-    binding = plan_binding(plan, role)
-    binding !== nothing && return binding.source
-    for spec in plan.operations
-        role in spec.outputs && return spec.name
+    matches = [binding for binding in plan.bindings if binding.role === role]
+    length(matches) > 1 && throw(ArgumentError(
+        "role :$role has $(length(matches)) bindings",
+    ))
+    producers = Symbol[spec.name for spec in plan.operations if role in spec.outputs]
+    length(producers) > 1 && throw(ArgumentError(
+        "role :$role is produced by $(join(string.(producers), ", "))",
+    ))
+    if !isempty(matches)
+        source = matches[1].source
+        if source !== nothing && any(spec.name === source for spec in plan.operations)
+            source in producers || throw(ArgumentError(
+                "role :$role is bound to :$source, which does not produce it",
+            ))
+        end
+        return source
     end
-    return nothing
+    return isempty(producers) ? nothing : producers[1]
 end
 
 """
@@ -276,6 +288,9 @@ end
 Inspectable dependency order. Cycles fail `validate`/`readiness`.
 """
 function plan_operation_order(plan::Plan)
+    _plan_resolution_ambiguous(plan) && throw(ArgumentError(
+        "plan $(plan.id.value) has an ambiguous role binding or producer",
+    ))
     names = [spec.name for spec in plan.operations]
     index = Dict{Symbol,Int}(spec.name => i for (i, spec) in enumerate(plan.operations))
     indeg = zeros(Int, length(plan.operations))
@@ -309,8 +324,16 @@ function _plan_has_cycle(plan::Plan)
     return length(plan_operation_order(plan)) != length(plan.operations)
 end
 
+function _plan_resolution_ambiguous(plan::Plan)
+    report = validate(plan)
+    return any(d -> d.code in (
+        :ambiguous_producer, :ambiguous_binding, :binding_role_mismatch,
+    ), report.diagnostics)
+end
+
 function report(plan::Plan)
-    order = plan_operation_order(plan)
+    ambiguous = _plan_resolution_ambiguous(plan)
+    order = ambiguous ? OperationSpec[] : plan_operation_order(plan)
     return ObjectReport(
         EPISTEME_PLAN_KIND,
         "Plan $(plan.id.value) with $(length(plan.operations)) operations.",
@@ -319,7 +342,7 @@ function report(plan::Plan)
             operations = Tuple(spec.name for spec in plan.operations),
             order = Tuple(spec.name for spec in order),
             roots = Tuple(b.role for b in plan_roots(plan)),
-            cyclic = _plan_has_cycle(plan),
+            cyclic = !ambiguous && length(order) != length(plan.operations),
         ),
         DiagnosticMessage[],
         ArtifactRef[],
@@ -328,7 +351,8 @@ end
 
 function readiness(plan::Plan, target::PipelineTarget)
     diagnostics = DiagnosticMessage[]
-    append!(diagnostics, validate(plan).diagnostics)
+    validation = validate(plan)
+    append!(diagnostics, validation.diagnostics)
     if target.name !== :execute && target.name !== :inspect
         push!(diagnostics, error_diagnostic(
             :unsupported_target,
@@ -337,7 +361,7 @@ function readiness(plan::Plan, target::PipelineTarget)
             target = target.name,
         ))
     end
-    if _plan_has_cycle(plan)
+    if isvalid(validation) && _plan_has_cycle(plan)
         push!(diagnostics, error_diagnostic(
             :plan_cycle,
             "plan $(plan.id.value) has a cyclic operation dependency",

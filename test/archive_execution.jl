@@ -649,6 +649,51 @@ end
     end
 end
 
+@testset "ambiguous producers fail closed" begin
+    left = OperationSpec(Symbol("fixture/a"); name = :left, outputs = (:state,))
+    right = OperationSpec(Symbol("fixture/b"); name = :right, outputs = (:state,))
+    plan = Plan(PlanId("plan-ambiguous"); operations = [left, right])
+    checked = validate(plan)
+    @test !isvalid(checked)
+    @test any(d -> d.code === :ambiguous_producer, checked.diagnostics)
+    @test_throws ArgumentError plan_operation_order(plan)
+    ready = readiness(plan, PipelineTarget(:execute))
+    @test !isready(ready)
+    @test report(plan).metadata.order == ()
+
+    named = OperationSpec(
+        Symbol("fixture/solve");
+        name = :solve,
+        inputs = [:mesh],
+        outputs = (:field,),
+    )
+    mismatch = Plan(
+        PlanId("plan-mismatch");
+        operations = [named],
+        bindings = [PlanBinding(:mesh; source = :solve)],
+    )
+    mismatch_report = validate(mismatch)
+    @test !isvalid(mismatch_report)
+    @test any(d -> d.code === :binding_role_mismatch, mismatch_report.diagnostics)
+    @test_throws ArgumentError plan_operation_order(mismatch)
+    @test report(mismatch).metadata.order == ()
+
+    consumer = OperationSpec(Symbol("fixture/use"); name = :use, inputs = [:field])
+    twice = Plan(
+        PlanId("plan-two-bindings");
+        operations = [named, consumer],
+        bindings = [
+            PlanBinding(:field; source = :solve),
+            PlanBinding(:field; source = :solve),
+        ],
+    )
+    twice_report = validate(twice)
+    @test !isvalid(twice_report)
+    @test any(d -> d.code === :ambiguous_binding, twice_report.diagnostics)
+    @test_throws ArgumentError plan_operation_order(twice)
+    @test report(twice).metadata.order == ()
+end
+
 @testset "reproduction comparison is domain-neutral" begin
     left = ContentId("sha256:aaa")
     right = ContentId("sha256:aaa")

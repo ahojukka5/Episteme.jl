@@ -901,13 +901,57 @@ function validate(plan::Plan)
             seen_names[spec.name] = i
         end
     end
-    names = Set(spec.name for spec in plan.operations)
-    for binding in plan.bindings
+    by_name = Dict{Symbol,OperationSpec}()
+    producers = Dict{Symbol,Symbol}()
+    for spec in plan.operations
+        by_name[spec.name] = spec
+        for role in spec.outputs
+            previous = get(producers, role, nothing)
+            if previous !== nothing
+                push!(diagnostics, error_diagnostic(
+                    :ambiguous_producer,
+                    "role :$role is produced by :$previous and :$(spec.name)";
+                    plan_id = plan.id.value,
+                    role = role,
+                    source = previous,
+                    other = spec.name,
+                ))
+            else
+                producers[role] = spec.name
+            end
+        end
+    end
+    seen_roles = Dict{Symbol,Int}()
+    for (i, binding) in enumerate(plan.bindings)
+        previous = get(seen_roles, binding.role, 0)
+        if previous != 0
+            push!(diagnostics, error_diagnostic(
+                :ambiguous_binding,
+                "role :$(binding.role) has more than one binding";
+                plan_id = plan.id.value,
+                role = binding.role,
+                index = i,
+                other_index = previous,
+            ))
+        else
+            seen_roles[binding.role] = i
+        end
         binding.source === nothing && continue
-        binding.source in names && continue
+        producer = get(by_name, binding.source, nothing)
+        if producer === nothing
+            push!(diagnostics, error_diagnostic(
+                :missing_producer,
+                "binding :$(binding.role) names unknown producer :$(binding.source)";
+                plan_id = plan.id.value,
+                role = binding.role,
+                source = binding.source,
+            ))
+            continue
+        end
+        binding.role in producer.outputs && continue
         push!(diagnostics, error_diagnostic(
-            :missing_producer,
-            "binding :$(binding.role) names unknown producer :$(binding.source)";
+            :binding_role_mismatch,
+            "binding :$(binding.role) names :$(binding.source), which does not produce that role";
             plan_id = plan.id.value,
             role = binding.role,
             source = binding.source,
