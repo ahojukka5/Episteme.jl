@@ -3,3 +3,16 @@ Manifest.toml
 *.jl.*.cov
 *.jl.mem
 .DS_Store
+
+# Generated local state. Not source.
+Manifest-*.toml
+LocalPreferences.toml
+*.mem
+.pytest_cache/
+.quarto/
+_build/
+runs/
+*.out
+*.err
+run.log
+inst.log
