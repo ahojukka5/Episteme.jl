@@ -8,10 +8,15 @@ function _capsule_schemas(graph::ArchiveGraph, schemas::SchemaRegistry)
     for run in graph.runs, staged in run.staged
         refs[_integrity_schema_key(staged.schema)] = staged.schema
     end
+    by_key = Dict{Tuple{String,String,String},Vector{SchemaDefinition}}()
+    for definition in schemas.entries
+        matches = get!(() -> SchemaDefinition[], by_key,
+            _integrity_schema_key(definition.schema))
+        push!(matches, definition)
+    end
     definitions = SchemaDefinition[]
     for key in sort!(collect(keys(refs)))
-        matches = [definition for definition in schemas.entries if
-            _integrity_schema_key(definition.schema) == key]
+        matches = haskey(by_key, key) ? by_key[key] : SchemaDefinition[]
         length(matches) == 1 || throw(ArgumentError(
             "capsule needs exactly one embedded definition for schema $(repr(key))",
         ))
