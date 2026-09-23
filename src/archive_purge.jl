@@ -267,8 +267,10 @@ function _retain_object_closure!(
     _retain_revision_records!(state, graph, object.revision_id)
     queue = ArchiveObject[object]
     seen = Set{String}()
-    while !isempty(queue)
-        item = popfirst!(queue)
+    cursor = 1
+    while cursor <= length(queue)
+        item = queue[cursor]
+        cursor += 1
         key = _object_key(item)
         key in seen && continue
         push!(seen, key)
@@ -852,13 +854,13 @@ function _build_compacted(
     policy::RetentionPolicy,
 )
     return ArchiveGraph(
-        _filter_copy(ordered_objects(graph), (_, obj) -> _object_key(obj) in state.objects),
-        _filter_copy(ordered_heads(graph), (_, head) -> head.id.value in state.heads),
-        _filter_copy(ordered_revisions(graph), (_, rev) -> rev.id.value in state.revisions),
-        _filter_copy(ordered_runs(graph), (_, run) -> run.id.value in state.runs),
-        _filter_copy(graph.events, (_, event) -> _keep_event(event, policy, state.runs)),
-        _filter_copy(graph.writes, (_, tx) -> tx.run_id !== nothing && tx.run_id.value in state.runs),
-        _filter_copy(
+        _filter_copy(ordered_objects(graph), (_, obj) -> _object_key(obj) in state.objects);
+        heads = _filter_copy(ordered_heads(graph), (_, head) -> head.id.value in state.heads),
+        revisions = _filter_copy(ordered_revisions(graph), (_, rev) -> rev.id.value in state.revisions),
+        runs = _filter_copy(ordered_runs(graph), (_, run) -> run.id.value in state.runs),
+        events = _filter_copy(graph.events, (_, event) -> _keep_event(event, policy, state.runs)),
+        writes = _filter_copy(graph.writes, (_, tx) -> tx.run_id !== nothing && tx.run_id.value in state.runs),
+        log_streams = _filter_copy(
             graph.log_streams,
             (_, stream) -> _keep_log_stream(stream, policy, state.runs, state.forced_streams),
         ),
