@@ -130,15 +130,71 @@ function _match_external(externals, object_id::ObjectId, content_id)
     return nothing
 end
 
-function _visible_revision_order(graph::ArchiveGraph, revision_id::RevisionId)
+# Operation-scoped lookup over one graph. Traversals build it once from the
+# current backing vectors and drop it when they return, so no persistent
+# cache can go stale when `graph.objects` or `graph.revisions` change.
+# First match wins, and grouped objects keep the order the public
+# `find_objects` / `find_revisions` return.
+struct _GraphLookup
+    graph::ArchiveGraph
+    revisions::Dict{String,RevisionRecord}
+    objects::Dict{Tuple{String,String},ArchiveObject}
+    by_object::Dict{String,Vector{ArchiveObject}}
+    by_revision::Dict{String,Vector{ArchiveObject}}
+end
+
+function _GraphLookup(graph::ArchiveGraph)
+    revisions = Dict{String,RevisionRecord}()
+    for rev in graph.revisions
+        get!(revisions, rev.id.value, rev)
+    end
+    objects = Dict{Tuple{String,String},ArchiveObject}()
+    by_object = Dict{String,Vector{ArchiveObject}}()
+    by_revision = Dict{String,Vector{ArchiveObject}}()
+    for object in graph.objects
+        get!(objects, (object.object_id.value, object.revision_id.value), object)
+        push!(get!(() -> ArchiveObject[], by_object, object.object_id.value), object)
+        push!(get!(() -> ArchiveObject[], by_revision, object.revision_id.value), object)
+    end
+    for group in values(by_object)
+        sort!(group; by = _object_sort_key)
+    end
+    for group in values(by_revision)
+        sort!(group; by = _object_sort_key)
+    end
+    return _GraphLookup(graph, revisions, objects, by_object, by_revision)
+end
+
+_GraphLookup(lookup::_GraphLookup) = lookup
+
+_graph(graph::ArchiveGraph) = graph
+_graph(lookup::_GraphLookup) = lookup.graph
+
+_find_revision(graph::ArchiveGraph, id::RevisionId) = find_revision(graph, id)
+_find_revision(lookup::_GraphLookup, id::RevisionId) =
+    get(lookup.revisions, id.value, nothing)
+_find_object(graph::ArchiveGraph, object_id::ObjectId, revision_id::RevisionId) =
+    find_object(graph, object_id, revision_id)
+_find_object(lookup::_GraphLookup, object_id::ObjectId, revision_id::RevisionId) =
+    get(lookup.objects, (object_id.value, revision_id.value), nothing)
+_find_objects(graph::ArchiveGraph, revision_id::RevisionId) = find_objects(graph, revision_id)
+_find_objects(lookup::_GraphLookup, revision_id::RevisionId) =
+    copy(get(lookup.by_revision, revision_id.value, ArchiveObject[]))
+_find_revisions(graph::ArchiveGraph, object_id::ObjectId) = find_revisions(graph, object_id)
+_find_revisions(lookup::_GraphLookup, object_id::ObjectId) =
+    copy(get(lookup.by_object, object_id.value, ArchiveObject[]))
+
+function _visible_revision_order(source::Union{ArchiveGraph,_GraphLookup}, revision_id::RevisionId)
     order = RevisionId[]
     seen = Set{String}()
     queue = RevisionId[revision_id]
-    while !isempty(queue)
-        id = popfirst!(queue)
+    cursor = 1
+    while cursor <= length(queue)
+        id = queue[cursor]
+        cursor += 1
         id.value in seen && continue
         push!(seen, id.value)
-        rec = find_revision(graph, id)
+        rec = _find_revision(source, id)
         rec === nothing && continue
         push!(order, id)
         for parent in rec.parents
@@ -149,14 +205,20 @@ function _visible_revision_order(graph::ArchiveGraph, revision_id::RevisionId)
     return order
 end
 
-function _resolve_in_revision_scope(graph::ArchiveGraph, target::ObjectRef, visible::Vector{RevisionId})
-    vis = Set(id.value for id in visible)
+_visible_set(visible::Vector{RevisionId}) = Set{String}(id.value for id in visible)
+
+function _resolve_in_revision_scope(
+    source::Union{ArchiveGraph,_GraphLookup},
+    target::ObjectRef,
+    visible::Vector{RevisionId},
+    vis::Set{String} = _visible_set(visible),
+)
     if target.revision_id !== nothing
         target.revision_id.value in vis || return nothing
-        return find_object(graph, target.object_id, target.revision_id)
+        return _find_object(source, target.object_id, target.revision_id)
     end
     for rev in visible
-        obj = find_object(graph, target.object_id, rev)
+        obj = _find_object(source, target.object_id, rev)
         obj === nothing || return obj
     end
     return nothing
@@ -166,7 +228,7 @@ function _entry_key(object_id::ObjectId, revision_id)
     return object_id.value * "@" * (revision_id === nothing ? "" : revision_id.value)
 end
 
-function _revision_has_parent_cycle(graph::ArchiveGraph, rec::RevisionRecord)
+function _revision_has_parent_cycle(graph::Union{ArchiveGraph,_GraphLookup}, rec::RevisionRecord)
     seen = Set{String}([rec.id.value])
     stack = RevisionId[_unique_parents(rec)...]
     while !isempty(stack)
@@ -174,14 +236,18 @@ function _revision_has_parent_cycle(graph::ArchiveGraph, rec::RevisionRecord)
         id == rec.id && return true
         id.value in seen && continue
         push!(seen, id.value)
-        parent = find_revision(graph, id)
+        parent = _find_revision(graph, id)
         parent === nothing && continue
         append!(stack, _unique_parents(parent))
     end
     return false
 end
 
-function _append_revision_record_diagnostics!(diagnostics, graph::ArchiveGraph, rec::RevisionRecord)
+function _append_revision_record_diagnostics!(
+    diagnostics,
+    graph::Union{ArchiveGraph,_GraphLookup},
+    rec::RevisionRecord,
+)
     if _revision_has_parent_cycle(graph, rec)
         push!(diagnostics, error_diagnostic(
             :cycle,
@@ -191,7 +257,7 @@ function _append_revision_record_diagnostics!(diagnostics, graph::ArchiveGraph, 
     end
     for parent_id in _unique_parents(rec)
         parent_id == rec.id && continue
-        find_revision(graph, parent_id) === nothing || continue
+        _find_revision(graph, parent_id) === nothing || continue
         push!(diagnostics, error_diagnostic(
             :dangling_parent,
             "revision $(rec.id.value) names unknown parent $(parent_id.value)";
@@ -200,7 +266,7 @@ function _append_revision_record_diagnostics!(diagnostics, graph::ArchiveGraph, 
         ))
     end
     rec.run_id === nothing && return diagnostics
-    run = find_run(graph, rec.run_id)
+    run = find_run(_graph(graph), rec.run_id)
     if run === nothing
         push!(diagnostics, error_diagnostic(
             :missing_revision_run,
@@ -231,9 +297,13 @@ function _append_revision_record_diagnostics!(diagnostics, graph::ArchiveGraph, 
     return diagnostics
 end
 
-function _append_visible_revision_diagnostics!(diagnostics, graph::ArchiveGraph, visible)
+function _append_visible_revision_diagnostics!(
+    diagnostics,
+    graph::Union{ArchiveGraph,_GraphLookup},
+    visible,
+)
     for id in visible
-        rec = find_revision(graph, id)
+        rec = _find_revision(graph, id)
         rec === nothing && continue
         _append_revision_record_diagnostics!(diagnostics, graph, rec)
     end
@@ -274,7 +344,7 @@ function _push_unresolved_entry!(
 end
 
 function _revision_manifest(
-    graph::ArchiveGraph,
+    source::Union{ArchiveGraph,_GraphLookup},
     revision_id::RevisionId;
     mode::Symbol,
     externals = ExternalRequirement[],
@@ -282,20 +352,25 @@ function _revision_manifest(
     mode in MANIFEST_MODES || throw(ArgumentError(
         "mode must be one of $MANIFEST_MODES, got :$mode",
     ))
-    rec = find_revision(graph, revision_id)
+    lookup = _GraphLookup(source)
+    graph = lookup.graph
+    rec = _find_revision(lookup, revision_id)
     rec === nothing && throw(ArgumentError(
         "revision $(revision_id.value) is not in the archive graph",
     ))
     reqs = _externals_vector(externals)
     diagnostics = DiagnosticMessage[]
-    visible = _visible_revision_order(graph, revision_id)
-    _append_visible_revision_diagnostics!(diagnostics, graph, visible)
-    queue = find_objects(graph, revision_id)
+    visible = _visible_revision_order(lookup, revision_id)
+    vis = _visible_set(visible)
+    _append_visible_revision_diagnostics!(diagnostics, lookup, visible)
+    queue = _find_objects(lookup, revision_id)
     seen = Set{String}()
     entries = ManifestEntry[]
     unresolved = String[]
-    while !isempty(queue)
-        object = popfirst!(queue)
+    cursor = 1
+    while cursor <= length(queue)
+        object = queue[cursor]
+        cursor += 1
         key = _entry_key(object.object_id, object.revision_id)
         key in seen && continue
         push!(seen, key)
@@ -307,7 +382,7 @@ function _revision_manifest(
             availability = :envelope_only,
         ))
         for ref in ordered_references(object)
-            resolved = _resolve_in_revision_scope(graph, ref.target, visible)
+            resolved = _resolve_in_revision_scope(lookup, ref.target, visible, vis)
             if resolved === nothing
                 _push_unresolved_entry!(
                     entries,
