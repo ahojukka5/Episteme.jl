@@ -587,6 +587,28 @@ function _object_pair_index(objects)
     return index
 end
 
+function _reindex_graph!(graph::ArchiveGraph)
+    empty!(graph.revision_index)
+    for revision in graph.revisions
+        get!(() -> revision, graph.revision_index, revision.id.value)
+    end
+    empty!(graph.object_index)
+    for object in graph.objects
+        key = (object.object_id.value, object.revision_id.value)
+        get!(() -> object, graph.object_index, key)
+    end
+    empty!(graph.objects_by_id)
+    empty!(graph.objects_by_revision)
+    for object in graph.objects
+        push!(get!(() -> ArchiveObject[], graph.objects_by_id, object.object_id.value), object)
+        push!(
+            get!(() -> ArchiveObject[], graph.objects_by_revision, object.revision_id.value),
+            object,
+        )
+    end
+    return graph
+end
+
 function ArchiveGraph(
     objects;
     heads = WorkflowHead[],
@@ -909,7 +931,8 @@ end
 Every snapshot of `object_id`, in logical order.
 """
 function find_revisions(graph::ArchiveGraph, object_id::ObjectId)
-    matches = get(graph.objects_by_id, object_id.value, ArchiveObject[])
+    matches = haskey(graph.objects_by_id, object_id.value) ?
+        graph.objects_by_id[object_id.value] : ArchiveObject[]
     return sort(matches; by = _object_sort_key)
 end
 
@@ -926,7 +949,8 @@ end
 Every object materialized in the given workflow revision, in logical order.
 """
 function find_objects(graph::ArchiveGraph, revision_id::RevisionId)
-    matches = get(graph.objects_by_revision, revision_id.value, ArchiveObject[])
+    matches = haskey(graph.objects_by_revision, revision_id.value) ?
+        graph.objects_by_revision[revision_id.value] : ArchiveObject[]
     return sort(matches; by = _object_sort_key)
 end
 

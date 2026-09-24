@@ -1405,8 +1405,10 @@ function commit!(
         payload = fetch_payload(store, object.object_id)
         payload === nothing || store_payload!(store, object.object_id, payload; revision_id = new_rev)
     end
+    _reindex_graph!(graph)
     _maybe_interrupt(interrupt_after, :objects, rid)
     push!(graph.revisions, rec)
+    _reindex_graph!(graph)
     _maybe_interrupt(interrupt_after, :revision, rid)
     committed_run = _copy_run(run; revision_id = new_rev, status = :completed)
     _replace_run!(graph, committed_run)
@@ -1564,6 +1566,7 @@ function _rollback_orphan_promotions!(graph, run::RunRecord, diagnostics)
     if length(remaining) != length(graph.objects)
         empty!(graph.objects)
         append!(graph.objects, remaining)
+        _reindex_graph!(graph)
         push!(diagnostics, warning_diagnostic(
             :rolled_back_partial_commit,
             "removed uncommitted objects from run $(run.id.value)",
@@ -1576,6 +1579,7 @@ end
 function _rollback_revision!(graph, rec::RevisionRecord, run::RunRecord, diagnostics)
     filter!(object -> object.revision_id != rec.id, graph.objects)
     filter!(rev -> rev.id != rec.id, graph.revisions)
+    _reindex_graph!(graph)
     parent = isempty(rec.parents) ? nothing : rec.parents[1]
     for i in eachindex(graph.heads)
         graph.heads[i].revision_id == rec.id || continue
