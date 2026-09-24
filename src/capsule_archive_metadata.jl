@@ -8,14 +8,19 @@ function _capsule_schemas(graph::ArchiveGraph, schemas::SchemaRegistry)
     for run in graph.runs, staged in run.staged
         refs[_integrity_schema_key(staged.schema)] = staged.schema
     end
+    # One registry pass: first definition per key, plus the keys seen twice.
+    by_key = Dict{Tuple{String,String,String},SchemaDefinition}()
+    duplicated = Set{Tuple{String,String,String}}()
+    for definition in schemas.entries
+        key = _integrity_schema_key(definition.schema)
+        haskey(by_key, key) ? push!(duplicated, key) : (by_key[key] = definition)
+    end
     definitions = SchemaDefinition[]
     for key in sort!(collect(keys(refs)))
-        matches = [definition for definition in schemas.entries if
-            _integrity_schema_key(definition.schema) == key]
-        length(matches) == 1 || throw(ArgumentError(
+        haskey(by_key, key) && !(key in duplicated) || throw(ArgumentError(
             "capsule needs exactly one embedded definition for schema $(repr(key))",
         ))
-        push!(definitions, only(matches))
+        push!(definitions, by_key[key])
     end
     return SchemaRegistry(definitions)
 end

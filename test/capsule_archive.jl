@@ -138,3 +138,78 @@ end
     @test_throws ArgumentError Episteme._capsule_schemas(graph,
         SchemaRegistry([_mesh_def(), _mesh_def(), _field_def()]))
 end
+
+@testset "capsule schema selection keeps ordering and fail-closed errors" begin
+    # The pre-index selection: one registry scan per retained key.
+    function scan_select(graph, schemas)
+        refs = Dict{Tuple{String,String,String},SchemaRef}()
+        for object in graph.objects
+            refs[Episteme._integrity_schema_key(object.schema)] = object.schema
+        end
+        for run in graph.runs, staged in run.staged
+            refs[Episteme._integrity_schema_key(staged.schema)] = staged.schema
+        end
+        definitions = SchemaDefinition[]
+        for key in sort!(collect(keys(refs)))
+            matches = [d for d in schemas.entries if
+                Episteme._integrity_schema_key(d.schema) == key]
+            length(matches) == 1 || throw(ArgumentError(
+                "capsule needs exactly one embedded definition for schema $(repr(key))",
+            ))
+            push!(definitions, only(matches))
+        end
+        return SchemaRegistry(definitions)
+    end
+    thrown(f) = try
+        f()
+        nothing
+    catch err
+        err
+    end
+    keyof(def) = Episteme._integrity_schema_key(def.schema)
+
+    versions = ["$(i).0.0" for i in 1:12]
+    retained = versions[[9, 2, 11, 5, 1]]
+    objects = [_obj(:delone, "mesh", "obj-$v", REV_1; version = v) for v in retained]
+    staged = StagedObject(ObjectId(ID_FIELD);
+        namespace = _field_def().namespace, kind = Symbol("oodi/field"),
+        schema = _field_def().schema, content_id = ContentId(CAPSULE_CONTENT_B))
+    graph = ArchiveGraph(objects; runs = [RunRecord(RunId("staged-run"); staged = [staged])])
+    defs = [[_mesh_def(version = v) for v in versions]; _field_def()]
+
+    # Output follows the sorted retained keys, whatever the registry order.
+    expected = sort!(unique!([keyof(d) for d in defs if
+        d.schema in Set([[o.schema for o in objects]; staged.schema])]))
+    for registry in (defs, reverse(defs), defs[[13, 4, 1, 12, 7, 2, 9, 3, 11, 5, 10, 6, 8]])
+        schemas = SchemaRegistry(registry)
+        selected = Episteme._capsule_schemas(graph, schemas)
+        @test [keyof(d) for d in selected.entries] == expected
+        @test to_namedtuple.(selected.entries) == to_namedtuple.(scan_select(graph, schemas).entries)
+    end
+
+    # A missing required definition fails with the same message as before.
+    missing_defs = SchemaRegistry(filter(d -> d.schema.version != "5.0.0", defs))
+    err = thrown(() -> Episteme._capsule_schemas(graph, missing_defs))
+    @test err isa ArgumentError
+    @test err == thrown(() -> scan_select(graph, missing_defs))
+    @test occursin(repr(("delone", "mesh", "5.0.0")), err.msg)
+
+    # Duplicates fail only when the duplicated key is retained.
+    dup_required = SchemaRegistry([defs; _mesh_def(version = "11.0.0", package_version = "9.9.9")])
+    err = thrown(() -> Episteme._capsule_schemas(graph, dup_required))
+    @test err isa ArgumentError
+    @test err == thrown(() -> scan_select(graph, dup_required))
+    @test occursin(repr(("delone", "mesh", "11.0.0")), err.msg)
+    dup_unused = SchemaRegistry([defs; _mesh_def(version = "3.0.0")])
+    @test [keyof(d) for d in Episteme._capsule_schemas(graph, dup_unused).entries] == expected
+
+    # Selection builds no per-key temporary: extra retained keys against the
+    # same registry must not add a per-key scan's worth of allocations.
+    big = SchemaRegistry([_mesh_def(version = "$(i).0.0") for i in 1:400])
+    few = ArchiveGraph([_obj(:delone, "mesh", "o-$i", REV_1; version = "$(i).0.0") for i in 1:10])
+    many = ArchiveGraph([_obj(:delone, "mesh", "o-$i", REV_1; version = "$(i).0.0") for i in 1:200])
+    Episteme._capsule_schemas(few, big); Episteme._capsule_schemas(many, big)
+    scan_select(few, big); scan_select(many, big)
+    @test (@allocated Episteme._capsule_schemas(many, big)) <
+        (@allocated scan_select(many, big)) ÷ 4
+end
