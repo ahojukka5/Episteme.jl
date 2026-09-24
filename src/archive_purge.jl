@@ -170,6 +170,7 @@ struct PurgeResult
 end
 
 struct _Reachability
+    lookup::_GraphLookup
     objects::Set{String}
     revisions::Set{String}
     runs::Set{String}
@@ -177,10 +178,13 @@ struct _Reachability
     externals::Vector{ExternalRequirement}
     diagnostics::Vector{DiagnosticMessage}
     forced_streams::Set{Tuple{String,Symbol}}
+    # Revisions whose visible ancestry is already retained.
+    walked::Set{String}
 end
 
-function _Reachability()
+function _Reachability(graph::ArchiveGraph)
     return _Reachability(
+        _GraphLookup(graph),
         Set{String}(),
         Set{String}(),
         Set{String}(),
@@ -188,6 +192,7 @@ function _Reachability()
         ExternalRequirement[],
         DiagnosticMessage[],
         Set{Tuple{String,Symbol}}(),
+        Set{String}(),
     )
 end
 
@@ -221,16 +226,25 @@ function _retain_object!(objects::Set{String}, revisions::Set{String}, object::A
     return nothing
 end
 
+# Retain a revision, its visible ancestry, and the runs that committed them.
+# The walk stops at a revision already walked in this operation: its
+# ancestry is already retained.
 function _retain_revision_records!(state::_Reachability, graph::ArchiveGraph, revision_id::RevisionId)
     push!(state.revisions, revision_id.value)
-    rec = find_revision(graph, revision_id)
-    rec === nothing && return nothing
-    for id in _visible_revision_order(graph, revision_id)
+    queue = RevisionId[revision_id]
+    cursor = 1
+    while cursor <= length(queue)
+        id = queue[cursor]
+        cursor += 1
+        id.value in state.walked && continue
+        push!(state.walked, id.value)
+        rec = _find_revision(state.lookup, id)
+        rec === nothing && continue
         push!(state.revisions, id.value)
-        parent = find_revision(graph, id)
-        parent === nothing && continue
-        parent.run_id === nothing && continue
-        push!(state.runs, parent.run_id.value)
+        rec.run_id === nothing || push!(state.runs, rec.run_id.value)
+        for parent in rec.parents
+            parent.value in state.walked || push!(queue, parent)
+        end
     end
     return nothing
 end
@@ -263,7 +277,8 @@ function _retain_object_closure!(
     policy::RetentionPolicy,
     externals,
 )
-    visible = _visible_revision_order(graph, object.revision_id)
+    visible = _visible_revision_order(state.lookup, object.revision_id)
+    vis = _visible_set(visible)
     _retain_revision_records!(state, graph, object.revision_id)
     queue = ArchiveObject[object]
     seen = Set{String}()
@@ -277,7 +292,7 @@ function _retain_object_closure!(
         _retain_object!(state.objects, state.revisions, item)
         _retain_revision_records!(state, graph, item.revision_id)
         for ref in ordered_references(item)
-            resolved = _resolve_in_revision_scope(graph, ref.target, visible)
+            resolved = _resolve_in_revision_scope(state.lookup, ref.target, visible, vis)
             if resolved === nothing
                 _retain_unresolved_target!(state, externals, object.revision_id, ref.target)
             else
@@ -287,7 +302,7 @@ function _retain_object_closure!(
     end
     policy.keep_ancestor_objects || return nothing
     for rev_id in visible
-        for obj in find_objects(graph, rev_id)
+        for obj in _find_objects(state.lookup, rev_id)
             _retain_object!(state.objects, state.revisions, obj)
         end
     end
@@ -306,10 +321,10 @@ function _retain_object_ref!(
 )
     matches = ArchiveObject[]
     if ref.revision_id !== nothing
-        obj = find_object(graph, ref.object_id, ref.revision_id)
+        obj = _find_object(state.lookup, ref.object_id, ref.revision_id)
         obj === nothing || push!(matches, obj)
     else
-        append!(matches, find_revisions(graph, ref.object_id))
+        append!(matches, _find_revisions(state.lookup, ref.object_id))
     end
     if !isempty(matches)
         for obj in matches
@@ -339,7 +354,7 @@ function _retain_revision_closure!(
     policy::RetentionPolicy,
     externals,
 )
-    manifest = inspect(graph, revision_id; externals = externals)
+    manifest = _revision_manifest(state.lookup, revision_id; mode = :inspect, externals = externals)
     for diag in manifest.diagnostics
         _push_diagnostic!(state.diagnostics, diag)
     end
@@ -372,8 +387,8 @@ function _retain_revision_closure!(
         end
     end
     policy.keep_ancestor_objects || return nothing
-    for rev_id in _visible_revision_order(graph, revision_id)
-        for object in find_objects(graph, rev_id)
+    for rev_id in _visible_revision_order(state.lookup, revision_id)
+        for object in _find_objects(state.lookup, rev_id)
             _retain_object!(state.objects, state.revisions, object)
         end
     end
@@ -631,7 +646,7 @@ function _reachability(
     externals,
     artifacts,
 )
-    state = _Reachability()
+    state = _Reachability(graph)
     for root in roots
         root isa RetentionRoot || throw(ArgumentError("roots must contain RetentionRoot values"))
         _seed_root!(state, graph, root, policy, externals)
@@ -854,13 +869,13 @@ function _build_compacted(
     policy::RetentionPolicy,
 )
     return ArchiveGraph(
-        _filter_copy(ordered_objects(graph), (_, obj) -> _object_key(obj) in state.objects);
-        heads = _filter_copy(ordered_heads(graph), (_, head) -> head.id.value in state.heads),
-        revisions = _filter_copy(ordered_revisions(graph), (_, rev) -> rev.id.value in state.revisions),
-        runs = _filter_copy(ordered_runs(graph), (_, run) -> run.id.value in state.runs),
-        events = _filter_copy(graph.events, (_, event) -> _keep_event(event, policy, state.runs)),
-        writes = _filter_copy(graph.writes, (_, tx) -> tx.run_id !== nothing && tx.run_id.value in state.runs),
-        log_streams = _filter_copy(
+        _filter_copy(ordered_objects(graph), (_, obj) -> _object_key(obj) in state.objects),
+        _filter_copy(ordered_heads(graph), (_, head) -> head.id.value in state.heads),
+        _filter_copy(ordered_revisions(graph), (_, rev) -> rev.id.value in state.revisions),
+        _filter_copy(ordered_runs(graph), (_, run) -> run.id.value in state.runs),
+        _filter_copy(graph.events, (_, event) -> _keep_event(event, policy, state.runs)),
+        _filter_copy(graph.writes, (_, tx) -> tx.run_id !== nothing && tx.run_id.value in state.runs),
+        _filter_copy(
             graph.log_streams,
             (_, stream) -> _keep_log_stream(stream, policy, state.runs, state.forced_streams),
         ),

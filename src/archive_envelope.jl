@@ -557,56 +557,6 @@ struct ArchiveGraph
     events::Vector{EventRecord}
     writes::Vector{WriteTransaction}
     log_streams::Vector{LogStreamRecord}
-    revision_index::Dict{String,RevisionRecord}
-    object_index::Dict{Tuple{String,String},ArchiveObject}
-    objects_by_id::Dict{String,Vector{ArchiveObject}}
-    objects_by_revision::Dict{String,Vector{ArchiveObject}}
-end
-
-function _first_index(items, key)
-    index = Dict{String,eltype(items)}()
-    for item in items
-        get!(index, key(item), item)
-    end
-    return index
-end
-
-function _objects_by(objects, key)
-    grouped = Dict{String,Vector{ArchiveObject}}()
-    for object in objects
-        push!(get!(() -> ArchiveObject[], grouped, key(object)), object)
-    end
-    return grouped
-end
-
-function _object_pair_index(objects)
-    index = Dict{Tuple{String,String},ArchiveObject}()
-    for object in objects
-        get!(index, (object.object_id.value, object.revision_id.value), object)
-    end
-    return index
-end
-
-function _reindex_graph!(graph::ArchiveGraph)
-    empty!(graph.revision_index)
-    for revision in graph.revisions
-        get!(() -> revision, graph.revision_index, revision.id.value)
-    end
-    empty!(graph.object_index)
-    for object in graph.objects
-        key = (object.object_id.value, object.revision_id.value)
-        get!(() -> object, graph.object_index, key)
-    end
-    empty!(graph.objects_by_id)
-    empty!(graph.objects_by_revision)
-    for object in graph.objects
-        push!(get!(() -> ArchiveObject[], graph.objects_by_id, object.object_id.value), object)
-        push!(
-            get!(() -> ArchiveObject[], graph.objects_by_revision, object.revision_id.value),
-            object,
-        )
-    end
-    return graph
 end
 
 function ArchiveGraph(
@@ -618,20 +568,14 @@ function ArchiveGraph(
     writes = WriteTransaction[],
     log_streams = LogStreamRecord[],
 )
-    stored_objects = _typed_vector(ArchiveObject, objects, "graph objects")
-    stored_revisions = _typed_vector(RevisionRecord, revisions, "graph revisions")
     return ArchiveGraph(
-        stored_objects,
+        _typed_vector(ArchiveObject, objects, "graph objects"),
         _typed_vector(WorkflowHead, heads, "graph heads"),
-        stored_revisions,
+        _typed_vector(RevisionRecord, revisions, "graph revisions"),
         _typed_vector(RunRecord, runs, "graph runs"),
         _typed_vector(EventRecord, events, "graph events"),
         _typed_vector(WriteTransaction, writes, "graph writes"),
         _typed_vector(LogStreamRecord, log_streams, "graph log streams"),
-        _first_index(stored_revisions, revision -> revision.id.value),
-        _object_pair_index(stored_objects),
-        _objects_by(stored_objects, object -> object.object_id.value),
-        _objects_by(stored_objects, object -> object.revision_id.value),
     )
 end
 
@@ -798,7 +742,10 @@ function event_timeline(graph::ArchiveGraph; run_id = nothing)
 end
 
 function find_revision(graph::ArchiveGraph, revision_id::RevisionId)
-    return get(graph.revision_index, revision_id.value, nothing)
+    for rev in graph.revisions
+        rev.id == revision_id && return rev
+    end
+    return nothing
 end
 
 function find_run(graph::ArchiveGraph, run_id::RunId)
@@ -931,8 +878,10 @@ end
 Every snapshot of `object_id`, in logical order.
 """
 function find_revisions(graph::ArchiveGraph, object_id::ObjectId)
-    matches = haskey(graph.objects_by_id, object_id.value) ?
-        graph.objects_by_id[object_id.value] : ArchiveObject[]
+    matches = ArchiveObject[]
+    for object in graph.objects
+        object.object_id == object_id && push!(matches, object)
+    end
     return sort(matches; by = _object_sort_key)
 end
 
@@ -940,7 +889,12 @@ end
     find_object(graph, object_id, revision_id) -> Union{ArchiveObject,Nothing}
 """
 function find_object(graph::ArchiveGraph, object_id::ObjectId, revision_id::RevisionId)
-    return get(graph.object_index, (object_id.value, revision_id.value), nothing)
+    for object in graph.objects
+        if object.object_id == object_id && object.revision_id == revision_id
+            return object
+        end
+    end
+    return nothing
 end
 
 """
@@ -949,8 +903,10 @@ end
 Every object materialized in the given workflow revision, in logical order.
 """
 function find_objects(graph::ArchiveGraph, revision_id::RevisionId)
-    matches = haskey(graph.objects_by_revision, revision_id.value) ?
-        graph.objects_by_revision[revision_id.value] : ArchiveObject[]
+    matches = ArchiveObject[]
+    for object in graph.objects
+        object.revision_id == revision_id && push!(matches, object)
+    end
     return sort(matches; by = _object_sort_key)
 end
 
