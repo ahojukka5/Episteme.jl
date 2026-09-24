@@ -404,6 +404,78 @@ end
     @test branch_from(rec.id; id = WorkflowHeadId("head-alt"), name = :alt).revision_id == rec.id
 end
 
+@testset "lookups and traversals see commit! and direct graph edits" begin
+    geom, store = _root_geometry()
+    disc = OperationSpec(
+        Symbol("fixture/discretize");
+        name = :discretize,
+        inputs = (:geometry,),
+        outputs = (:mesh,),
+        input_ports = [OperationPort(:geometry; schema = GEOM_SCHEMA)],
+    )
+    plan = Plan(
+        PlanId("plan-lookup");
+        operations = [disc],
+        bindings = [
+            PlanBinding(
+                :geometry;
+                object_id = geom.object_id,
+                revision_id = geom.revision_id,
+                content_id = geom.content_id,
+                schema = GEOM_SCHEMA,
+            ),
+            PlanBinding(:mesh; source = :discretize, object_id = ObjectId(ID_MESH)),
+        ],
+    )
+    graph = ArchiveGraph(
+        [geom];
+        heads = [_head()],
+        revisions = [RevisionRecord(RevisionId(REV_1))],
+    )
+    retained(graph, rev) = Episteme._reachability(
+        graph, [RetentionRoot(rev)], RetentionPolicy(), ExternalRequirement[]).objects
+    mesh_id, r2 = ObjectId(ID_MESH), RevisionId(REV_2)
+    # Query before the commit: a cache filled here must not hide later records.
+    @test find_revision(graph, r2) === nothing
+    @test find_object(graph, mesh_id, r2) === nothing
+    @test isempty(find_objects(graph, r2))
+    @test isempty(find_revisions(graph, mesh_id))
+
+    run = execute!(graph, plan; head = :main, store = store)
+    rec = commit!(graph, run.id; head = :main, store = store, revision_id = r2)
+    mesh = find_object(graph, mesh_id, r2)
+    @test mesh !== nothing
+    @test find_revision(graph, r2) == rec
+    @test [o.object_id for o in find_objects(graph, r2)] == [mesh_id]
+    @test find_revisions(graph, mesh_id) == [mesh]
+    @test producing_run(graph, mesh) == find_run(graph, run.id)
+    @test any(e -> e.object_id == mesh_id, inspect(graph, r2).entries)
+    @test Episteme._object_key(mesh) in retained(graph, r2)
+
+    # Code that edits the backing vectors directly is seen by the next call.
+    r3 = RevisionId(REV_3)
+    note = ArchiveObject(
+        ObjectId(ID_POST), r3;
+        namespace = geom.namespace, kind = geom.kind, schema = geom.schema,
+        references = [ArchiveReference(:mesh, mesh_id)],
+    )
+    push!(graph.revisions, RevisionRecord(r3; parents = [r2]))
+    push!(graph.objects, note)
+    @test find_revision(graph, r3) !== nothing
+    @test find_object(graph, note.object_id, r3) == note
+    @test find_objects(graph, r3) == [note]
+    @test find_revisions(graph, note.object_id) == [note]
+    manifest = inspect(graph, r3)
+    @test issubset([note.object_id, mesh_id], [e.object_id for e in manifest.entries])
+    @test isempty(filter(d -> d.severity === :error, manifest.diagnostics))
+    @test issubset(Episteme._object_key.([note, mesh]), retained(graph, r3))
+
+    filter!(o -> o.object_id != note.object_id, graph.objects)
+    @test find_object(graph, note.object_id, r3) === nothing
+    @test isempty(find_objects(graph, r3))
+    @test !(Episteme._object_key(note) in retained(graph, r3))
+end
+
 @testset "operation failure leaves committed history untouched" begin
     geom, store = _root_geometry()
     boom = OperationSpec(Symbol("fixture/boom"); name = :boom)
