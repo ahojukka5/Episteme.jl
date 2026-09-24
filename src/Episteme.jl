@@ -7,6 +7,7 @@ using SHA
 include("introspection.jl")
 include("semantic_tree.jl")
 include("declarative.jl")
+include("semantic_model.jl")
 include("archive_envelope.jl")
 include("derived_artifacts.jl")
 include("archive_checkout.jl")
@@ -56,6 +57,7 @@ export isready, to_namedtuple
 export SemanticNode, NodeRef, add_child!, attribute, set_attribute!
 export ValidationRule, AttributeSchema, NodeSchema, NodeValidationRule
 export script_node, validated_node, check_validation_rule, check_node_validation_rule
+export SemanticModel, EPISTEME_MODEL_KIND, model_nodes, node_refs, dependency_order
 export AbstractArchiveId, ObjectId, RevisionId, ContentId, RunId, WorkflowHeadId
 export SoftwareEnvironmentId, ExecutionContextId
 export SoftwareComponent, SoftwareEnvironment

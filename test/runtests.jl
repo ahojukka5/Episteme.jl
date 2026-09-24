@@ -215,6 +215,7 @@ struct DummyObject end
     include("semantic_values.jl")
 
     include("declarative.jl")
+    include("semantic_model.jl")
 
     include("archive_envelope.jl")
     include("archive_namespaces.jl")
