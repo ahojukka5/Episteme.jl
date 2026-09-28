@@ -117,20 +117,43 @@ function _external_integrity_records(records)
     return _typed_vector(ExternalIntegrityRecord, records, "external integrity records")
 end
 
-function _match_external_integrity(records, entry::ManifestEntry)
-    matches = ExternalIntegrityRecord[
-        record for record in records if record.object_id == entry.object_id
-    ]
+const _NO_EXTERNAL_INTEGRITY = ExternalIntegrityRecord[]
+
+function _external_integrity_index(records::Vector{ExternalIntegrityRecord})
+    index = Dict{ObjectId, Vector{ExternalIntegrityRecord}}()
+    for record in records
+        push!(get!(() -> ExternalIntegrityRecord[], index, record.object_id), record)
+    end
+    return index
+end
+
+function _match_external_integrity(
+    index::Dict{ObjectId, Vector{ExternalIntegrityRecord}},
+    object_id::ObjectId,
+    content_id::Union{ContentId, Nothing},
+)
+    matches = get(index, object_id, _NO_EXTERNAL_INTEGRITY)
     isempty(matches) && return nothing, :missing
-    if entry.content_id !== nothing
-        exact = ExternalIntegrityRecord[
-            record for record in matches if record.content_id == entry.content_id
-        ]
-        length(exact) == 1 && return exact[1], :exact
-        length(exact) > 1 && return nothing, :ambiguous
+    if content_id !== nothing
+        found = nothing
+        nexact = 0
+        for record in matches
+            record.content_id == content_id || continue
+            nexact += 1
+            found = record
+            nexact > 1 && return nothing, :ambiguous
+        end
+        nexact == 1 && return found, :exact
     end
     length(matches) == 1 && return matches[1], :object_only
     return nothing, :ambiguous
+end
+
+function _match_external_integrity(
+    index::Dict{ObjectId, Vector{ExternalIntegrityRecord}},
+    entry::ManifestEntry,
+)
+    return _match_external_integrity(index, entry.object_id, entry.content_id)
 end
 
 function _schema_identity_diagnostics(entry::ManifestEntry, definition::SchemaDefinition)
@@ -183,9 +206,9 @@ function _object_integrity_row(entry::ManifestEntry, diagnostics)
     )
 end
 
-function _external_integrity_row(entry::ManifestEntry, records, requested, diagnostics)
+function _external_integrity_row(entry::ManifestEntry, index, requested, diagnostics)
     local_diags = DiagnosticMessage[]
-    record, match = _match_external_integrity(records, entry)
+    record, match = _match_external_integrity(index, entry)
     content_id = entry.content_id
     artifact = entry.artifact
     verified = :none
@@ -341,13 +364,14 @@ function integrity_manifest(
 )
     requested = _verification_level(level)
     records = _external_integrity_records(external_integrity)
+    index = _external_integrity_index(records)
     diagnostics = copy(manifest.diagnostics)
     rows = IntegrityDependencyRow[]
     entries = sort(copy(manifest.entries); by = _integrity_entry_sort_key)
 
     for entry in entries
         if entry.availability === :external_required
-            push!(rows, _external_integrity_row(entry, records, requested, diagnostics))
+            push!(rows, _external_integrity_row(entry, index, requested, diagnostics))
         else
             push!(rows, _object_integrity_row(entry, diagnostics))
         end

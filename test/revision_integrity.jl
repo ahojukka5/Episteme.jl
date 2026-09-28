@@ -160,6 +160,60 @@ end
     end
 end
 
+@testset "external integrity records are matched from one index" begin
+    mktempdir() do dir
+        path_a = joinpath(dir, "a.bin")
+        path_b = joinpath(dir, "b.bin")
+        write(path_a, UInt8[1, 2, 3, 4])
+        write(path_b, UInt8[5, 6, 7, 8])
+        artifact_a = ArtifactRef(:file; path = path_a, description = "a")
+        artifact_b = ArtifactRef(:file; path = path_b, description = "b")
+        record_a = capture_external_integrity(
+            ExternalRequirement(ObjectId("obj-a"); artifact = artifact_a);
+            sample_bytes = 1,
+            sample_count = 1,
+        )
+        record_a_again = capture_external_integrity(
+            ExternalRequirement(ObjectId("obj-a"); artifact = artifact_a);
+            sample_bytes = 1,
+            sample_count = 1,
+        )
+        record_b = capture_external_integrity(
+            ExternalRequirement(ObjectId("obj-b"); artifact = artifact_b);
+            sample_bytes = 1,
+            sample_count = 1,
+        )
+        index = Episteme._external_integrity_index([record_a, record_a_again, record_b])
+        hit, status = Episteme._match_external_integrity(
+            index, record_b.object_id, record_b.content_id,
+        )
+        @test status === :exact
+        @test hit.content_id == record_b.content_id
+        _, ambiguous = Episteme._match_external_integrity(
+            index, record_a.object_id, record_a.content_id,
+        )
+        @test ambiguous === :ambiguous
+        missing, missing_status = Episteme._match_external_integrity(
+            index, ObjectId("missing"), nothing,
+        )
+        @test missing === nothing
+        @test missing_status === :missing
+        only_index = Episteme._external_integrity_index([record_b])
+        only_hit, only_status = Episteme._match_external_integrity(
+            only_index, record_b.object_id, nothing,
+        )
+        @test only_status === :object_only
+        @test only_hit === record_b
+        _, fallback = Episteme._match_external_integrity(
+            only_index, record_b.object_id, ContentId("other-content"),
+        )
+        @test fallback === :object_only
+        @test length(index) == 2
+        @test length(index[record_a.object_id]) == 2
+        @test length(only_index) == 1
+    end
+end
+
 @testset "empty revision integrity reports zero external bytes" begin
     manifest = RevisionIntegrityManifest(
         RevisionId("empty-revision"), :metadata, true,
