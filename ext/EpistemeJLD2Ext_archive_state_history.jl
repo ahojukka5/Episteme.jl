@@ -54,7 +54,12 @@ function Episteme.write_state_archive(
 end
 
 function Episteme.inspect_archive(path::AbstractString, ::Type{ArchiveStateHistory})
-    base = inspect_archive(path)
+    return _inspect_archive_session(path) do file, core
+        return _inspect_state_history(path, file, core)
+    end
+end
+
+function _inspect_state_history(path, file, base)
     diagnostics = copy(base.diagnostics)
     if !base.identified || base.profile === nothing
         return _empty_state_history_inspection(path, base.identified, false, base.externals, diagnostics)
@@ -67,12 +72,10 @@ function Episteme.inspect_archive(path::AbstractString, ::Type{ArchiveStateHisto
 
     state = nothing
     try
-        JLD2.jldopen(path, "r"; plain = true) do file
-            _state_history_counts_exist(file) || throw(ArgumentError(
-                "AH5 profile declares state-history records but required indexed roots are missing",
-            ))
-            state = _read_state_history(file)
-        end
+        _state_history_counts_exist(file) || throw(ArgumentError(
+            "AH5 profile declares state-history records but required indexed roots are missing",
+        ))
+        state = _read_state_history(file)
         append!(diagnostics, _validate_state_history(
             state;
             externals = base.externals,

@@ -73,20 +73,26 @@ function Episteme.write_event_archive(
 end
 
 function Episteme.inspect_archive(path::AbstractString, ::Type{ArchiveEventHistory})
-    run_view = inspect_archive(path, ArchiveRunHistory)
+    return _inspect_archive_session(path) do file, core
+        state_view = _inspect_state_history(path, file, core)
+        run_view = _inspect_run_history(path, file, state_view, core)
+        return _inspect_event_history(path, file, run_view, core)
+    end
+end
+
+function _inspect_event_history(path, file, run_view, core)
     diagnostics = copy(run_view.diagnostics)
     if !run_view.identified
         return _empty_event_history_inspection(
-            path, false, false, nothing, RunRecord[], run_view.externals, diagnostics,
+            path, false, false, nothing, RunRecord[], run_view.externals, diagnostics, core,
         )
     end
     if !isvalid(run_view)
         return _empty_event_history_inspection(
-            path, true, false, nothing, RunRecord[], run_view.externals, diagnostics,
+            path, true, false, nothing, RunRecord[], run_view.externals, diagnostics, core,
         )
     end
 
-    core = inspect_archive(path)
     declared = core.profile !== nothing && AH5_EVENT_HISTORY_FEATURE in core.profile.features
     declared || return _empty_event_history_inspection(
         path,
@@ -96,6 +102,7 @@ function Episteme.inspect_archive(path::AbstractString, ::Type{ArchiveEventHisto
         run_view.runs,
         run_view.externals,
         diagnostics,
+        core,
     )
 
     run_declared = core.profile !== nothing && AH5_RUN_HISTORY_FEATURE in core.profile.features
@@ -108,17 +115,15 @@ function Episteme.inspect_archive(path::AbstractString, ::Type{ArchiveEventHisto
         "AH5 event-history feature requires authoritative state-history records",
     ))
     any(d -> d.severity === :error, diagnostics) && return _empty_event_history_inspection(
-        path, true, true, nothing, RunRecord[], run_view.externals, diagnostics,
+        path, true, true, nothing, RunRecord[], run_view.externals, diagnostics, core,
     )
 
     history = nothing
     try
-        JLD2.jldopen(path, "r"; plain = true) do file
-            _event_history_counts_exist(file) || throw(ArgumentError(
-                "AH5 profile declares event history but required indexed roots are missing",
-            ))
-            history = _read_event_history(file)
-        end
+        _event_history_counts_exist(file) || throw(ArgumentError(
+            "AH5 profile declares event history but required indexed roots are missing",
+        ))
+        history = _read_event_history(file)
         append!(diagnostics, _validate_event_history(
             run_view.state,
             run_view.runs,

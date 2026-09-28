@@ -244,6 +244,7 @@ struct DummyObject end
     include("archive_integrity_binding.jl")
     include("integrity_reverification.jl")
     include("archive_state_history.jl")
+    include("archive_session.jl")
     include("capsule_plan.jl")
     include("capsule_archive.jl")
     include("capsule_archive_provenance.jl")

@@ -80,16 +80,40 @@ function Episteme.write_archive(
     return path
 end
 
-function Episteme.inspect_archive(path::AbstractString)
+# A task may store a Ref under these keys to count read sessions and generic
+# core decodes. The keys hold no archive data; the open file is an argument.
+const _ARCHIVE_READ_OPENS = :episteme_ah5_read_opens
+const _ARCHIVE_CORE_DECODES = :episteme_ah5_core_decodes
+
+function _note_archive_counter(key)
+    counter = get(task_local_storage(), key, nothing)
+    counter isa Ref || return nothing
+    counter[] += 1
+    return nothing
+end
+
+function _jldopen_archive_read(path)
+    _note_archive_counter(_ARCHIVE_READ_OPENS)
+    return JLD2.jldopen(path, "r"; plain = true)
+end
+
+"""
+    _inspect_archive_session(f, path) -> result of f
+
+Identify `path` once, open it once for reading, decode generic AH5 metadata
+once, and pass `(file, core)` to `f`. `file` is `nothing` when the path cannot
+be opened; `core` is still the fail-closed inspection. The file is closed
+before this function returns.
+"""
+function _inspect_archive_session(f, path::AbstractString)
     diagnostics = DiagnosticMessage[]
-    empty = _empty_inspection(path, diagnostics)
     if !ispath(path)
         push!(diagnostics, error_diagnostic(
             :missing_archive,
             "archive path does not exist: $path";
             path = String(path),
         ))
-        return empty
+        return f(nothing, _empty_inspection(path, diagnostics))
     end
     if !is_hdf5_container(path)
         push!(diagnostics, error_diagnostic(
@@ -97,13 +121,12 @@ function Episteme.inspect_archive(path::AbstractString)
             "file is not an HDF5-format AH5 archive";
             path = String(path),
         ))
-        return empty
+        return f(nothing, _empty_inspection(path, diagnostics))
     end
 
+    local file
     try
-        return JLD2.jldopen(path, "r"; plain = true) do file
-            return _inspect_open_archive(path, file, diagnostics)
-        end
+        file = _jldopen_archive_read(path)
     catch err
         push!(diagnostics, error_diagnostic(
             :not_ah5_archive,
@@ -111,6 +134,30 @@ function Episteme.inspect_archive(path::AbstractString)
             path = String(path),
             reason = sprint(showerror, err),
         ))
-        return empty
+        return f(nothing, _empty_inspection(path, diagnostics))
+    end
+
+    try
+        core = try
+            _note_archive_counter(_ARCHIVE_CORE_DECODES)
+            _inspect_open_archive(path, file, diagnostics)
+        catch err
+            push!(diagnostics, error_diagnostic(
+                :not_ah5_archive,
+                "file is HDF5-format but has no readable AH5 profile";
+                path = String(path),
+                reason = sprint(showerror, err),
+            ))
+            return f(nothing, _empty_inspection(path, diagnostics))
+        end
+        return f(file, core)
+    finally
+        close(file)
+    end
+end
+
+function Episteme.inspect_archive(path::AbstractString)
+    return _inspect_archive_session(path) do _file, core
+        return core
     end
 end

@@ -70,7 +70,14 @@ function Episteme.write_derived_archive(
 end
 
 function Episteme.inspect_archive(path::AbstractString, ::Type{ArchiveDerivedHistory})
-    run_view = inspect_archive(path, ArchiveRunHistory)
+    return _inspect_archive_session(path) do file, core
+        state_view = _inspect_state_history(path, file, core)
+        run_view = _inspect_run_history(path, file, state_view, core)
+        return _inspect_derived_history(path, file, run_view, core)
+    end
+end
+
+function _inspect_derived_history(path, file, run_view, core)
     diagnostics = copy(run_view.diagnostics)
     if !run_view.identified
         return _empty_derived_history_inspection(
@@ -83,7 +90,6 @@ function Episteme.inspect_archive(path::AbstractString, ::Type{ArchiveDerivedHis
         )
     end
 
-    core = inspect_archive(path)
     declared = core.profile !== nothing && AH5_DERIVED_ARTIFACTS_FEATURE in core.profile.features
     declared || return _empty_derived_history_inspection(
         path,
@@ -110,12 +116,10 @@ function Episteme.inspect_archive(path::AbstractString, ::Type{ArchiveDerivedHis
 
     history = nothing
     try
-        JLD2.jldopen(path, "r"; plain = true) do file
-            _derived_history_counts_exist(file) || throw(ArgumentError(
-                "AH5 profile declares derived artifacts but required indexed roots are missing",
-            ))
-            history = _read_derived_history(file)
-        end
+        _derived_history_counts_exist(file) || throw(ArgumentError(
+            "AH5 profile declares derived artifacts but required indexed roots are missing",
+        ))
+        history = _read_derived_history(file)
         append!(diagnostics, _validate_derived_history(
             run_view.state,
             run_view.runs,

@@ -581,6 +581,21 @@ function _empty_event_history_inspection(
     runs,
     externals,
     diagnostics,
+    ::ArchiveInspection,
+)
+    return _empty_event_history_inspection(
+        path, identified, declared, state, runs, externals, diagnostics,
+    )
+end
+
+function _empty_event_history_inspection(
+    path,
+    identified,
+    declared,
+    state,
+    runs,
+    externals,
+    diagnostics,
 )
     valid = identified && !any(d -> d.severity === :error, diagnostics)
     return ArchiveEventHistoryInspection(
