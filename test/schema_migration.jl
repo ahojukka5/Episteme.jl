@@ -86,6 +86,9 @@ end
     @test chained.status === :chain
     @test length(chained.steps) == 2
     @test chained.rewrite_payload
+    adjacency = chain.adjacency
+    plan_migration(v1, v3, chain)
+    @test chain.adjacency === adjacency
 
     missing = plan_migration(v1, SchemaRef(:oodi, "field", "9.0.0"), chain)
     @test !isvalid(missing)
