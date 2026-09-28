@@ -62,7 +62,13 @@ function Episteme.write_run_archive(
 end
 
 function Episteme.inspect_archive(path::AbstractString, ::Type{ArchiveRunHistory})
-    state_view = inspect_archive(path, ArchiveStateHistory)
+    return _inspect_archive_session(path) do file, core
+        state_view = _inspect_state_history(path, file, core)
+        return _inspect_run_history(path, file, state_view, core)
+    end
+end
+
+function _inspect_run_history(path, file, state_view, core)
     diagnostics = copy(state_view.diagnostics)
     if !state_view.identified
         return _empty_run_history_inspection(
@@ -75,7 +81,6 @@ function Episteme.inspect_archive(path::AbstractString, ::Type{ArchiveRunHistory
         )
     end
 
-    core = inspect_archive(path)
     declared = core.profile !== nothing && AH5_RUN_HISTORY_FEATURE in core.profile.features
     declared || return _empty_run_history_inspection(
         path, true, false, state_view.state, state_view.externals, diagnostics,
@@ -90,12 +95,10 @@ function Episteme.inspect_archive(path::AbstractString, ::Type{ArchiveRunHistory
 
     history = nothing
     try
-        JLD2.jldopen(path, "r"; plain = true) do file
-            _jld2_get(file, _count_key(AH5_RUN_HISTORY_KEY)) === nothing && throw(ArgumentError(
-                "AH5 profile declares run history but $(AH5_RUN_HISTORY_KEY)/count is missing",
-            ))
-            history = _read_run_history(file)
-        end
+        _jld2_get(file, _count_key(AH5_RUN_HISTORY_KEY)) === nothing && throw(ArgumentError(
+            "AH5 profile declares run history but $(AH5_RUN_HISTORY_KEY)/count is missing",
+        ))
+        history = _read_run_history(file)
         append!(diagnostics, _validate_run_history(
             state_view.state,
             history.runs;

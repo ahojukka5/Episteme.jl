@@ -69,8 +69,8 @@ function _empty_event_history_inspection(
     runs::Vector{RunRecord},
     externals::Vector{ExternalRequirement},
     diagnostics::Vector{DiagnosticMessage},
+    core::ArchiveInspection,
 )
-    core = inspect_archive(path)
     if core.history.runs != length(runs)
         push!(diagnostics, error_diagnostic(
             :run_history_records_missing,
