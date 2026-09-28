@@ -84,13 +84,17 @@ end
 Directed graph of semantic migration steps. Keys are exact schema
 namespace, id, and version; package SemVer is ignored.
 """
+const _EMPTY_MIGRATION_STEPS = SchemaMigrationStep[]
+
 struct SchemaMigrationRegistry
     steps::Vector{SchemaMigrationStep}
+    adjacency::Dict{SchemaRef,Vector{SchemaMigrationStep}}
 
     function SchemaMigrationRegistry(steps)
-        registry = new(_typed_vector(SchemaMigrationStep, steps, "schema migration steps"))
+        typed = _typed_vector(SchemaMigrationStep, steps, "schema migration steps")
+        registry = new(typed, Dict{SchemaRef,Vector{SchemaMigrationStep}}())
         _require_unique_migration_edges(registry)
-        return registry
+        return new(typed, _migration_adjacency(typed))
     end
 end
 
@@ -133,12 +137,17 @@ function _require_unique_migration_edges(registry::SchemaMigrationRegistry)
     return registry
 end
 
-function _migration_adjacency(registry::SchemaMigrationRegistry)
+function _migration_adjacency(steps::Vector{SchemaMigrationStep})
     adjacency = Dict{SchemaRef,Vector{SchemaMigrationStep}}()
-    for step in registry.steps
-        push!(get!(adjacency, step.source, SchemaMigrationStep[]), step)
+    for step in steps
+        push!(get!(() -> SchemaMigrationStep[], adjacency, step.source), step)
     end
     return adjacency
+end
+
+function _migration_steps(registry::SchemaMigrationRegistry, node::SchemaRef)
+    steps = get(registry.adjacency, node, nothing)
+    return steps === nothing ? _EMPTY_MIGRATION_STEPS : steps
 end
 
 """
@@ -243,13 +252,14 @@ function plan_migration(
         )
     end
 
-    adjacency = _migration_adjacency(migrations)
     dist = Dict{SchemaRef,Int}(source => 0)
     parents = Dict{SchemaRef,Vector{SchemaMigrationStep}}()
     queue = SchemaRef[source]
-    while !isempty(queue)
-        node = popfirst!(queue)
-        for step in get(adjacency, node, SchemaMigrationStep[])
+    head = 1
+    while head <= length(queue)
+        node = queue[head]
+        head += 1
+        for step in _migration_steps(migrations, node)
             nxt = step.target
             nd = dist[node] + 1
             previous = get(dist, nxt, nothing)
