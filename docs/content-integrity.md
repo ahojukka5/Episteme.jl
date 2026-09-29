@@ -25,6 +25,11 @@ The canonical byte format is versioned by `CanonicalHashPolicy`. Changing the
 canonicalization rules requires a new policy version rather than silently
 reusing old identities.
 
+`canonical_bytes` returns that encoding. `canonical_digest` and
+`canonical_content_id` hash the same bytes as they are written, so the digest
+does not retain the transcript. Callers that need the bytes still use
+`canonical_bytes`.
+
 ## Shared normalization
 
 The v1 encoder uses explicit type and length tags. In particular:
