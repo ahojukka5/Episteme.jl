@@ -50,6 +50,70 @@
     @test_throws ArgumentError CanonicalHashPolicy(; algorithm = :md5)
 end
 
+function _warmed_canonical_digest_alloc(value)
+    canonical_digest(value)
+    return @allocated canonical_digest(value)
+end
+
+@testset "streamed canonical digest" begin
+    nested = (;
+        label = "nested",
+        values = [1.25, -0.0, Inf, -Inf, NaN],
+        meta = (n = typemin(Int64), ok = true, name = "mesh"),
+        items = (Int32(7), "mesh", :a),
+        mapping = Dict{String,Any}("b" => 2, "a" => "mesh"),
+    )
+    materialized = collect(Episteme.SHA.sha256(canonical_bytes(nested)))
+    @test canonical_digest(nested) == materialized
+    policy = CanonicalHashPolicy(; version = "episteme-canonical-v2-test")
+    @test canonical_digest(nested; policy) ==
+        collect(Episteme.SHA.sha256(canonical_bytes(nested; policy)))
+    @test canonical_digest(nested; policy) != canonical_digest(nested)
+
+    # Pinned episteme-canonical-v1 digests. These lock the byte layout; the
+    # streamed digest and canonical_bytes must both keep producing them.
+    @test bytes2hex(canonical_digest(typemin(Int64))) ==
+        "4b83e839ba7ff21baad396dec968d16072ae28f50807e976776cdda626fa2716"
+    @test bytes2hex(canonical_digest(typemax(UInt128))) ==
+        "87e122a871349d0ef242f0ef4bedb654904807a5954f335eae01a0d16f39756c"
+    @test bytes2hex(canonical_digest(big"123456789012345678901234567890")) ==
+        "a9f3a33bff8db5de4c7084ca48d3bcc647951b599c437dfc12d524610e45223a"
+    @test bytes2hex(canonical_digest(-0.0)) ==
+        "24bdb14476c757e5c4dc47d0a8d059a2776f11971c8f015b9e7dce212a7f5dde"
+    @test bytes2hex(canonical_digest(1.5)) ==
+        "e5b02bc17042ed75106a3e250e89eb12c089767a73fe1636d25cd3e16ca74f33"
+    @test bytes2hex(canonical_digest(NaN)) ==
+        "414903fe72e36a71dcb18a22c2906c7c66fdca155b149c4eadc2109c4e7d0943"
+    pinned = (;
+        label = "nested",
+        values = [1.25, -0.0, Inf],
+        meta = (n = 2, ok = true),
+    )
+    @test bytes2hex(canonical_digest(pinned)) ==
+        "6a295e63d8a5a301388a238617add4a20ebcf7aa641efb5bebb5ee898a87bb9a"
+    wide = (; record = (name = "nested", values = fill(1.5, 4000)))
+    @test bytes2hex(canonical_digest(wide)) ==
+        "e7cecc8955a3f0c1fa01cfd4c3e28cb871e85135fc7a44184ec73f6019b5247b"
+    @test canonical_digest(wide) == collect(Episteme.SHA.sha256(canonical_bytes(wide)))
+    @test occursin(string(typemin(Int64)), String(canonical_bytes(typemin(Int64))))
+    @test occursin(string(typemax(UInt128)), String(canonical_bytes(typemax(UInt128))))
+    @test occursin(
+        string(reinterpret(UInt64, 1.5); base = 16, pad = 16),
+        String(canonical_bytes(1.5)),
+    )
+
+    small = (; record = (name = "nested", values = fill(1.5, 2_000)))
+    large = (; record = (name = "nested", values = fill(1.5, 20_000)))
+    _warmed_canonical_digest_alloc(small)
+    alloc_small = _warmed_canonical_digest_alloc(small)
+    alloc_large = _warmed_canonical_digest_alloc(large)
+    transcript = length(canonical_bytes(large))
+    @test transcript > 400_000
+    @test alloc_large * 8 < transcript
+    @test alloc_large < 64 * 1024
+    @test alloc_large <= alloc_small * 2
+end
+
 @testset "tiered local external artifact verification" begin
     mktempdir() do dir
         path = joinpath(dir, "artifact.bin")

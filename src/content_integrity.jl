@@ -7,6 +7,12 @@
 
 const CANONICAL_HASH_ALGORITHMS = (:sha256,)
 const CANONICAL_CONTENT_VERSION = "episteme-canonical-v1"
+const _CANONICAL_HEX = codeunits("0123456789abcdef")
+const _CANONICAL_DIGEST_CHUNK = 4096
+const _CANONICAL_BIT_INTEGERS = Union{
+    Int8, Int16, Int32, Int64, Int128,
+    UInt8, UInt16, UInt32, UInt64, UInt128,
+}
 
 """
     CanonicalHashPolicy(; algorithm=:sha256, version=CANONICAL_CONTENT_VERSION)
@@ -105,14 +111,76 @@ end
 """
     canonical_digest(value; policy=CanonicalHashPolicy()) -> Vector{UInt8}
 
-Cryptographic digest of canonical logical content.
+Cryptographic digest of canonical logical content. The transcript is fed to
+SHA-256 as it is written, and the digest matches `SHA.sha256` of
+`canonical_bytes` for the same value and policy.
 """
 function canonical_digest(value; policy::CanonicalHashPolicy = CanonicalHashPolicy())
-    bytes = canonical_bytes(value; policy = policy)
     policy.algorithm === :sha256 || throw(ArgumentError(
         "unsupported canonical hash algorithm :$(policy.algorithm)",
     ))
-    return collect(SHA.sha256(bytes))
+    io = _CanonicalDigestIO()
+    _canonical_tag!(io, "episteme-canonical")
+    _canonical_string!(io, policy.version)
+    _canonical_write!(io, value, policy)
+    return _canonical_digest_finish!(io)
+end
+
+# Fixed scratch. Ordered values must not retain the canonical transcript.
+mutable struct _CanonicalDigestIO <: IO
+    ctx::SHA.SHA2_256_CTX
+    buffer::Vector{UInt8}
+    filled::Int
+end
+
+function _CanonicalDigestIO()
+    return _CanonicalDigestIO(
+        SHA.SHA2_256_CTX(),
+        Vector{UInt8}(undef, _CANONICAL_DIGEST_CHUNK),
+        0,
+    )
+end
+
+function _canonical_digest_flush!(io::_CanonicalDigestIO)
+    io.filled == 0 && return io
+    SHA.update!(io.ctx, io.buffer, io.filled)
+    io.filled = 0
+    return io
+end
+
+function _canonical_digest_finish!(io::_CanonicalDigestIO)
+    _canonical_digest_flush!(io)
+    return collect(SHA.digest!(io.ctx))
+end
+
+function Base.write(io::_CanonicalDigestIO, byte::UInt8)
+    if io.filled == length(io.buffer)
+        _canonical_digest_flush!(io)
+    end
+    io.filled += 1
+    @inbounds io.buffer[io.filled] = byte
+    return 1
+end
+
+function Base.unsafe_write(io::_CanonicalDigestIO, src::Ptr{UInt8}, nb::UInt)
+    remaining = Int(nb)
+    offset = 0
+    buf = io.buffer
+    while remaining > 0
+        space = length(buf) - io.filled
+        if space == 0
+            _canonical_digest_flush!(io)
+            space = length(buf)
+        end
+        chunk = min(space, remaining)
+        GC.@preserve buf unsafe_copyto!(
+            pointer(buf, io.filled + 1), src + offset, chunk,
+        )
+        io.filled += chunk
+        offset += chunk
+        remaining -= chunk
+    end
+    return nb
 end
 
 """
@@ -131,8 +199,70 @@ function _canonical_tag!(io, tag::AbstractString)
     return io
 end
 
+function _canonical_udecimal_width(value::Unsigned)
+    iszero(value) && return 1
+    ten = oftype(value, 10)
+    n = 0
+    y = value
+    while !iszero(y)
+        n += 1
+        y = div(y, ten)
+    end
+    return n
+end
+
+function _canonical_unsigned_magnitude(value::Signed)
+    if value == typemin(typeof(value))
+        return unsigned(typemin(typeof(value)))
+    end
+    return unsigned(-value)
+end
+
+function _canonical_decimal_width(value::Signed)
+    if value < zero(value)
+        return 1 + _canonical_udecimal_width(_canonical_unsigned_magnitude(value))
+    end
+    return _canonical_udecimal_width(unsigned(value))
+end
+
+_canonical_decimal_width(value::Unsigned) = _canonical_udecimal_width(value)
+
+function _canonical_write_udecimal!(io, value::Unsigned)
+    ten = oftype(value, 10)
+    if iszero(value)
+        write(io, UInt8('0'))
+        return io
+    end
+    place = one(value)
+    limit = div(typemax(typeof(value)), ten)
+    while place <= limit
+        next = place * ten
+        next > value && break
+        place = next
+    end
+    while true
+        digit, value = divrem(value, place)
+        write(io, UInt8(0x30 + digit))
+        isone(place) && break
+        place = div(place, ten)
+    end
+    return io
+end
+
+function _canonical_write_decimal!(io, value::Signed)
+    if value < zero(value)
+        write(io, UInt8('-'))
+        _canonical_write_udecimal!(io, _canonical_unsigned_magnitude(value))
+    else
+        _canonical_write_udecimal!(io, unsigned(value))
+    end
+    return io
+end
+
+_canonical_write_decimal!(io, value::Unsigned) = _canonical_write_udecimal!(io, value)
+
 function _canonical_bytestring!(io, bytes)
-    print(io, length(bytes))
+    _canonical_write_decimal!(io, length(bytes))
     write(io, UInt8(':'))
     write(io, bytes)
     return io
@@ -153,24 +283,41 @@ function _canonical_write!(io, value::Bool, policy)
     return io
 end
 
+function _canonical_write!(io, value::_CANONICAL_BIT_INTEGERS, policy)
+    _canonical_tag!(io, "integer")
+    _canonical_write_decimal!(io, _canonical_decimal_width(value))
+    write(io, UInt8(':'))
+    _canonical_write_decimal!(io, value)
+    return io
+end
+
 function _canonical_write!(io, value::Integer, policy)
     _canonical_tag!(io, "integer")
     _canonical_string!(io, string(value))
     return io
 end
 
-function _canonical_float_token(value::Union{Float16,Float32,Float64})
-    x = Float64(value)
-    isnan(x) && return "nan"
-    isinf(x) && return signbit(x) ? "-inf" : "+inf"
-    x == 0.0 && return "0"
-    bits = reinterpret(UInt64, x)
-    return string(bits; base = 16, pad = 16)
+function _canonical_write_hex16!(io, bits::UInt64)
+    for shift in (60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 16, 12, 8, 4, 0)
+        write(io, _CANONICAL_HEX[Int((bits >> shift) & 0x0f) + 1])
+    end
+    return io
 end
 
 function _canonical_write!(io, value::Union{Float16,Float32,Float64}, policy)
     _canonical_tag!(io, "real64")
-    _canonical_string!(io, _canonical_float_token(value))
+    x = Float64(value)
+    if isnan(x)
+        _canonical_string!(io, "nan")
+    elseif isinf(x)
+        _canonical_string!(io, signbit(x) ? "-inf" : "+inf")
+    elseif x == 0.0
+        _canonical_string!(io, "0")
+    else
+        _canonical_write_decimal!(io, 16)
+        write(io, UInt8(':'))
+        _canonical_write_hex16!(io, reinterpret(UInt64, x))
+    end
     return io
 end
 
@@ -202,7 +349,7 @@ end
 
 function _canonical_write!(io, value::Tuple, policy)
     _canonical_tag!(io, "tuple")
-    print(io, length(value))
+    _canonical_write_decimal!(io, length(value))
     write(io, UInt8(';'))
     for item in value
         _canonical_write!(io, item, policy)
@@ -213,7 +360,7 @@ end
 function _canonical_write!(io, value::NamedTuple, policy)
     _canonical_tag!(io, "namedtuple")
     names = sort!(collect(keys(value)); by = String)
-    print(io, length(names))
+    _canonical_write_decimal!(io, length(names))
     write(io, UInt8(';'))
     for name in names
         _canonical_write!(io, name, policy)
@@ -225,12 +372,12 @@ end
 function _canonical_write!(io, value::AbstractArray, policy)
     ndims(value) == 0 && throw(ArgumentError("zero-dimensional arrays are not canonical portable values"))
     _canonical_tag!(io, "array")
-    print(io, ndims(value))
+    _canonical_write_decimal!(io, ndims(value))
     write(io, UInt8(';'))
     for dim in size(value)
         _canonical_write!(io, Int(dim), policy)
     end
-    print(io, length(value))
+    _canonical_write_decimal!(io, length(value))
     write(io, UInt8(';'))
     for item in value
         _canonical_write!(io, item, policy)
@@ -254,7 +401,7 @@ function _canonical_write!(io, value::AbstractDict, policy)
             "dictionary contains distinct keys with the same canonical logical identity",
         ))
     end
-    print(io, length(keyed))
+    _canonical_write_decimal!(io, length(keyed))
     write(io, UInt8(';'))
     for (_, entry) in keyed
         _canonical_write!(io, first(entry), policy)
