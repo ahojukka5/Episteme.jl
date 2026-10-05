@@ -1,0 +1,19 @@
+name = "DeloneDirectOperation"
+uuid = "cd55b3b3-8d9c-4c00-980a-e21bce715549"
+version = "0.1.0"
+
+[deps]
+Delone = "0a3734f8-1dfd-4ffb-90f2-cbaa38dcac37"
+Episteme = "7c15cd61-9c6a-4671-bc94-9960963998ac"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+Delone = {url = "https://github.com/ahojukka5/Delone.jl.git", rev = "cdd17d11940bd0773408725d51d10009ce1be3a9"}
+# The revision Delone already imports for report/validate. The script
+# does not call that package. Oodi is not a dependency.
+Episteme = {url = "https://github.com/ahojukka5/Episteme.jl.git", rev = "f1cb1b7fe6a7f78b96098bbd8a24b0797c6bc640"}
+
+[compat]
+Delone = "0.1"
+Episteme = "0.1"
+julia = "1.11"
