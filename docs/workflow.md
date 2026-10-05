@@ -150,10 +150,25 @@ branch_from(revision_id; id = WorkflowHeadId("alt"), name = :alt)
 `compare_reproduction(::Val{:numeric}, left, right)` for tolerance-qualified
 agreement. Episteme does not invent a universal floating-point tolerance.
 
+## One real domain operation
+
+`test/scientific_lifecycle.jl` binds `apply_operation` around Delone's
+public `delaunay_triangulation` for five deterministic points. Delone
+executes the triangulation and supplies the snapshot digest. Episteme
+records the plan, the activity, and the commit, and does not interpret
+the mesh. An uncommitted run leaves the head in place. A collinear
+cloud stays a failed run with no revision. The same function runs with
+only Delone loaded.
+
+The Episteme suite skips that proof unless `EPISTEME_DELONE_ROOT`
+points at a Delone checkout. Episteme does not depend on Delone.
+
 ## What this is not
 
 - a distributed DAG scheduler
 - automatic `.ah5` writes on every execute
 - domain meshing, FEM, or solver semantics
+- a registry or dispatcher of domain operations
+- an Oodi composition layer or a Maudslay service runtime
 - `rerun!` (committed rerun remains later work)
 - bitwise identity for HPC floating-point workflows
