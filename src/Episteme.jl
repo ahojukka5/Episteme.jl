@@ -35,6 +35,7 @@ include("archive_run_history.jl")
 include("archive_run_history_semantics.jl")
 include("archive_event_history.jl")
 include("archive_event_history_semantics.jl")
+include("schema_migration_archive.jl")
 include("capsule_plan.jl")
 include("capsule_archive.jl")
 include("capsule_archive_metadata.jl")
@@ -82,6 +83,7 @@ export SCHEMA_CARDINALITIES, known_schemas, list_schemas, ordered_schemas
 export SchemaMigrationStep, SchemaMigrationRegistry, MigrationPlan, MigrationResult
 export MIGRATION_AXES, MIGRATION_PLAN_STATUSES
 export plan_migration, migrate_payload, migrate_object
+export MigrationRequest, MigrationArchiveResult, migrate_archive, materialize_migration
 export ObjectRef, ArchiveReference
 export LogicalType, LogicalArraySpec, LOGICAL_SCALAR_KINDS
 export ArchiveObject, WorkflowHead, ArchiveGraph, ArchiveCatalog

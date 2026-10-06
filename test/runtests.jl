@@ -235,6 +235,7 @@ struct DummyObject end
     include("archive_external_preflight.jl")
     include("content_integrity.jl")
     include("schema_migration.jl")
+    include("archive_schema_migration.jl")
     include("external_sample_validation.jl")
     include("software_environment.jl")
     include("execution_context.jl")

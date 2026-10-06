@@ -172,3 +172,28 @@ Requires JLD2: run `using JLD2` to load `EpistemeJLD2Ext`.
 function write_derived_archive(args...; kwargs...)
     throw(_missing_jld2_error("write_derived_archive"))
 end
+
+"""
+    materialize_migration(destination, source, requests, migrations;
+                          schemas, revision_id, run_id,
+                          software_environment=nothing,
+                          software_environments=nothing, namespaces=nothing)
+
+Read `source` and, when every request has a valid semantic migration, write
+a new AH5 archive to `destination` through [`write_event_archive`](@ref).
+The source path is not opened for writing. Existing destinations are
+refused. Invalid, ambiguous, or unavailable migrations return before any
+output file is created.
+
+The new archive keeps source objects and revisions, appends migrated
+objects at `revision_id`, and records those source revisions as parents.
+Metadata-only steps reuse `ContentId`. Payload rewrites store the canonical
+id produced by [`migrate_object`](@ref). Scientific payload bytes are not
+embedded. One migration event per object records implementation ids, old
+and new schema identities, content ids, software identity, and diagnostics.
+
+Requires JLD2: run `using JLD2` to activate `EpistemeJLD2Ext`.
+"""
+function materialize_migration(args...; kwargs...)
+    throw(_missing_jld2_error("materialize_migration"))
+end

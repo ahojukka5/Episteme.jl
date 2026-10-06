@@ -27,6 +27,12 @@
             () -> write_archive(path; software_environments=SoftwareEnvironmentRegistry()),
             () -> inspect_archive(path, ExecutionContextRegistry),
             () -> write_archive(path; execution_contexts=ExecutionContextRegistry()),
+            () -> materialize_migration(
+                path,
+                joinpath(dir, "missing-source.ah5"),
+                MigrationRequest[],
+                SchemaMigrationRegistry(SchemaMigrationStep[]),
+            ),
         )
             err = try
                 operation()
