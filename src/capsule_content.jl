@@ -196,7 +196,7 @@ function _bind_reachable_payload!(
             "capsule payload for $object_id @ $revision_id does not match its ContentId",
         ))
         push!(portable, supplied)
-        _push_content!(entries, :payload, :included; common...,
+        _push_content!(entries, :payload, :retained; common...,
             reason = :portable_state, encoding = "portable")
         return nothing
     end
@@ -213,7 +213,7 @@ function _bind_reachable_payload!(
         "capsule native payload for $object_id @ $revision_id does not match its ContentId",
     ))
     push!(native, supplied)
-    _push_content!(entries, :payload, :included; common...,
+    _push_content!(entries, :payload, :retained; common...,
         reason = :native_trusted, encoding = "native")
     return nothing
 end
@@ -222,7 +222,7 @@ function _capsule_software_rows!(entries, graph, software)
     for id in sort!(collect(ArchiveProvenanceSummary(graph).software_environments))
         recorded = software !== nothing &&
             find_software_environment(software, SoftwareEnvironmentId(id)) !== nothing
-        _push_content!(entries, :software_environment, recorded ? :included : :unavailable;
+        _push_content!(entries, :software_environment, recorded ? :retained : :unavailable;
             label = id, reason = recorded ? :recorded_provenance : :environment_record_missing)
     end
     return entries
@@ -232,7 +232,7 @@ function _capsule_context_rows!(entries, graph, contexts)
     for id in sort!(collect(ArchiveProvenanceSummary(graph).execution_contexts))
         recorded = contexts !== nothing &&
             find_execution_context(contexts, ExecutionContextId(id)) !== nothing
-        _push_content!(entries, :execution_context, recorded ? :included : :unavailable;
+        _push_content!(entries, :execution_context, recorded ? :retained : :unavailable;
             label = id, reason = recorded ? :recorded_provenance : :execution_context_record_missing)
     end
     return entries
@@ -248,7 +248,7 @@ function _capsule_document_rows!(entries, documents)
             "duplicate capsule document $(document.id.value)",
         ))
         push!(seen, document.id.value)
-        _push_content!(entries, :document, :included;
+        _push_content!(entries, :document, :retained;
             label = document.id.value, reason = :portable_specification)
     end
     isempty(documents) && _push_content!(entries, :document, :unavailable;
@@ -282,7 +282,7 @@ function _bind_capsule_content(
 
     for id in plan.retention.retained_revisions
         reason = id == plan.source_revision ? :retention_root : :ancestor
-        _push_content!(entries, :revision, :included;
+        _push_content!(entries, :revision, :retained;
             revision_id = id.value, label = id.value, reason = reason)
     end
     for id in plan.retention.omitted_revisions
@@ -290,7 +290,7 @@ function _bind_capsule_content(
             revision_id = id.value, label = id.value, reason = :unreachable)
     end
     for id in plan.retention.retained_runs
-        _push_content!(entries, :provenance, :included;
+        _push_content!(entries, :provenance, :retained;
             label = id.value, reason = :retained_run)
     end
     for id in plan.retention.omitted_runs
@@ -325,7 +325,7 @@ function _bind_capsule_content(
         revision_id = _capsule_id_text(item.revision_id)
         content_id = _capsule_id_text(item.content_id)
         if item.class === :reachable
-            _push_content!(entries, :object, :included;
+            _push_content!(entries, :object, :retained;
                 object_id = object_id, revision_id = revision_id, content_id = content_id,
                 reason = :reachability)
             object = reachable[(object_id, revision_id)]
@@ -350,7 +350,7 @@ function _bind_capsule_content(
     for definition in schemas.entries
         label = string(definition.schema.namespace_id, "/", definition.schema.schema_id,
             "@", definition.schema.version)
-        _push_content!(entries, :schema, :included;
+        _push_content!(entries, :schema, :retained;
             label = label, content_id = canonical_content_id(definition).value,
             reason = :retained_schema)
     end
@@ -377,7 +377,7 @@ function _bind_capsule_content(
         graph, plan.source_revision, entries;
         externals = plan.externals, software = software,
     )
-    embedded = any(entry -> entry.kind === :payload && entry.status === :included, entries)
+    embedded = any(entry -> entry.kind === :payload && entry.status === :retained, entries)
     return CapsuleBoundContent(
         entries, portable, native, docs, readiness, software, contexts, embedded,
     )
@@ -412,7 +412,7 @@ end
 
 function _capsule_payload_gap(entry::Union{Nothing,CapsuleContentEntry}, native_verified::Bool)
     entry === nothing && return :payload_not_supplied
-    if entry.status !== :included
+    if entry.status !== :retained
         return entry.reason
     end
     entry.encoding == "portable" && return nothing
@@ -479,7 +479,7 @@ function _capsule_software_gaps!(replay_extra, rerun_extra, manifest, entries, s
     run === nothing && return nothing
     run.software_environment === nothing && return nothing
     id = run.software_environment.value
-    recorded = any(entry -> entry.kind === :software_environment && entry.status === :included &&
+    recorded = any(entry -> entry.kind === :software_environment && entry.status === :retained &&
         entry.label == id, entries)
     if !recorded || software === nothing ||
             find_software_environment(software, run.software_environment) === nothing
@@ -510,7 +510,7 @@ function _capsule_software_gaps!(replay_extra, rerun_extra, manifest, entries, s
 end
 
 function _capsule_specification_gap!(rerun_extra, entries)
-    any(entry -> entry.kind === :document && entry.status === :included, entries) && return nothing
+    any(entry -> entry.kind === :document && entry.status === :retained, entries) && return nothing
     push!(rerun_extra, error_diagnostic(
         :portable_specification_missing,
         "capsule has no portable declarative specification to rerun from",
@@ -519,7 +519,7 @@ function _capsule_specification_gap!(rerun_extra, entries)
 end
 
 function _capsule_runtime_gap!(replay_extra, entries)
-    any(entry -> entry.kind === :runtime && entry.status === :included, entries) || return nothing
+    any(entry -> entry.kind === :runtime && entry.status === :retained, entries) || return nothing
     push!(replay_extra, error_diagnostic(
         :runtime_packaged,
         "capsule packaged an OS, runtime, or container image",
@@ -636,8 +636,8 @@ function _verify_portable_capsule_payloads(payloads, entries, integrity::Revisio
         push!(seen, key)
         identity = canonical_content_id(payload.value)
         entry = _capsule_payload_entry(entries, key[1], key[2])
-        entry !== nothing && entry.status === :included && entry.encoding == "portable" ||
-            throw(ArgumentError("portable capsule payload $(key[1]) @ $(key[2]) is not an included row"))
+        entry !== nothing && entry.status === :retained && entry.encoding == "portable" ||
+            throw(ArgumentError("portable capsule payload $(key[1]) @ $(key[2]) is not a retained row"))
         entry.content_id == identity.value || throw(ArgumentError(
             "portable capsule payload $(key[1]) @ $(key[2]) failed content-identity verification",
         ))
@@ -647,9 +647,9 @@ function _verify_portable_capsule_payloads(payloads, entries, integrity::Revisio
         ))
     end
     for entry in entries
-        entry.kind === :payload && entry.status === :included && entry.encoding == "portable" || continue
+        entry.kind === :payload && entry.status === :retained && entry.encoding == "portable" || continue
         (entry.object_id, entry.revision_id) in seen || throw(ArgumentError(
-            "included portable payload $(entry.object_id) @ $(entry.revision_id) is missing",
+            "retained portable payload $(entry.object_id) @ $(entry.revision_id) is missing",
         ))
     end
     return payloads
@@ -661,7 +661,7 @@ function _verify_capsule_dispositions(graph, manifest::CapsuleManifest, document
         key = (object.object_id.value, object.revision_id.value)
         entry = nothing
         for candidate in manifest.content
-            candidate.kind === :object && candidate.status === :included || continue
+            candidate.kind === :object && candidate.status === :retained || continue
             candidate.object_id == key[1] || continue
             candidate.revision_id == key[2] || continue
             entry = candidate
@@ -673,7 +673,7 @@ function _verify_capsule_dispositions(graph, manifest::CapsuleManifest, document
         push!(included_objects, key)
     end
     for entry in manifest.content
-        if entry.kind === :object && entry.status === :included
+        if entry.kind === :object && entry.status === :retained
             (entry.object_id, entry.revision_id) in included_objects || throw(ArgumentError(
                 "capsule lists object $(entry.object_id) @ $(entry.revision_id) that is not retained",
             ))
@@ -682,14 +682,14 @@ function _verify_capsule_dispositions(graph, manifest::CapsuleManifest, document
                 throw(ArgumentError(
                     "omitted object $(entry.object_id) @ $(entry.revision_id) is still in the capsule",
                 ))
-        elseif entry.kind === :payload && entry.status === :included && entry.encoding == "native"
+        elseif entry.kind === :payload && entry.status === :retained && entry.encoding == "native"
             (entry.object_id, entry.revision_id, entry.content_id) in native_verified_keys ||
                 throw(ArgumentError(
                     "native capsule payload $(entry.object_id) @ $(entry.revision_id) failed byte verification",
                 ))
-        elseif entry.kind === :document && entry.status === :included
+        elseif entry.kind === :document && entry.status === :retained
             any(document -> document.id.value == entry.label, documents) || throw(ArgumentError(
-                "included document $(entry.label) is missing from the capsule",
+                "retained document $(entry.label) is missing from the capsule",
             ))
         end
     end
@@ -785,7 +785,7 @@ function _refuse_capsule_native_record(nt)
 end
 
 function _capsule_needs_native(entries)
-    return any(entry -> entry.kind === :payload && entry.status === :included &&
+    return any(entry -> entry.kind === :payload && entry.status === :retained &&
         entry.encoding == "native", entries)
 end
 

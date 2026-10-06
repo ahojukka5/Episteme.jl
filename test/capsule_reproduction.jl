@@ -221,13 +221,13 @@ end
         @test !isempty(_capsule_rows(view.manifest, :object; status = :omitted, reason = :unreachable, object_id = ID_FIELD))
         @test !isempty(_capsule_rows(view.manifest, :debug; status = :omitted, reason = :unpinned_debug))
         @test !isempty(_capsule_rows(view.manifest, :log; status = :unavailable, reason = :log_bytes_not_packaged))
-        @test !isempty(_capsule_rows(view.manifest, :schema; status = :included))
-        @test !isempty(_capsule_rows(view.manifest, :provenance; status = :included))
-        @test !isempty(_capsule_rows(view.manifest, :software_environment; status = :included))
-        @test !isempty(_capsule_rows(view.manifest, :execution_context; status = :included))
-        @test !isempty(_capsule_rows(view.manifest, :document; status = :included))
-        @test !isempty(_capsule_rows(view.manifest, :revision; status = :included, reason = :retention_root))
-        @test !isempty(_capsule_rows(view.manifest, :revision; status = :included, reason = :ancestor))
+        @test !isempty(_capsule_rows(view.manifest, :schema; status = :retained))
+        @test !isempty(_capsule_rows(view.manifest, :provenance; status = :retained))
+        @test !isempty(_capsule_rows(view.manifest, :software_environment; status = :retained))
+        @test !isempty(_capsule_rows(view.manifest, :execution_context; status = :retained))
+        @test !isempty(_capsule_rows(view.manifest, :document; status = :retained))
+        @test !isempty(_capsule_rows(view.manifest, :revision; status = :retained, reason = :retention_root))
+        @test !isempty(_capsule_rows(view.manifest, :revision; status = :retained, reason = :ancestor))
         @test !isempty(_capsule_rows(view.manifest, :revision; status = :omitted, reason = :unreachable))
         integrity = only(inspect_archive(path, RevisionIntegrityManifest).manifests)
         for payload in view.payloads
@@ -445,7 +445,7 @@ end
         @test isvalid(generic)
         @test isempty(generic.payloads)
         native_row = only(_capsule_rows(generic.manifest, :payload; object_id = ID_MESH))
-        @test native_row.status === :included
+        @test native_row.status === :retained
         @test native_row.encoding == "native"
         @test generic.achieved.inspectable && !generic.achieved.replayable
         @test :native_replay_requires_verification in _capsule_codes(readiness(generic, PipelineTarget(:replay)))

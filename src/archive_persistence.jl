@@ -65,7 +65,7 @@ end
 Materialize a standalone AH5 reproduction capsule from a valid `CapsulePlan`.
 Revalidate and compact the source without mutating it. The capsule keeps the
 retained revision closure, schemas, provenance, external references, and a
-content manifest of included, external, unavailable, redacted, and omitted
+content manifest of retained, external, unavailable, redacted, and omitted
 rows. Portable scientific state and portable documents are embedded when
 supplied and when their canonical content identity matches the envelope.
 Julia-native state is embedded only when `native_policy=true` and a canonical
