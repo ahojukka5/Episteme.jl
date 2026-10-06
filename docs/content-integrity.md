@@ -82,8 +82,11 @@ result does not repeat the verification. Use `verify_integrity` to compare that
 expected identity set with a freshly built live manifest. Unchanged content
 keeps the same `ContentId` across `compact_archive` and AH5 state-history
 repacking; a changed logical value must receive a new identity.
-[Metadata capsules](capsule-archives.md) can retain stored evidence, but do not
-embed scientific payload bytes or establish execution readiness.
+[Reproduction capsules](capsule-archives.md) embed portable state only when its
+canonical identity matches the envelope, and they verify that identity before
+treating the payload as replayable. Native bytes are checked before
+deserialization. A metadata-only capsule does not establish execution
+readiness.
 
 Semantic migration chains remain tracked by issue #41. Digital signatures and
 PKI are outside the content-integrity contract in issue #42.

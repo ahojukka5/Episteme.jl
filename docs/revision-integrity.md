@@ -50,7 +50,8 @@ manifests through the JLD2 extension. Inspection reads the recorded result.
 `:metadata`, `:sample`, or `:full` level and checks whether each `ContentId`
 was preserved. A metadata or sample live check is never reported as `:full`.
 [Capsule planning](capsule-planning.md) and
-[metadata capsule publication](capsule-archives.md) consume this evidence.
-Published metadata capsules do not embed scientific payload bytes or promise
-execution readiness. Migration execution remains issue #41; signatures remain
-out of scope.
+[reproduction capsule publication](capsule-archives.md) consume this evidence.
+A published capsule may embed portable state whose canonical identity matches
+these rows. It does not promise execution readiness unless that state, the
+recorded dependencies, and the manifest agree. Migration execution remains
+issue #41; signatures remain out of scope.

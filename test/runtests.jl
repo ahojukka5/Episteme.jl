@@ -248,6 +248,7 @@ struct DummyObject end
     include("capsule_plan.jl")
     include("capsule_archive.jl")
     include("capsule_archive_provenance.jl")
+    include("capsule_reproduction.jl")
     include("archive_software_environment_integrity.jl")
     include("archive_software_environment_staged.jl")
     include("archive_execution_context_coverage.jl")

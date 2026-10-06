@@ -38,6 +38,7 @@ include("archive_event_history_semantics.jl")
 include("capsule_plan.jl")
 include("capsule_archive.jl")
 include("capsule_archive_metadata.jl")
+include("capsule_content.jl")
 include("archive_software_environments.jl")
 include("archive_execution_contexts.jl")
 include("archive_derived_artifacts.jl")
@@ -45,7 +46,9 @@ include("archive_execution.jl")
 include("archive_provenance.jl")
 include("archive_reproduction.jl")
 
-export write_capsule_archive, CapsuleManifest, CapsuleArchiveResult, ArchiveCapsuleInspection
+export write_capsule_archive, verify_capsule
+export CapsuleManifest, CapsuleArchiveResult, ArchiveCapsuleInspection
+export CapsulePayload, CapsuleRedaction, CapsuleContentEntry, CapsuleReadiness, CapsuleVerification
 
 export report, validate, readiness
 export AbstractEpistemeReport, AbstractValidationReport, AbstractReadinessReport

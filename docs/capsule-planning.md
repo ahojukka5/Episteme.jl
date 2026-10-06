@@ -89,9 +89,8 @@ classifications, external dependencies, integrity report, and readiness result.
 ## Materialization
 
 Once a `CapsulePlan` is valid, [`write_capsule_archive`](capsule-archives.md)
-can compact its retained closure and write a standalone metadata-only AH5
-capsule. The writer revalidates the source binding, preserves the source
-identity explicitly, and assigns the new file a distinct archive identity.
-
-Portable-document embedding, software-environment/execution-context manifests,
-and trusted native payload replay remain separate later layers.
+compacts its retained closure into a standalone AH5 reproduction capsule.
+The writer revalidates the source binding, preserves the source identity, and
+assigns the new file a distinct archive identity. Plan readiness is the
+request. The published manifest records the readiness the embedded content
+actually supports.

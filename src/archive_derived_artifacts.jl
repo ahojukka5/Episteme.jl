@@ -91,6 +91,9 @@ function _refuse_derived_history_root_collision(profile::ArchiveProfile)
         (:software_environments, AH5_SOFTWARE_ENVIRONMENTS_KEY),
         (:execution_contexts, AH5_EXECUTION_CONTEXTS_KEY),
         (:capsule, AH5_CAPSULE_KEY),
+        (:capsule_payloads, AH5_CAPSULE_PAYLOADS_KEY),
+        (:capsule_documents, AH5_CAPSULE_DOCUMENTS_KEY),
+        (:capsule_native, AH5_CAPSULE_NATIVE_KEY),
     )
         _path_overlap(root, AH5_DERIVED_ARTIFACTS_KEY) || continue
         throw(ArgumentError(
