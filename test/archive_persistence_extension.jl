@@ -27,6 +27,7 @@
             Episteme.write_run_archive,
             Episteme.write_event_archive,
             Episteme.write_derived_archive,
+            Episteme.materialize_migration,
         )
             thrown = try
                 f(:no_such_archive_argument, 0x1)
@@ -66,6 +67,10 @@
             write_derived_archive,
             Tuple{AbstractString,ArchiveGraph,Vector{DerivedArtifactRecord}},
         )) === Base.get_extension(Episteme, :EpistemeJLD2Ext)
+        @test parentmodule(which(
+            materialize_migration,
+            Tuple{AbstractString,AbstractString,Vector{MigrationRequest},SchemaMigrationRegistry},
+        )) === Base.get_extension(Episteme, :EpistemeJLD2Ext)
         # The external-aware String specialization stays in the owner package.
         @test parentmodule(which(write_archive, Tuple{String})) === Episteme
     end
@@ -85,6 +90,7 @@
             :write_run_archive,
             :write_event_archive,
             :write_derived_archive,
+            :materialize_migration,
         )
             binding = Base.Docs.Binding(Episteme, name)
             @test haskey(registry, binding)

@@ -1,10 +1,13 @@
 # Semantic schema migration chains
 
-This is the first implementation slice of issue
-[#41](https://github.com/ahojukka5/Episteme.jl/issues/41), tracked by
-[#103](https://github.com/ahojukka5/Episteme.jl/issues/103). It plans and
-applies **semantic** schema migrations in memory. It does not rewrite an
-AH5 file, run JLD2 `Upgrade`, or change physical layout.
+Issue [#41](https://github.com/ahojukka5/Episteme.jl/issues/41) keeps
+semantic schema migration separate from Julia representation upgrades and
+from AH5 physical-layout changes.
+
+[#103](https://github.com/ahojukka5/Episteme.jl/issues/103) plans and
+applies a migration in memory. [#140](https://github.com/ahojukka5/Episteme.jl/issues/140)
+publishes a valid result as a **new** AH5 archive. Neither slice rewrites
+the source file, runs JLD2 `Upgrade`, or changes physical layout.
 
 ## Four axes stay separate
 
@@ -13,7 +16,7 @@ AH5 file, run JLD2 `Upgrade`, or change physical layout.
 | Semantic schema id/version | Episteme runner + domain `migrate_payload` | yes |
 | Julia representation | JLD2 `Upgrade` / `rconvert` | refused |
 | Episteme shared record evolution | later Episteme-owned steps | not yet |
-| AH5 physical profile | later archive rewrite | not yet |
+| AH5 physical profile | later archive rewrite | not this slice |
 
 Package release version is never a compatibility signal.
 
@@ -63,9 +66,57 @@ NamedTuple, or the run fails closed.
 If the implementation is not loaded, the result names the required
 package/capability and creates no output object.
 
+## New archive
+
+`migrate_archive` applies those same requests to an in-memory graph and
+returns a successor graph. It does not mutate the source graph and it
+does not create a file. `materialize_migration` reads a source `.ah5`
+file and, only when that successor is valid, publishes it with the
+existing `write_event_archive` path.
+
+```julia
+materialize_migration(
+    destination,
+    source,
+    requests,
+    migrations;
+    schemas,
+    revision_id,
+    run_id,
+    software_environment,
+)
+```
+
+The source path is opened read-only. An existing destination is refused.
+An unsupported, ambiguous, or unloaded migrator returns before any output
+file is created.
+
+The successor keeps the source objects and revision records. Migrated
+objects share the source `ObjectId`, use the caller-supplied revision, and
+record that revision's parents as the source revisions. A single parent
+moves heads that pointed at it. Old and new `SchemaRef`s are embedded.
+Each migrated object also gets a `:schema_migration` event whose payload
+records implementation ids, schema versions, content ids, software
+identity, and diagnostics. Pass `software_environment` to store the
+migrator's `SoftwareEnvironment` record; omitting it leaves a warning and
+does not invent machine facts.
+
+Metadata-only steps persist the source `ContentId`. A payload rewrite
+persists the canonical id from `migrate_object`. Scientific payload bytes
+are not part of the AH5 profile, so reuse is that identity, not a second
+copy of a dataset.
+
+A source object whose embedded schema is `:migration_required` still
+cannot be retained: existing graph validation refuses to publish that
+object. The historical fixture is the schema version that was valid to
+archive. The migration registry, not a compatibility guess, performs the
+step.
+
 ## Deliberate non-goals
 
-- writing a new `.ah5` archive
 - treating successful JLD2 reconstruction as schema compatibility
 - in-place rewrite of the only archive copy
+- a second AH5 writer or a physical-layout migration
+- domain scientific transforms inside Episteme
+- general archive compaction
 - signatures or PKI

@@ -188,9 +188,10 @@ Selected concrete types:
 - `canonical_content_id` / `integrity_manifest` / `verify_integrity` —
   logical content identity, revision dependency manifests, and live
   re-verification of persisted AH5 integrity evidence.
-- `plan_migration` / `migrate_object` — semantic schema-migration chains
-  in memory; domain packages own `migrate_payload`, and the source
-  object is never rewritten.
+- `plan_migration` / `migrate_object` / `materialize_migration` —
+  semantic schema-migration chains. Domain packages own
+  `migrate_payload`. The source object and source archive are never
+  rewritten; a valid migration is published as a new AH5 archive.
 
 Tree operations:
 
