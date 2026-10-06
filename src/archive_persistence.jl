@@ -57,18 +57,38 @@ end
     write_capsule_archive(path, source_graph, plan, schemas;
                           source_archive_id, namespaces=nothing,
                           externals=(), profile=nothing,
-                          software_environments=nothing, kwargs...)
+                          software_environments=nothing,
+                          execution_contexts=nothing,
+                          payloads=(), documents=(), redactions=(),
+                          native_policy=false, kwargs...)
 
-Materialize a standalone metadata-only AH5 capsule from a valid `CapsulePlan`.
-Revalidate and compact the source, retain its required schemas and external
-declarations, and persist state, run, event, write, log and integrity metadata.
-The new archive identity differs from `source_archive_id`. Scientific payload
-bytes and raw log bytes are not embedded. Existing destinations are refused.
+Materialize a standalone AH5 reproduction capsule from a valid `CapsulePlan`.
+Revalidate and compact the source without mutating it. The capsule keeps the
+retained revision closure, schemas, provenance, external references, and a
+content manifest of included, external, unavailable, redacted, and omitted
+rows. Portable scientific state and portable documents are embedded when
+supplied and when their canonical content identity matches the envelope.
+Julia-native state is embedded only when `native_policy=true` and a canonical
+projection matches. OS images, language runtimes, and containers are not
+packaged. Existing destinations are refused.
 
 Requires JLD2: run `using JLD2` to activate `EpistemeJLD2Ext`.
 """
 function write_capsule_archive(args...; kwargs...)
     throw(_missing_jld2_error("write_capsule_archive"))
+end
+
+"""
+    verify_capsule(path; native_policy=false) -> CapsuleVerification
+
+Re-read a capsule and verify portable payload identities before returning them.
+Native payloads are deserialized only when `native_policy=true` and only after
+their stored byte hash matches. A failed check does not return those values.
+
+Requires JLD2: run `using JLD2` to activate `EpistemeJLD2Ext`.
+"""
+function verify_capsule(args...; kwargs...)
+    throw(_missing_jld2_error("verify_capsule"))
 end
 
 """

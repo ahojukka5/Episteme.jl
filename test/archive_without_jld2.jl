@@ -22,6 +22,7 @@
             () -> write_derived_archive(path, graph, DerivedArtifactRecord[]),
             () -> write_capsule_archive(path, graph),
             () -> inspect_archive(path, CapsuleManifest),
+            () -> verify_capsule(path),
             () -> inspect_archive(path, SoftwareEnvironmentRegistry),
             () -> write_archive(path; software_environments=SoftwareEnvironmentRegistry()),
             () -> inspect_archive(path, ExecutionContextRegistry),
