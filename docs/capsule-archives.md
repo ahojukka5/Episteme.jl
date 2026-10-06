@@ -56,8 +56,8 @@ The optional `:capsule_manifest` feature lives at the reserved
 documents, and explicitly trusted native bytes at sibling roots. The manifest
 contains the new archive identity, source archive identity, one root revision,
 the requested target, the verification level, retained and omitted counts, and
-one row per included, external, unavailable, redacted, or omitted item.
-`payloads_embedded` is true only when a scientific payload row is included.
+one row per retained, external, unavailable, redacted, or omitted item.
+`payloads_embedded` is true only when a scientific payload row is retained.
 The capsule identity must differ from the source identity. Omitted counts
 describe the original source.
 

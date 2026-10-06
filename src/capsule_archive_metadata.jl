@@ -51,7 +51,7 @@ const CAPSULE_CONTENT_KINDS = (
     :revision, :object, :schema, :provenance, :external, :payload, :document,
     :software_environment, :execution_context, :log, :debug, :runtime,
 )
-const CAPSULE_CONTENT_STATUSES = (:included, :external, :unavailable, :redacted, :omitted)
+const CAPSULE_CONTENT_STATUSES = (:retained, :external, :unavailable, :redacted, :omitted)
 const CAPSULE_REFUSED_RUNTIME_NAMES = (
     "os", "runtime", "container", "container_image", "os_image", "disk_image",
 )
@@ -64,7 +64,7 @@ const CapsuleCounts = NamedTuple{
 """
     CapsuleContentEntry
 
-One row in a capsule content manifest. `status` is `:included`, `:external`,
+One row in a capsule content manifest. `status` is `:retained`, `:external`,
 `:unavailable`, `:redacted`, or `:omitted`. Empty identity fields mean the row
 is not keyed by that identity.
 """
@@ -178,7 +178,7 @@ function _refuse_invalid_capsule_manifest(manifest::CapsuleManifest)
     _capsule_target(manifest.target)
     _verification_level(manifest.verification)
     all(count -> count >= 0, manifest.counts) || throw(ArgumentError("negative capsule count"))
-    embedded = any(entry -> entry.kind === :payload && entry.status === :included, manifest.content)
+    embedded = any(entry -> entry.kind === :payload && entry.status === :retained, manifest.content)
     if manifest.format_version == 1
         manifest.payloads_embedded && throw(ArgumentError(
             "legacy capsule manifests do not embed scientific payload bytes",
@@ -192,12 +192,12 @@ function _refuse_invalid_capsule_manifest(manifest::CapsuleManifest)
         ))
     else
         manifest.payloads_embedded == embedded || throw(ArgumentError(
-            "capsule payload flag does not match included scientific state",
+            "capsule payload flag does not match retained scientific state",
         ))
         _capsule_runtime_row(manifest.content) === nothing && throw(ArgumentError(
             "capsule manifest must record that no OS, runtime, or container image is packaged",
         ))
-        any(entry -> entry.kind === :runtime && entry.status === :included, manifest.content) &&
+        any(entry -> entry.kind === :runtime && entry.status === :retained, manifest.content) &&
             throw(ArgumentError("capsule manifest claims a packaged runtime"))
     end
     return manifest

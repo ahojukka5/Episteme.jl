@@ -26,7 +26,7 @@ function _load_verified_native_payloads(path, entries)
     records = _read_capsule_native_records(path)
     payloads = Episteme.CapsulePayload[]
     for entry in entries
-        entry.kind === :payload && entry.status === :included && entry.encoding == "native" || continue
+        entry.kind === :payload && entry.status === :retained && entry.encoding == "native" || continue
         matched = nothing
         for record in records
             record.object_id == entry.object_id || continue
