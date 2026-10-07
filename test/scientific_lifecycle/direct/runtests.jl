@@ -37,6 +37,13 @@ function _operation_source_is_domain_only()
     return true
 end
 
+# Julia 1.13 stores DefaultTestSet.anynonpass as UInt8. The predicate
+# keeps the same pass/fail exit as the older Bool field.
+function _process_status(ts)
+    failed = isdefined(Test, :anynonpass) ? Test.anynonpass(ts) : ts.anynonpass
+    return failed ? 1 : 0
+end
+
 function main()
     names = Set(id.name for id in keys(Base.loaded_modules))
     ts = @testset "Delone triangulation without orchestration" begin
@@ -61,7 +68,7 @@ function main()
 
         @test_throws ArgumentError delaunay_triangulation(COLLINEAR)
     end
-    return ts.anynonpass ? 1 : 0
+    return _process_status(ts)
 end
 
 exit(main())

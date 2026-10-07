@@ -16,6 +16,7 @@ function _write_lifecycle_project(dir, episteme_root, delone_root)
         println(io, "[deps]")
         println(io, "Delone = \"0a3734f8-1dfd-4ffb-90f2-cbaa38dcac37\"")
         println(io, "Episteme = \"7c15cd61-9c6a-4671-bc94-9960963998ac\"")
+        println(io, "Pkg = \"44cfe95a-1eb2-52ea-b672-e2afdf69b78f\"")
         println(io, "Test = \"8dfed614-e22c-5e08-85e1-65c5234f0b40\"")
         println(io, "[sources]")
         println(io, "Delone = {path = ", _toml_string(abspath(delone_root)), "}")
@@ -32,8 +33,8 @@ function _run_scientific_lifecycle(delone_root::AbstractString)
         script = joinpath(@__DIR__, "scientific_lifecycle.jl")
         exe = joinpath(Sys.BINDIR, Base.julia_exename())
         log = joinpath(dir, "lifecycle.log")
-        # Pkg.test restricts JULIA_LOAD_PATH to the test project, which does
-        # not include Pkg. The child needs the default load path to instantiate.
+        # Pkg.test sets JULIA_LOAD_PATH to the parent test project. Drop it
+        # so this child resolves the project above, including Pkg.
         child_env = Dict{String,String}(ENV)
         delete!(child_env, "JULIA_LOAD_PATH")
         child_env["JULIA_PKG_PRECOMPILE_AUTO"] = "0"

@@ -145,6 +145,13 @@ function _loaded_package_names()
     return Set(id.name for id in keys(Base.loaded_modules))
 end
 
+# Julia 1.13 stores DefaultTestSet.anynonpass as UInt8. The predicate
+# keeps the same pass/fail exit as the older Bool field.
+function _process_status(ts)
+    failed = isdefined(Test, :anynonpass) ? Test.anynonpass(ts) : ts.anynonpass
+    return failed ? 1 : 0
+end
+
 function main()
     empty!(SEEN_INPUTS)
     empty!(PRODUCED)
@@ -282,7 +289,7 @@ function main()
             @test length(PRODUCED) == 1
         end
     end
-    return ts.anynonpass ? 1 : 0
+    return _process_status(ts)
 end
 
 exit(main())
