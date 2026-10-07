@@ -355,3 +355,189 @@ end
     agreed = _field_def(; version = "1.0.0", replaces = SchemaRef(:oodi, "field", "0.8.0"))
     @test isvalid(validate(SchemaRegistry([old, agreed])))
 end
+
+function _migration_head_graph(
+    historical,
+    migrated;
+    parents = [RevisionId(REV_1)],
+    head = REV_2,
+    revisions = nothing,
+    extra_heads = WorkflowHead[],
+)
+    revision_records = revisions === nothing ? [
+        RevisionRecord(RevisionId(REV_1)),
+        RevisionRecord(RevisionId(head); parents = parents),
+    ] : revisions
+    heads = [
+        WorkflowHead(WorkflowHeadId("head-main"), :main, RevisionId(head)),
+        extra_heads...,
+    ]
+    return ArchiveGraph(
+        [historical, migrated];
+        revisions = revision_records,
+        heads = heads,
+    )
+end
+
+@testset "migration_required objects remain only as ancestry of a migrated head" begin
+    source_ref = SchemaRef(:oodi, "field", "0.8.0")
+    target_ref = SchemaRef(:oodi, "field", "1.0.0")
+    later_ref = SchemaRef(:oodi, "field", "2.0.0")
+    historical_def = _field_def(;
+        version = "0.8.0",
+        compatibility = :migration_required,
+        replaced_by = target_ref,
+        migration = SchemaMigrationRef(
+            source_ref, target_ref; implementation_id = "field-0.8-to-1.0",
+        ),
+    )
+    migrated_def = _field_def(;
+        version = "1.0.0",
+        compatibility = :exact_read,
+        replaces = source_ref,
+    )
+    compatible_def = _field_def(;
+        version = "1.0.0",
+        compatibility = :backwards_compatible,
+        replaces = source_ref,
+    )
+    historical = _obj(
+        :oodi, "field", ID_FIELD, REV_1;
+        version = "0.8.0", content = "field-v1", uuid = UUID_OODI,
+    )
+    migrated = _obj(
+        :oodi, "field", ID_FIELD, REV_2;
+        version = "1.0.0", content = "field-v2", uuid = UUID_OODI,
+    )
+    registry = SchemaRegistry([historical_def, migrated_def])
+    retained = _migration_head_graph(historical, migrated)
+    report = validate(retained, registry)
+    @test isvalid(report)
+    @test !any(d -> d.code === :migration_required, report.diagnostics)
+    @test historical.schema == historical_def.schema
+    @test historical.content_id == ContentId("field-v1")
+    @test only(retained.heads).revision_id == migrated.revision_id
+
+    compatible = _migration_head_graph(
+        historical,
+        migrated,
+    )
+    @test isvalid(validate(compatible, SchemaRegistry([historical_def, compatible_def])))
+
+    through_parent = _migration_head_graph(
+        historical,
+        _obj(
+            :oodi, "field", ID_FIELD, REV_3;
+            version = "1.0.0", content = "field-v2", uuid = UUID_OODI,
+        );
+        head = REV_3,
+        revisions = [
+            RevisionRecord(RevisionId(REV_1)),
+            RevisionRecord(RevisionId(REV_2); parents = [RevisionId(REV_1)]),
+            RevisionRecord(RevisionId(REV_3); parents = [RevisionId(REV_2)]),
+        ],
+    )
+    @test isvalid(validate(through_parent, registry))
+
+    chained_historical = _field_def(;
+        version = "0.8.0",
+        compatibility = :migration_required,
+        replaced_by = target_ref,
+        migration = SchemaMigrationRef(
+            source_ref, target_ref; implementation_id = "field-0.8-to-1.0",
+        ),
+    )
+    chained_mid = _field_def(;
+        version = "1.0.0",
+        compatibility = :exact_read,
+        replaces = source_ref,
+        replaced_by = later_ref,
+        migration = SchemaMigrationRef(
+            target_ref, later_ref; implementation_id = "field-1.0-to-2.0",
+        ),
+    )
+    chained_head = _field_def(;
+        version = "2.0.0",
+        compatibility = :exact_read,
+        replaces = target_ref,
+    )
+    chained = _migration_head_graph(
+        historical,
+        _obj(
+            :oodi, "field", ID_FIELD, REV_2;
+            version = "2.0.0", content = "field-v2", uuid = UUID_OODI,
+        ),
+    )
+    @test isvalid(validate(
+        chained, SchemaRegistry([chained_historical, chained_mid, chained_head]),
+    ))
+
+    current = validate(
+        _migration_head_graph(
+            historical, migrated;
+            head = REV_1,
+            revisions = [
+                RevisionRecord(RevisionId(REV_1)),
+                RevisionRecord(RevisionId(REV_2); parents = [RevisionId(REV_1)]),
+            ],
+        ),
+        registry,
+    )
+    @test any(d -> d.code === :migration_required, current.diagnostics)
+
+    still_headed = validate(
+        _migration_head_graph(
+            historical, migrated;
+            extra_heads = [WorkflowHead(
+                WorkflowHeadId("head-old"), :old, RevisionId(REV_1),
+            )],
+        ),
+        registry,
+    )
+    @test any(d -> d.code === :migration_required, still_headed.diagnostics)
+
+    unrelated = validate(
+        _migration_head_graph(
+            historical,
+            _obj(
+                :oodi, "field", ID_SPACE, REV_2;
+                version = "1.0.0", content = "other", uuid = UUID_OODI,
+            ),
+        ),
+        registry,
+    )
+    @test any(d -> d.code === :migration_required, unrelated.diagnostics)
+
+    not_ancestor = validate(
+        _migration_head_graph(historical, migrated; parents = RevisionId[]),
+        registry,
+    )
+    @test any(d -> d.code === :migration_required, not_ancestor.diagnostics)
+
+    off_chain = _field_def(; version = "2.0.0", compatibility = :exact_read)
+    wrong_target = validate(
+        _migration_head_graph(
+            historical,
+            _obj(
+                :oodi, "field", ID_FIELD, REV_2;
+                version = "2.0.0", content = "field-v2", uuid = UUID_OODI,
+            ),
+        ),
+        SchemaRegistry([historical_def, migrated_def, off_chain]),
+    )
+    @test any(d -> d.code === :migration_required, wrong_target.diagnostics)
+
+    unsupported_def = _field_def(;
+        version = "0.9.0",
+        compatibility = :unsupported,
+    )
+    unsupported_object = _obj(
+        :oodi, "field", ID_FIELD, REV_1;
+        version = "0.9.0", content = "field-old", uuid = UUID_OODI,
+    )
+    unsupported = validate(
+        _migration_head_graph(unsupported_object, migrated),
+        SchemaRegistry([unsupported_def, migrated_def]),
+    )
+    @test any(d -> d.code === :unsupported_schema, unsupported.diagnostics)
+end

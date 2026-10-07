@@ -605,12 +605,87 @@ function _validate_schema_against_namespaces!(
     return diagnostics
 end
 
+function _schema_status_readable(status::Symbol)
+    return status === :exact_read || status === :backwards_compatible
+end
+
+function _migration_target(entry::SchemaDefinition)
+    entry.migration === nothing && return nothing
+    return entry.migration.target
+end
+
+function _migration_chain_reaches(
+    source::SchemaRef,
+    target::SchemaRef,
+    registry::SchemaRegistry,
+)
+    source == target && return false
+    seen = Set{SchemaRef}()
+    current = source
+    while !(current in seen)
+        push!(seen, current)
+        entry = resolve_schema(current, registry)
+        entry === nothing && return false
+        nxt = _migration_target(entry)
+        nxt === nothing && return false
+        nxt == target && return true
+        current = nxt
+    end
+    return false
+end
+
+# A `:migration_required` object may remain only as ancestry of a head that
+# materializes the same object at a readable schema reached by the embedded
+# migration pointers. That historical revision must not itself be a head.
+function _head_migration_index(graph::ArchiveGraph)
+    head_revisions = Set{String}()
+    ancestors = Dict{String,Set{String}}()
+    at_head = Dict{String,Dict{String,ArchiveObject}}()
+    for head in graph.heads
+        revision_id = head.revision_id.value
+        push!(head_revisions, revision_id)
+        haskey(ancestors, revision_id) && continue
+        prior = Set{String}()
+        for revision in revision_ancestors(graph, head.revision_id)
+            push!(prior, revision.id.value)
+        end
+        ancestors[revision_id] = prior
+        present = Dict{String,ArchiveObject}()
+        for object in graph.objects
+            object.revision_id == head.revision_id || continue
+            present[object.object_id.value] = object
+        end
+        at_head[revision_id] = present
+    end
+    return head_revisions, ancestors, at_head
+end
+
+function _retained_migration_ancestry(
+    object::ArchiveObject,
+    registry::SchemaRegistry,
+    head_revisions,
+    ancestors,
+    at_head,
+)
+    object.revision_id.value in head_revisions && return false
+    for (revision_id, prior) in ancestors
+        object.revision_id.value in prior || continue
+        successor = get(at_head[revision_id], object.object_id.value, nothing)
+        successor === nothing && continue
+        _schema_status_readable(schema_status(successor.schema, registry)) || continue
+        _migration_chain_reaches(object.schema, successor.schema, registry) || continue
+        return true
+    end
+    return false
+end
+
 function _validate_graph_schemas!(
     diagnostics,
     graph::ArchiveGraph,
     registry::SchemaRegistry;
     namespaces::Union{Nothing,NamespaceRegistry} = nothing,
 )
+    head_revisions, ancestors, at_head = _head_migration_index(graph)
     for object in ordered_objects(graph)
         status = schema_status(object.schema, registry)
         if status === :missing_schema
@@ -629,7 +704,9 @@ function _validate_graph_schemas!(
                 schema_kind = schema_kind(object.schema),
                 version = object.schema.version,
             ))
-        elseif status === :migration_required
+        elseif status === :migration_required && !_retained_migration_ancestry(
+            object, registry, head_revisions, ancestors, at_head,
+        )
             push!(diagnostics, error_diagnostic(
                 :migration_required,
                 "schema $(schema_kind(object.schema)) version $(object.schema.version) requires an explicit migration";

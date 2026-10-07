@@ -82,7 +82,7 @@ API. That catalog still does not contain JLD2 type names.
 | --- | --- |
 | `:missing_schema` | object names a `SchemaRef` that is not embedded |
 | `:unsupported_schema` | embedded compatibility is `:unsupported` |
-| `:migration_required` | compatibility is `:migration_required` |
+| `:migration_required` | compatibility is `:migration_required`, and the object is not retained ancestry of a migrated head |
 | `:missing_migration_ref` | that compatibility is set but no `SchemaMigrationRef` is stored |
 | `:corrupt_schema` | definition is empty, duplicate, self-replacing, or has contradictory replacement/migration links |
 | `:duplicate_schema` | the same `SchemaRef` is embedded twice |
@@ -91,9 +91,16 @@ API. That catalog still does not contain JLD2 type names.
 | `:payload_schema_violation` | a portable NamedTuple/SemanticNode payload breaks the declared fields or `NodeSchema` |
 
 `validate(graph, registry)` checks the graph envelope plus that every
-object schema is embedded and readable. `validate(payload, definition)`
-and `validate(node, definition)` check portable content against one
-definition. Live `SemanticNode` trees may still hold values that have no
+object schema is embedded. A current object must be readable
+(`:exact_read` or `:backwards_compatible`). A `:migration_required`
+object is accepted only as ancestry: its revision is not a workflow
+head, a head revision materializes the same object at a readable
+schema, and that schema is reached by following embedded
+`SchemaMigrationRef` targets. `validate(payload, definition)` and
+`validate(node, definition)` check portable content against one
+definition. The identity-only catalog still reports
+`:migration_required` for every such object; it is not this registry
+check. Live `SemanticNode` trees may still hold values that have no
 portable schema; those fail closed on capture (#34), not here.
 
 `readiness(registry, PipelineTarget(:inspect))` is true when the
