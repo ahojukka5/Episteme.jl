@@ -168,6 +168,13 @@ function _owner_source_has_no_lifecycle()
     return true
 end
 
+# Julia 1.13 stores DefaultTestSet.anynonpass as UInt8. The predicate
+# keeps the same pass/fail exit as the older Bool field.
+function _process_status(ts)
+    failed = isdefined(Test, :anynonpass) ? Test.anynonpass(ts) : ts.anynonpass
+    return failed ? 1 : 0
+end
+
 function main()
     empty!(SEEN_INPUTS)
     empty!(PRODUCED)
@@ -347,6 +354,9 @@ function main()
             direct = TOML.parsefile(joinpath(@__DIR__, "direct", "Project.toml"))
             @test project["sources"]["Delone"]["rev"] == DELONE_SHA
             @test direct["sources"]["Delone"]["rev"] == DELONE_SHA
+            @test haskey(project["deps"], "Pkg")
+            @test haskey(project["deps"], "TOML")
+            @test haskey(direct["deps"], "Pkg")
             @test length(project["sources"]["Delone"]["rev"]) == 40
             @test direct["sources"]["Episteme"]["rev"] ==
                 "f1cb1b7fe6a7f78b96098bbd8a24b0797c6bc640"
@@ -359,7 +369,7 @@ function main()
             @test !haskey(get(episteme, "weakdeps", Dict()), "Delone")
         end
     end
-    return ts.anynonpass ? 1 : 0
+    return _process_status(ts)
 end
 
 exit(main())

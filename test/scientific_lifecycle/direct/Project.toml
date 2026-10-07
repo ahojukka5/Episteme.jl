@@ -5,6 +5,8 @@ version = "0.1.0"
 [deps]
 Delone = "0a3734f8-1dfd-4ffb-90f2-cbaa38dcac37"
 Episteme = "7c15cd61-9c6a-4671-bc94-9960963998ac"
+# The direct script calls Pkg.instantiate. Declare it.
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [sources]
