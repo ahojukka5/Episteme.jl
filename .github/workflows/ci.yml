@@ -30,10 +30,23 @@ jobs:
       fail-fast: false
       matrix:
         julia-version: ['1']
+    # Delone is private. The lifecycle project clones it by URL and SHA.
+    # Pkg reads the credential helper this step installs, including the
+    # child process that instantiates that project.
+    env:
+      GH_TOKEN: ${{ secrets.PRIVATE_REPOS_TOKEN }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Configure GitHub credentials for private dependencies
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::secret PRIVATE_REPOS_TOKEN is not set; private dependencies cannot be cloned"
+            exit 1
+          fi
+          gh auth setup-git
 
       - name: Set up Julia
         uses: julia-actions/setup-julia@v2
