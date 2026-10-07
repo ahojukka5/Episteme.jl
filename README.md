@@ -24,6 +24,53 @@ in-memory execution lifecycle (`execute!` / `commit!` / `recover_writes!`).
 Physical `.ah5` writes remain explicit via `write_archive`. See
 [`docs/workflow.md`](docs/workflow.md).
 
+## Capabilities
+
+| Capability | Status | Where to see it |
+| --- | --- | --- |
+| `report`, `validate`, `readiness`, local schemas, semantic trees | qualified | [`docs/semantic-tree.md`](docs/semantic-tree.md), [`docs/declarative-contracts.md`](docs/declarative-contracts.md) |
+| In-memory archive history: plan, `execute!`, stage, `commit!`, restart | qualified | [`docs/workflow.md`](docs/workflow.md), [`docs/archive-lifecycle.md`](docs/archive-lifecycle.md) |
+| JLD2-backed AH5 profile (`write_archive` / `inspect_archive`) | qualified | [`docs/archive-profile.md`](docs/archive-profile.md) |
+| AH5 state, run, and event history | qualified | [`docs/archive-state-history.md`](docs/archive-state-history.md), [`docs/archive-run-history.md`](docs/archive-run-history.md), [`docs/archive-event-history.md`](docs/archive-event-history.md) |
+| Content identity, external checks, revision integrity, persisted manifests | qualified | [`docs/content-integrity.md`](docs/content-integrity.md), [`docs/external-integrity.md`](docs/external-integrity.md), [`docs/revision-integrity.md`](docs/revision-integrity.md), [`docs/archive-integrity.md`](docs/archive-integrity.md) |
+| Reproduction capsules | qualified | [`docs/capsule-archives.md`](docs/capsule-archives.md), [`docs/capsule-planning.md`](docs/capsule-planning.md) |
+| Semantic schema migration, including `materialize_migration` | partial | [`docs/schema-migration.md`](docs/schema-migration.md) |
+
+There is no `examples/` corpus. The documents above are the runnable
+entry points, and the contract tests live in `test/`. AH5 readers and
+writers load only after `using JLD2`. `execute!` and `commit!` do not
+write files.
+
+`materialize_migration` reads a source `.ah5` file and, only when the
+successor is valid, publishes a new archive with the existing event
+writer. It does not rewrite the source, and it does not add a second
+writer. A retained object whose schema compatibility is
+`:migration_required` still cannot be archived. That limitation is
+[#141](https://github.com/ahojukka5/Episteme.jl/issues/141).
+
+## What this package deliberately does not do
+
+Domain models, meshes, solvers, and payload meaning stay in the package
+that owns them. Episteme stores a `script_node` contract and does not
+run its source. It does not package OS images, language runtimes, or
+containers inside a capsule, and inspection does not fetch external
+requirements. It does not upgrade an archive in place and does not treat
+JLD2 reconstruction as schema compatibility.
+
+These tracked extensions are not implemented:
+
+- retaining a `:migration_required` object as ancestry while the migrated
+  revision is the head
+  ([#141](https://github.com/ahojukka5/Episteme.jl/issues/141));
+- binding large derived-artifact bytes through `ArtifactRef` once a real
+  bulk fixture exists
+  ([#112](https://github.com/ahojukka5/Episteme.jl/issues/112)) —
+  payload-free derived records already persist;
+- end-to-end archive qualification and any later parallel bulk I/O
+  ([#29](https://github.com/ahojukka5/Episteme.jl/issues/29));
+- lightweight XDMF views over archived arrays
+  ([#28](https://github.com/ahojukka5/Episteme.jl/issues/28)).
+
 ## Why this package exists
 
 Independently owned scientific packages need a shared place to describe objects,

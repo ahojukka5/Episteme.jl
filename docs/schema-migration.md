@@ -108,9 +108,10 @@ copy of a dataset.
 
 A source object whose embedded schema is `:migration_required` still
 cannot be retained: existing graph validation refuses to publish that
-object. The historical fixture is the schema version that was valid to
-archive. The migration registry, not a compatibility guess, performs the
-step.
+object. That gap is
+[#141](https://github.com/ahojukka5/Episteme.jl/issues/141). The
+historical fixture is the schema version that was valid to archive. The
+migration registry, not a compatibility guess, performs the step.
 
 ## Deliberate non-goals
 
