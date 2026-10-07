@@ -123,6 +123,70 @@ end
     )
 end
 
+@testset "migration registries refuse every directed cycle" begin
+    refs = [SchemaRef(:example, "record", string(i, ".0.0")) for i in 1:4]
+    edge(a, b) = SchemaMigrationStep(a, b; implementation_id = "not_loaded")
+    two_cycle = [edge(refs[1], refs[2]), edge(refs[2], refs[1])]
+    three_cycle = [edge(refs[1], refs[2]), edge(refs[2], refs[3]),
+        edge(refs[3], refs[1])]
+    @test_throws ArgumentError SchemaMigrationRegistry(two_cycle)
+    @test_throws ArgumentError SchemaMigrationRegistry(reverse(two_cycle))
+    @test_throws ArgumentError SchemaMigrationRegistry(three_cycle)
+    @test_throws ArgumentError SchemaMigrationRegistry(
+        [edge(refs[3], refs[4]); two_cycle],
+    )
+
+    # Reconstruction of portable declarations still uses the checked constructor.
+    declarations = to_namedtuple.(two_cycle)
+    restored = [SchemaMigrationStep(
+        SchemaRef(row.source.namespace_id, row.source.schema_id, row.source.version),
+        SchemaRef(row.target.namespace_id, row.target.schema_id, row.target.version);
+        implementation_id = row.implementation_id,
+        axis = row.axis,
+        rewrite_payload = row.rewrite_payload,
+        required_package = row.required_package,
+    ) for row in declarations]
+    @test_throws ArgumentError SchemaMigrationRegistry(restored)
+
+    # Shared version labels in different namespaces/schema ids are distinct vertices.
+    other = SchemaRef(:other, "record", "1.0.0")
+    other_kind = SchemaRef(:example, "other", "1.0.0")
+    distinct = SchemaMigrationRegistry([
+        edge(refs[1], refs[2]), edge(refs[2], other), edge(other, other_kind),
+    ])
+    @test plan_migration(refs[1], other_kind, distinct).status === :chain
+    @test length(plan_migration(refs[1], other_kind, distinct).steps) == 3
+
+    converging = SchemaMigrationRegistry([
+        edge(refs[1], refs[2]), edge(refs[1], refs[3]),
+        edge(refs[2], refs[4]), edge(refs[3], refs[4]),
+    ])
+    @test plan_migration(refs[1], refs[2], converging).status === :direct
+    @test plan_migration(refs[1], refs[4], converging).status === :ambiguous
+    @test isvalid(plan_migration(refs[1], refs[1], SchemaMigrationRegistry([])))
+
+    # No recursion-depth dependence for long valid chains or their closing edge.
+    long_refs = [SchemaRef(:example, "long", string(i)) for i in 1:10_000]
+    long_steps = [edge(long_refs[i], long_refs[i + 1]) for i in 1:9_999]
+    long_plan = plan_migration(first(long_refs), last(long_refs),
+        SchemaMigrationRegistry(long_steps))
+    @test isvalid(long_plan)
+    @test length(long_plan.steps) == 9_999
+    @test_throws ArgumentError SchemaMigrationRegistry(
+        [long_steps; edge(last(long_refs), first(long_refs))],
+    )
+
+    # The SchemaRegistry admission route checks its embedded migration edges too.
+    v1, v2 = SchemaRef(:oodi, "field", "1.0.0"), SchemaRef(:oodi, "field", "2.0.0")
+    definitions = SchemaRegistry([
+        _field_schema("1.0.0"; migration = SchemaMigrationRef(v1, v2;
+            implementation_id = "not_loaded")),
+        _field_schema("2.0.0"; migration = SchemaMigrationRef(v2, v1;
+            implementation_id = "not_loaded")),
+    ])
+    @test_throws ArgumentError SchemaMigrationRegistry(definitions)
+end
+
 @testset "toy v1 field migrates to v2 without mutating the source" begin
     v1 = _field_schema(
         "1.0.0";

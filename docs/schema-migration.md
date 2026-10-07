@@ -38,6 +38,11 @@ Missing chains are `:unsupported`. Two shortest routes are
 implementations are refused when the registry is constructed. Invalid
 plans must not be applied.
 
+The registry must be a DAG. Directed cycles are refused at construction,
+even in a component unrelated to the requested source and target. This
+check uses exact schema identities, not numerical version ordering, and
+does not invoke payload transforms.
+
 A metadata-only step sets `rewrite_payload=false`. The plan's
 `rewrite_payload` flag is true when any step rewrites payload bytes.
 

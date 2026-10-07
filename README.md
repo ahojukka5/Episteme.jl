@@ -44,9 +44,15 @@ write files.
 `materialize_migration` reads a source `.ah5` file and, only when the
 successor is valid, publishes a new archive with the existing event
 writer. It does not rewrite the source, and it does not add a second
-writer. A retained object whose schema compatibility is
-`:migration_required` still cannot be archived. That limitation is
-[#141](https://github.com/ahojukka5/Episteme.jl/issues/141).
+writer. Migration registries reject duplicate edges and directed cycles.
+A retained `:migration_required` object can remain as proper ancestry
+when the workflow head materializes the same object at a readable target
+of its embedded migration chain. See the bounded retention conditions in
+[`docs/schema-migration.md`](docs/schema-migration.md).
+Domain migrators currently receive caller payload arrays directly; source
+array isolation remains pending
+[#147](https://github.com/ahojukka5/Episteme.jl/issues/147). Read-only source
+archive access does not provide that in-memory isolation.
 
 ## What this package deliberately does not do
 
@@ -59,9 +65,6 @@ JLD2 reconstruction as schema compatibility.
 
 These tracked extensions are not implemented:
 
-- retaining a `:migration_required` object as ancestry while the migrated
-  revision is the head
-  ([#141](https://github.com/ahojukka5/Episteme.jl/issues/141));
 - binding large derived-artifact bytes through `ArtifactRef` once a real
   bulk fixture exists
   ([#112](https://github.com/ahojukka5/Episteme.jl/issues/112)) —
