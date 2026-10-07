@@ -81,8 +81,9 @@ end
     SchemaMigrationRegistry(steps)
     SchemaMigrationRegistry(schemas::SchemaRegistry; kwargs...)
 
-Directed graph of semantic migration steps. Keys are exact schema
-namespace, id, and version; package SemVer is ignored.
+Directed acyclic graph of semantic migration steps. Keys are exact schema
+namespace, id, and version; package SemVer is ignored. Duplicate edges and
+cycles, including disconnected cycles, are refused before planning.
 """
 const _EMPTY_MIGRATION_STEPS = SchemaMigrationStep[]
 
@@ -94,7 +95,9 @@ struct SchemaMigrationRegistry
         typed = _typed_vector(SchemaMigrationStep, steps, "schema migration steps")
         registry = new(typed, Dict{SchemaRef,Vector{SchemaMigrationStep}}())
         _require_unique_migration_edges(registry)
-        return new(typed, _migration_adjacency(typed))
+        adjacency = _migration_adjacency(typed)
+        _require_acyclic_migrations(typed, adjacency)
+        return new(typed, adjacency)
     end
 end
 
@@ -148,6 +151,35 @@ end
 function _migration_steps(registry::SchemaMigrationRegistry, node::SchemaRef)
     steps = get(registry.adjacency, node, nothing)
     return steps === nothing ? _EMPTY_MIGRATION_STEPS : steps
+end
+
+function _require_acyclic_migrations(steps, adjacency)
+    incoming = Dict{SchemaRef,Int}()
+    nodes = SchemaRef[]
+    for step in steps
+        for node in (step.source, step.target)
+            haskey(incoming, node) && continue
+            incoming[node] = 0
+            push!(nodes, node)
+        end
+        incoming[step.target] += 1
+    end
+    queue = SchemaRef[node for node in nodes if incoming[node] == 0]
+    head = 1
+    while head <= length(queue)
+        node = queue[head]
+        head += 1
+        outgoing = get(adjacency, node, nothing)
+        outgoing === nothing && continue
+        for step in outgoing
+            incoming[step.target] -= 1
+            incoming[step.target] == 0 && push!(queue, step.target)
+        end
+    end
+    length(queue) == length(nodes) || throw(ArgumentError(
+        "semantic migration registry contains a directed cycle",
+    ))
+    return nothing
 end
 
 """
