@@ -106,12 +106,16 @@ persists the canonical id from `migrate_object`. Scientific payload bytes
 are not part of the AH5 profile, so reuse is that identity, not a second
 copy of a dataset.
 
-A source object whose embedded schema is `:migration_required` still
-cannot be retained: existing graph validation refuses to publish that
-object. That gap is
-[#141](https://github.com/ahojukka5/Episteme.jl/issues/141). The
-historical fixture is the schema version that was valid to archive. The
-migration registry, not a compatibility guess, performs the step.
+A source object whose embedded schema is `:migration_required` is kept
+when its revision is proper ancestry of a workflow head, that head
+materializes the same object, and the head schema is a readable target
+of the embedded migration chain (`:exact_read` or
+`:backwards_compatible`). The retained object keeps its schema identity
+and content id. The unmigrated revision must not itself be a head. An
+invalid, ambiguous, or unloaded migrator still returns before any
+output file is created. The migration registry performs the step;
+compatibility is not inferred. The source archive may still have been
+written while that schema was valid to archive.
 
 ## Deliberate non-goals
 

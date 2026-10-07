@@ -373,3 +373,111 @@ end
         @test !ispath(bare_destination)
     end
 end
+
+function _schema_requiring_migration(definition::SchemaDefinition)
+    definition.migration === nothing && return definition
+    return SchemaDefinition(
+        definition.schema;
+        namespace = definition.namespace,
+        compatibility = :migration_required,
+        fields = definition.fields,
+        node_schema = definition.node_schema,
+        documentation = definition.documentation,
+        package_version = definition.package_version,
+        replaces = definition.replaces,
+        replaced_by = definition.replaced_by,
+        migration = definition.migration,
+    )
+end
+
+@testset "migration_required source objects stay in the successor archive" begin
+    mktempdir() do dir
+        fixture = _archive_migration_fixture()
+        required = SchemaRegistry([
+            _schema_requiring_migration(entry) for entry in fixture.schemas.entries
+        ])
+        @test schema_status(fixture.field.schema, required) === :migration_required
+        @test schema_status(fixture.label.schema, required) === :migration_required
+        @test any(
+            diagnostic -> diagnostic.code === :migration_required,
+            validate(fixture.graph, required).diagnostics,
+        )
+
+        source = joinpath(dir, "historical.ah5")
+        destination = joinpath(dir, "migrated.ah5")
+        write_state_archive(source, fixture.graph; schemas = fixture.historical)
+        before = read(source)
+        revision_id = RevisionId(ARCHIVE_MIGRATION_REV_2)
+        run_id = RunId("run-required-ancestry")
+        published = materialize_migration(
+            destination,
+            source,
+            fixture.requests,
+            fixture.migrations;
+            schemas = required,
+            revision_id = revision_id,
+            run_id = run_id,
+            software_environment = fixture.software,
+        )
+        @test isvalid(published)
+        @test published.published
+        @test read(source) == before
+        @test isfile(destination)
+
+        reopened = reconstruct_graph(inspect_archive(destination, ArchiveEventHistory))
+        report = validate(reopened, required)
+        @test isvalid(report)
+        @test !any(diagnostic -> diagnostic.code === :migration_required, report.diagnostics)
+        @test isvalid(integrity_manifest(reopened, revision_id, required))
+        @test isvalid(integrity_manifest(
+            reopened, fixture.field.revision_id, required,
+        ))
+        @test only(reopened.heads).revision_id == revision_id
+        retained_field = find_object(
+            reopened, fixture.field.object_id, fixture.field.revision_id,
+        )
+        retained_label = find_object(
+            reopened, fixture.label.object_id, fixture.label.revision_id,
+        )
+        @test retained_field.schema == fixture.field.schema
+        @test retained_field.content_id == fixture.field_content
+        @test retained_label.schema == fixture.label.schema
+        @test retained_label.content_id == fixture.label_content
+        @test schema_status(retained_field.schema, required) === :migration_required
+        head_field = find_object(reopened, fixture.field.object_id, revision_id)
+        @test head_field.schema == SchemaRef(:oodi, "field", "2.0.0")
+        @test schema_status(head_field.schema, required) === :exact_read
+        core = inspect_archive(destination)
+        listed = only(item for item in core.schemas if item.schema == fixture.field.schema)
+        @test listed.compatibility === :migration_required
+
+        blocked_destination = joinpath(dir, "not-published.ah5")
+        missing = SchemaMigrationRegistry([
+            SchemaMigrationStep(
+                fixture.field.schema,
+                SchemaRef(:oodi, "field", "2.0.0");
+                implementation_id = "not_loaded",
+                required_package = "Oodi.jl",
+            ),
+        ])
+        unpublished = materialize_migration(
+            blocked_destination,
+            source,
+            [fixture.requests[1]],
+            missing;
+            schemas = required,
+            revision_id = revision_id,
+            run_id = RunId("run-required-missing"),
+            software_environment = fixture.software,
+        )
+        @test !isvalid(unpublished)
+        @test !unpublished.published
+        @test unpublished.graph === nothing
+        @test any(
+            diagnostic -> diagnostic.code === :migration_implementation_missing,
+            unpublished.diagnostics,
+        )
+        @test !ispath(blocked_destination)
+        @test read(source) == before
+    end
+end
