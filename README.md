@@ -31,6 +31,7 @@ Physical `.ah5` writes remain explicit via `write_archive`. See
 | `report`, `validate`, `readiness`, local schemas, semantic trees | qualified | [`docs/semantic-tree.md`](docs/semantic-tree.md), [`docs/declarative-contracts.md`](docs/declarative-contracts.md) |
 | In-memory archive history: plan, `execute!`, stage, `commit!`, restart | qualified | [`docs/workflow.md`](docs/workflow.md), [`docs/archive-lifecycle.md`](docs/archive-lifecycle.md) |
 | JLD2-backed AH5 profile (`write_archive` / `inspect_archive`) | qualified | [`docs/archive-profile.md`](docs/archive-profile.md) |
+| Lightweight XDMF views of existing numeric archive arrays | qualified primitive layouts | [`docs/archive-views.md`](docs/archive-views.md) |
 | AH5 state, run, and event history | qualified | [`docs/archive-state-history.md`](docs/archive-state-history.md), [`docs/archive-run-history.md`](docs/archive-run-history.md), [`docs/archive-event-history.md`](docs/archive-event-history.md) |
 | Content identity, external checks, revision integrity, persisted manifests | qualified | [`docs/content-integrity.md`](docs/content-integrity.md), [`docs/external-integrity.md`](docs/external-integrity.md), [`docs/revision-integrity.md`](docs/revision-integrity.md), [`docs/archive-integrity.md`](docs/archive-integrity.md) |
 | Reproduction capsules | qualified | [`docs/capsule-archives.md`](docs/capsule-archives.md), [`docs/capsule-planning.md`](docs/capsule-planning.md) |

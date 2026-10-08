@@ -90,5 +90,6 @@ include("EpistemeJLD2Ext_capsule_archive.jl")
 include("EpistemeJLD2Ext_archive_software_environments.jl")
 include("EpistemeJLD2Ext_archive_execution_contexts.jl")
 include("EpistemeJLD2Ext_archive_schema_migration.jl")
+include("EpistemeJLD2Ext_archive_views.jl")
 
 end # module EpistemeJLD2Ext

@@ -46,6 +46,10 @@ include("archive_derived_artifacts.jl")
 include("archive_execution.jl")
 include("archive_provenance.jl")
 include("archive_reproduction.jl")
+include("archive_views.jl")
+
+export AbstractXdmfView, XdmfDataset, XdmfAttribute, XdmfSet, XdmfGrid, XdmfCollection
+export XdmfViewInspection, xdmf_projection, inspect_xdmf_view, write_xdmf_view
 
 export write_capsule_archive, verify_capsule
 export CapsuleManifest, CapsuleArchiveResult, ArchiveCapsuleInspection

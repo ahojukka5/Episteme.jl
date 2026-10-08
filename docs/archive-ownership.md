@@ -249,7 +249,7 @@ Logical contract first, then physical persistence in Episteme.
 | --- | --- | --- |
 | #26 envelope, identities, references, schema-version rules | done | persist those records |
 | #27 transactions / completion / restart | status, staging, write phases, restart refs | JLD2 markers, file locks, recovery |
-| #28 XDMF views | none | generic writer; domain registers the projection recipe |
+| #28 XDMF views | XdmfDataset, XdmfGrid, attributes, sets, collections | read-only numeric qualification and metadata writer; domain owns the recipe ([contract](archive-views.md)) |
 | #29 integrity and parallel-HDF5 qualification | none | `EpistemeHDF5Ext` after domain codecs exist |
 | #30 revision history | revision identity types | graph storage |
 | #31 purge / compaction | RetentionRoot, plan_purge, compact_archive | physical rewrite / new `.ah5` |
