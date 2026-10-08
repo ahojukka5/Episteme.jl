@@ -271,9 +271,14 @@ function _capsule_content_storage(entry::CapsuleContentEntry)
 end
 
 function _restore_capsule_content_entry(nt)
+    # Early format-2 capsules persisted "included" before that state was
+    # renamed "retained". Preserve their readability while writing only the
+    # current vocabulary; no archive rewrite is required on inspection.
+    status = Symbol(nt.status)
+    status === :included && (status = :retained)
     return CapsuleContentEntry(
         Symbol(nt.kind),
-        Symbol(nt.status);
+        status;
         object_id = String(nt.object_id),
         revision_id = String(nt.revision_id),
         content_id = String(nt.content_id),

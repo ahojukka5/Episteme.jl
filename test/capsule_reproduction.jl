@@ -239,6 +239,40 @@ end
     end
 end
 
+@testset "historical format-2 included rows remain readable" begin
+    mktempdir() do dir
+        parts = _reproduction_graph()
+        plan = _reproduction_plan(parts)
+        path = joinpath(dir, "historical-format-2.ah5")
+        _write_reproduction(path, parts, plan)
+
+        current = inspect_archive(path, CapsuleManifest)
+        @test isvalid(current)
+        key = Episteme.AH5_CAPSULE_KEY
+        JLD2.jldopen(path, "r+") do file
+            stored = file[key]
+            @test stored.format_version == 2
+            @test any(row -> row.status == "retained", stored.content)
+            # Rewrite a real on-disk capsule using the original v2 spelling.
+            # The binary layout and format version are otherwise unchanged.
+            old_rows = [
+                row.status == "retained" ? merge(row, (status = "included",)) : row
+                for row in stored.content
+            ]
+            delete!(file, key)
+            file[key] = merge(stored, (content = old_rows,))
+        end
+
+        restored = inspect_archive(path, CapsuleManifest)
+        @test isvalid(restored)
+        @test restored.manifest.format_version == 2
+        @test to_namedtuple(restored.manifest) == to_namedtuple(current.manifest)
+        @test all(row -> row.status !== :included, restored.manifest.content)
+        @test isready(readiness(restored, PipelineTarget(:rerun)))
+        @test isvalid(verify_capsule(path))
+    end
+end
+
 @testset "missing capsule evidence downgrades execution readiness" begin
     mktempdir() do dir
         parts = _reproduction_graph()
