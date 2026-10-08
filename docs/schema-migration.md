@@ -58,7 +58,15 @@ migrate_payload(::Val{:toy_field_v1_v2}, payload::NamedTuple, step) =
 
 `migrate_object` validates the portable payload against each embedded
 schema, calls the named implementation, and returns a **new** envelope.
-The source object is unchanged. The migrated object keeps the source
+The source object and caller-owned payload arrays are unchanged, including
+arrays nested inside portable containers. Each domain transform receives a
+deep working copy and may mutate that copy. A metadata-only step is compared
+against its preceding values, so in-place changes are rejected. Failed chains
+return no output object or payload. `source_unchanged` describes this in-memory
+source boundary; it does not sandbox arbitrary domain code or its external
+side effects.
+
+The migrated object keeps the source
 `ObjectId`, uses a caller-supplied new `RevisionId`, and records old
 and new schema identities. Put the new revision in the DAG with
 `parents = [source.revision_id]`.

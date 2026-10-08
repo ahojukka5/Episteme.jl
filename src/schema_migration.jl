@@ -204,7 +204,9 @@ Base.isvalid(plan::MigrationPlan) = plan.valid
     MigrationResult <: AbstractValidationReport
 
 In-memory application of a valid [`MigrationPlan`](@ref). The source
-[`ArchiveObject`](@ref) is never mutated.
+[`ArchiveObject`](@ref) and caller-owned payload arrays are never mutated.
+`source_unchanged` covers this in-memory boundary, not arbitrary external
+state accessed by domain code.
 """
 struct MigrationResult <: AbstractValidationReport
     source_unchanged::Bool
@@ -356,7 +358,9 @@ end
     migrate_payload(implementation, payload, step) -> NamedTuple
 
 Domain extension point. Episteme does not know scientific meaning and
-must not invent required target fields. Missing methods return `missing`.
+must not invent required target fields. Each invocation receives an owned
+working copy, including nested arrays, which the domain may mutate. Missing
+methods return `missing`.
 """
 function migrate_payload(::Val, payload, ::SchemaMigrationStep)
     return missing
@@ -404,7 +408,9 @@ end
         -> MigrationResult
 
 Apply a planned semantic chain to a portable NamedTuple payload. The source
-envelope is not mutated. Metadata-only chains reuse `object.content_id`;
+envelope and caller-owned payload are not mutated. Each transform receives a
+deep copy so metadata-only checks compare against the preceding values, even
+when the transform mutates its input. Metadata-only chains reuse `object.content_id`;
 payload rewrites mint a new canonical identity.
 """
 function migrate_object(
@@ -432,7 +438,7 @@ function migrate_object(
         revision_id = object.revision_id.value,
     )); return _failed_migration(object, plan, diagnostics))
 
-    current = payload
+    current = deepcopy(payload)
     current_schema = object.schema
     for step in plan.steps
         source_def = resolve_schema(step.source, schemas)
@@ -446,7 +452,7 @@ function migrate_object(
         append!(diagnostics, source_report.diagnostics)
         isvalid(source_report) || return _failed_migration(object, plan, diagnostics)
 
-        next_payload = migrate_payload(_implementation_val(step), current, step)
+        next_payload = migrate_payload(_implementation_val(step), deepcopy(current), step)
         if next_payload === missing
             package = isempty(step.required_package) ? step.implementation_id :
                 step.required_package
