@@ -6,9 +6,15 @@
     mktempdir() do dir
         path = joinpath(dir, "not-created.ah5")
         graph = ArchiveGraph(ArchiveObject[])
+        reference = ObjectRef(ObjectId("view"); revision_id=RevisionId("revision"))
+        dataset = XdmfDataset("/data/points", reference, ContentId("object");
+            content_id=ContentId("array"))
+        view = XdmfGrid("unloaded", dataset, dataset; cells=1)
         for operation in (
             () -> write_archive(path),
             () -> inspect_archive(path),
+            () -> inspect_xdmf_view(path, view),
+            () -> write_xdmf_view(path, "missing.ah5", view),
             () -> is_ah5_archive(path),
             () -> write_archive(path, RevisionIntegrityManifest[]),
             () -> inspect_archive(path, RevisionIntegrityManifest),
