@@ -59,7 +59,9 @@ the requested target, the verification level, retained and omitted counts, and
 one row per retained, external, unavailable, redacted, or omitted item.
 `payloads_embedded` is true only when a scientific payload row is retained.
 The capsule identity must differ from the source identity. Omitted counts
-describe the original source.
+describe the original source. Earlier format-2 archives wrote the retained
+content status as `included`; readers normalize that spelling to `retained`
+without rewriting the archive. New archives emit only `retained`.
 
 `manifest.readiness` is what the embedded content supports:
 `inspectable`, `replayable`, `restartable`, and `rerunnable`. A requested
