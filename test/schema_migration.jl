@@ -331,3 +331,81 @@ end
     @test !hasfield(SchemaMigrationStep, :julia_type)
     @test !hasfield(MigrationPlan, :jld2_upgrade)
 end
+
+function migrate_payload(::Val{:mutate_nested_values}, payload::NamedTuple, ::SchemaMigrationStep)
+    payload.values[1][1] += 10.0
+    return payload
+end
+
+function migrate_payload(::Val{:mutate_then_missing}, payload::NamedTuple, ::SchemaMigrationStep)
+    payload.values[1][1] += 100.0
+    return missing
+end
+
+function migrate_payload(::Val{:mutate_then_invalid}, payload::NamedTuple, ::SchemaMigrationStep)
+    payload.values[1][1] += 100.0
+    return (; name = payload.name)
+end
+
+@testset "migration owns nested payload arrays on success and rejection" begin
+    fields = [
+        SchemaField(:name, LogicalType(:string)),
+        SchemaField(:values, LogicalType(:real); rank = 1,
+            shape = (nothing,), cardinality = :many),
+    ]
+    v1, v2, v3 = [_field_schema(v; fields) for v in ("1.0.0", "2.0.0", "3.0.0")]
+    schemas = SchemaRegistry([v1, v2, v3])
+    source = _field_object(REV_1, v1.schema)
+    envelope = to_namedtuple(source)
+    payload = (; name = "nested", values = [[1.0, 2.0], [3.0]])
+    original = deepcopy(payload)
+    function apply_steps(steps, target)
+        migrate_object(source, payload, target, SchemaMigrationRegistry(steps);
+            schemas, revision_id = RevisionId(REV_2))
+    end
+    first_step = SchemaMigrationStep(v1.schema, v2.schema;
+        implementation_id = "mutate_nested_values")
+    success = apply_steps([first_step], v2.schema)
+    @test isvalid(success)
+    @test success.source_unchanged
+    @test payload == original
+    @test to_namedtuple(source) == envelope
+    @test success.payload.values == [[11.0, 2.0], [3.0]]
+    @test success.payload.values !== payload.values
+    @test success.payload.values[2] !== payload.values[2]
+    @test success.object.content_id == canonical_content_id(success.payload)
+    success.payload.values[2][1] = 99.0
+    @test payload == original
+
+    chain = apply_steps([first_step, SchemaMigrationStep(v2.schema, v3.schema;
+        implementation_id = "mutate_nested_values")], v3.schema)
+    @test isvalid(chain)
+    @test chain.payload.values == [[21.0, 2.0], [3.0]]
+    @test payload == original
+
+    for implementation in ("mutate_then_missing", "mutate_then_invalid")
+        rejected = apply_steps([first_step, SchemaMigrationStep(v2.schema, v3.schema;
+            implementation_id = implementation)], v3.schema)
+        @test !isvalid(rejected)
+        @test rejected.source_unchanged
+        @test rejected.payload === nothing
+        @test rejected.object === nothing
+        @test payload == original
+        @test to_namedtuple(source) == envelope
+    end
+
+    metadata = apply_steps([SchemaMigrationStep(v1.schema, v2.schema;
+        implementation_id = "mutate_nested_values", rewrite_payload = false)], v2.schema)
+    @test !isvalid(metadata)
+    @test metadata.payload === nothing
+    @test metadata.object === nothing
+    @test payload == original
+    @test any(d -> d.code === :migration_rewrote_metadata_only, metadata.diagnostics)
+
+    mixed = apply_steps([first_step, SchemaMigrationStep(v2.schema, v3.schema;
+        implementation_id = "mutate_nested_values", rewrite_payload = false)], v3.schema)
+    @test !isvalid(mixed)
+    @test mixed.object === nothing
+    @test payload == original
+    @test any(d -> d.code === :migration_rewrote_metadata_only, mixed.diagnostics)
+end
