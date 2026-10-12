@@ -355,3 +355,150 @@ end
         @test listed.node_schema.rules[1].message == "min<=max\nplease"
     end
 end
+
+@testset "external metadata survives projection and portable AH5 storage" begin
+    metadata = (
+        z_label = "µ,=\t\n",
+        unit = "m",
+        dimensions = (2, 3, 0),
+        labels = (:x, :y, "z"),
+        description = (value = 1.25, enabled = true, absent = nothing),
+        path = "descriptive path", uri = :descriptive_uri, kind = "descriptive kind",
+        empty_tuple = (),
+        empty_record = (;),
+        nested = ((z = (1, false), a = "nested"),),
+    )
+    req = ExternalRequirement(ObjectId("external-metadata-input");
+        content_id = ContentId("sha256:" * "a"^64),
+        artifact = ArtifactRef(:file, "data.bin", "file:data.bin",
+            "portable input", metadata))
+    projected = to_namedtuple(req)
+    @test projected.artifact == to_namedtuple(req.artifact)
+    @test projected.artifact.metadata === metadata
+    @test !haskey(projected.artifact.metadata, :metadata)
+    @test to_namedtuple(from_namedtuple(ExternalRequirement, projected)) == projected
+
+    mktempdir() do dir
+        path = joinpath(dir, "metadata.ah5")
+        write_archive(path; externals = [req])
+        view = inspect_archive(path)
+        @test view.identified
+        @test isvalid(validate(view))
+        restored = only(view.externals)
+        @test restored.object_id == req.object_id
+        @test restored.content_id == req.content_id
+        @test to_namedtuple(restored.artifact) == to_namedtuple(req.artifact)
+        @test keys(restored.artifact.metadata) == keys(metadata)
+        @test keys(restored.artifact.metadata.nested[1]) == (:z, :a)
+        @test restored.artifact.metadata.dimensions === (2, 3, 0)
+        @test restored.artifact.metadata.labels === (:x, :y, "z")
+        @test view.profile.profile_version == AH5_PROFILE_VERSION
+        @test isempty(view.schemas)
+        named = ExternalRequirement(ObjectId("named-metadata");
+            artifact = ArtifactRef(:file; metadata = (unit = "m",)))
+        named_path = joinpath(dir, "named-metadata.ah5")
+        write_archive(named_path; externals = [named])
+        @test only(inspect_archive(named_path).externals).artifact.metadata ==
+            (metadata = (unit = "m",),)
+        JLD2.jldopen(path, "r"; plain = true) do file
+            raw = file["$(AH5_EXTERNALS_KEY)/1"]
+            @test raw.artifact_metadata.portable_kind == "namedtuple"
+            @test String.(getproperty.(raw.artifact_metadata.items, :name)) ==
+                collect(String.(keys(metadata)))
+            # The historical decoder reads its six fields without knowing the
+            # optional metadata; identity/location remain consumable.
+            old = ArtifactRef(Symbol(raw.artifact_kind);
+                path = String(raw.artifact_path), uri = String(raw.artifact_uri),
+                description = String(raw.artifact_description))
+            @test old.path == req.artifact.path
+            @test old.uri == req.artifact.uri
+            @test isempty(old.metadata)
+            @test String(raw.object_id) == req.object_id.value
+            @test String(raw.content_id) == req.content_id.value
+        end
+    end
+end
+
+@testset "historical external rows restore empty metadata" begin
+    historical = (
+        object_id = "historical-input", content_id = "historical-bytes",
+        artifact_kind = "file", artifact_path = "old.bin", artifact_uri = "",
+        artifact_description = "historical description",
+    )
+    projection = (
+        object_id = historical.object_id, content_id = historical.content_id,
+        artifact = (kind = :file, path = "old.bin", uri = nothing,
+                    description = historical.artifact_description),
+    )
+    @test isempty(from_namedtuple(ExternalRequirement, projection).artifact.metadata)
+    mktempdir() do dir
+        path = joinpath(dir, "historical.ah5")
+        write_archive(path)
+        JLD2.jldopen(path, "r+") do file
+            delete!(file, "$(AH5_EXTERNALS_KEY)/count")
+            file["$(AH5_EXTERNALS_KEY)/count"] = 1
+            file["$(AH5_EXTERNALS_KEY)/1"] = historical
+        end
+        before = read(path)
+        view = inspect_archive(path)
+        @test view.identified
+        @test isvalid(validate(view))
+        req = only(view.externals)
+        @test req.object_id == ObjectId("historical-input")
+        @test req.content_id == ContentId("historical-bytes")
+        @test req.artifact.path == "old.bin"
+        @test req.artifact.uri === nothing
+        @test isempty(req.artifact.metadata)
+        @test read(path) == before
+    end
+end
+
+@testset "unsupported external metadata refuses output before publication" begin
+    safe = ExternalRequirement(ObjectId("safe"); artifact = ArtifactRef(:file; unit = "m"))
+    unsafe = (x -> x, Ref(1), [1, 2], Dict(:x => 1), Float32(1), typemax(UInt), 'x')
+    mktempdir() do dir
+        for (i, value) in enumerate(unsafe)
+            req = ExternalRequirement(ObjectId("unsafe");
+                artifact = ArtifactRef(:file; nested = (label = "safe", value = (value,))))
+            path = joinpath(dir, "unsupported-$i.ah5")
+            @test_throws ArgumentError write_archive(path; externals = [safe, req])
+            @test !ispath(path)
+            @test readdir(dir) == String[]
+            write(path, "existing bytes")
+            @test_throws ArgumentError write_archive(path; externals = [safe, req])
+            @test read(path, String) == "existing bytes"
+            rm(path)
+        end
+    end
+end
+
+@testset "unsupported external metadata tags refuse archive inspection" begin
+    mktempdir() do dir
+        for (i, metadata) in enumerate((
+            (portable_kind = "tuple", items = Any[]),
+            (portable_kind = "namedtuple", items = Any[
+                (name = "unit", value = (portable_kind = "string", value = "m")),
+                (name = "unit", value = (portable_kind = "string", value = "mm")),
+            ]),
+            (portable_kind = "namedtuple", items = Any[(name = "bad",
+                value = (portable_kind = "encoded", kind = "opaque",
+                    data = (portable_kind = "namedtuple", items = Any[])))]),
+        ))
+            path = joinpath(dir, "corrupt-metadata-$i.ah5")
+            write_archive(path)
+            JLD2.jldopen(path, "r+") do file
+                delete!(file, "$(AH5_EXTERNALS_KEY)/count")
+                file["$(AH5_EXTERNALS_KEY)/count"] = 1
+                file["$(AH5_EXTERNALS_KEY)/1"] = (
+                    object_id = "corrupt-input", content_id = "",
+                    artifact_kind = "file", artifact_path = "", artifact_uri = "",
+                    artifact_description = "", artifact_metadata = metadata,
+                )
+            end
+            view = inspect_archive(path)
+            @test view.identified
+            @test !isvalid(validate(view))
+            @test isempty(view.externals)
+        end
+    end
+end

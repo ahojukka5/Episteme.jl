@@ -445,6 +445,54 @@ function _restore_namespace_listing(nt)
     return from_namedtuple(NamespaceListing, nt)
 end
 
+# External descriptions use the existing portable scalar tags, but retain
+# NamedTuple field order rather than canonicalizing scientific payloads.
+function _external_metadata_storage(value)
+    if value isa NamedTuple
+        return (
+            portable_kind = "namedtuple",
+            items = Any[(name = String(name), value = _external_metadata_storage(item))
+                        for (name, item) in pairs(value)],
+        )
+    elseif value isa Tuple
+        return (portable_kind = "tuple", items = Any[_external_metadata_storage(item)
+                                                     for item in value])
+    elseif value === nothing || value isa Bool || value isa Integer ||
+           value isa Float64 || value isa AbstractString || value isa Symbol
+        diagnostics = DiagnosticMessage[]
+        captured = _capture_value!(diagnostics, value, "<external-artifact>", :metadata)
+        isempty(diagnostics) || throw(ArgumentError("external artifact metadata is not portable"))
+        return _portable_value_namedtuple(captured)
+    end
+    throw(ArgumentError(
+        "external artifact metadata supports only portable scalars, tuples, and NamedTuples",
+    ))
+end
+
+function _restore_external_metadata_value(value)
+    kind = Symbol(value.portable_kind)
+    if kind === :namedtuple
+        names = Tuple(Symbol(item.name) for item in value.items)
+        allunique(names) || throw(ArgumentError("duplicate external metadata field names"))
+        items = Tuple(_restore_external_metadata_value(item.value) for item in value.items)
+        return NamedTuple{names}(items)
+    elseif kind === :tuple
+        return Tuple(_restore_external_metadata_value(item) for item in value.items)
+    end
+    kind in (:bool, :integer, :real, :string, :symbol, :nothing) ||
+        throw(ArgumentError("unsupported external metadata tag :$kind"))
+    return _value_from_namedtuple(value)
+end
+
+function _restore_external_metadata(value)
+    metadata = _restore_external_metadata_value(value)
+    metadata isa NamedTuple || throw(ArgumentError(
+        "AH5 external artifact metadata must restore as a NamedTuple",
+    ))
+    _external_metadata_storage(metadata) # Refuse tags outside this bounded contract.
+    return metadata
+end
+
 function _external_storage(req::ExternalRequirement)
     return (
         object_id = req.object_id.value,
@@ -453,6 +501,7 @@ function _external_storage(req::ExternalRequirement)
         artifact_path = req.artifact.path === nothing ? "" : req.artifact.path,
         artifact_uri = req.artifact.uri === nothing ? "" : req.artifact.uri,
         artifact_description = req.artifact.description,
+        artifact_metadata = _external_metadata_storage(req.artifact.metadata),
     )
 end
 
@@ -464,10 +513,12 @@ function _restore_external(nt)
         ObjectId(String(nt.object_id));
         content_id = isempty(content) ? nothing : ContentId(content),
         artifact = ArtifactRef(
-            Symbol(nt.artifact_kind);
-            path = isempty(path) ? nothing : path,
-            uri = isempty(uri) ? nothing : uri,
-            description = String(nt.artifact_description),
+            Symbol(nt.artifact_kind),
+            isempty(path) ? nothing : path,
+            isempty(uri) ? nothing : uri,
+            String(nt.artifact_description),
+            hasproperty(nt, :artifact_metadata) ?
+                _restore_external_metadata(nt.artifact_metadata) : (;),
         ),
     )
 end

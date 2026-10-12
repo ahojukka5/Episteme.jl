@@ -68,6 +68,18 @@ itself stays at `/episteme/profile`.
 Logical graph/schema/namespace metadata is validated before the file is
 created. A graph that references a missing embedded schema is refused.
 
+External artifact descriptions retain `ArtifactRef.metadata` through public
+requirement projections and AH5 reconstruction. Supported metadata consists of
+`nothing`, booleans, representable machine integers, `Float64`, strings, symbols,
+and nested tuples or NamedTuples; field names and order are preserved. Arrays,
+closures, opaque objects, and other unsupported values are refused before the
+output path is created, even when they occur in a later external record.
+Metadata does not change `ObjectId`, `ContentId`, paths, or payload schemas.
+Historical external rows without the optional `artifact_metadata` field restore
+empty metadata. Older readers can still read identity and location from updated
+rows, but omit this descriptive metadata; use an updated reader for lossless
+reconstruction.
+
 ## Writer and inspector
 
 ```julia
