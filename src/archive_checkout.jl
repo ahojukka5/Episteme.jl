@@ -120,15 +120,24 @@ function _externals_vector(externals)
     return _typed_vector(ExternalRequirement, externals, "externals")
 end
 
-function _match_external(externals, object_id::ObjectId, content_id)
+function _resolve_external(externals, object_id::ObjectId, content_id)
+    found = nothing
     for req in externals
         req.object_id == object_id || continue
         if req.content_id === nothing || content_id === nothing || req.content_id == content_id
-            return req
+            if found !== nothing &&
+               (!isequal(found.content_id, req.content_id) ||
+                !isequal(to_namedtuple(found.artifact), to_namedtuple(req.artifact)))
+                return nothing, :ambiguous
+            end
+            found = req
         end
     end
-    return nothing
+    return found, found === nothing ? :missing : :exact
 end
+
+_match_external(externals, object_id::ObjectId, content_id) =
+    first(_resolve_external(externals, object_id, content_id))
 
 # Operation-scoped lookup over one graph. Traversals build it once from the
 # current backing vectors and drop it when they return, so no persistent
@@ -316,7 +325,7 @@ function _push_unresolved_entry!(
     key = _entry_key(object_id, target_rev)
     key in seen_unresolved && return nothing
     push!(seen_unresolved, key)
-    req = _match_external(reqs, object_id, nothing)
+    req, resolution = _resolve_external(reqs, object_id, nothing)
     if req !== nothing
         push!(entries, ManifestEntry(
             object_id;
@@ -333,8 +342,10 @@ function _push_unresolved_entry!(
             availability = :missing,
         ))
         push!(diagnostics, error_diagnostic(
-            :missing_manifest_object,
-            "revision $(revision_id.value) names missing object $(object_id.value)";
+            resolution === :ambiguous ? :ambiguous_external_requirement : :missing_manifest_object,
+            resolution === :ambiguous ?
+                "revision $(revision_id.value) has conflicting external declarations for object $(object_id.value)" :
+                "revision $(revision_id.value) names missing object $(object_id.value)";
             revision_id = revision_id.value,
             object_id = object_id.value,
             target_revision_id = target_rev === nothing ? nothing : target_rev.value,

@@ -227,6 +227,7 @@ struct DummyObject end
     include("archive_events.jl")
     include("portable_document.jl")
     include("archive_checkout.jl")
+    include("archive_external_ambiguity.jl")
     include("archive_purge.jl")
     include("derived_artifacts.jl")
     include("archive_profile.jl")
