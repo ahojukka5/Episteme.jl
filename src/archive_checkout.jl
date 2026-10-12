@@ -731,12 +731,7 @@ end
 to_namedtuple(req::ExternalRequirement) = (
     object_id = req.object_id.value,
     content_id = req.content_id === nothing ? nothing : req.content_id.value,
-    artifact = (
-        kind = req.artifact.kind,
-        path = req.artifact.path,
-        uri = req.artifact.uri,
-        description = req.artifact.description,
-    ),
+    artifact = to_namedtuple(req.artifact),
 )
 
 function from_namedtuple(::Type{ExternalRequirement}, nt)
@@ -745,10 +740,11 @@ function from_namedtuple(::Type{ExternalRequirement}, nt)
         ObjectId(String(nt.object_id));
         content_id = nt.content_id === nothing ? nothing : ContentId(String(nt.content_id)),
         artifact = ArtifactRef(
-            Symbol(artifact_nt.kind);
-            path = artifact_nt.path,
-            uri = artifact_nt.uri,
-            description = String(artifact_nt.description),
+            Symbol(artifact_nt.kind),
+            artifact_nt.path === nothing ? nothing : String(artifact_nt.path),
+            artifact_nt.uri === nothing ? nothing : String(artifact_nt.uri),
+            String(artifact_nt.description),
+            hasproperty(artifact_nt, :metadata) ? artifact_nt.metadata : (;),
         ),
     )
 end

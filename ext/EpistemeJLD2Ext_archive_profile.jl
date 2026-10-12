@@ -61,6 +61,8 @@ function Episteme.write_archive(
     history = graph === nothing ? ArchiveHistorySummary() : ArchiveHistorySummary(graph)
     provenance = graph === nothing ? ArchiveProvenanceSummary() : ArchiveProvenanceSummary(graph)
     external_values = _typed_vector(ExternalRequirement, externals, "external requirements")
+    # Encode every external before opening the path, including later records.
+    external_storage = [_external_storage(req) for req in external_values]
     roots = profile_record.roots
 
     JLD2.jldopen(path, "w") do file
@@ -69,7 +71,7 @@ function Episteme.write_archive(
         _write_indexed!(file, roots.schemas, schema_listings, _schema_listing_storage)
         file[roots.history] = _history_storage(history)
         file[roots.provenance] = _provenance_storage(provenance)
-        _write_indexed!(file, roots.externals, external_values, _external_storage)
+        _write_indexed!(file, roots.externals, external_storage, identity)
         if software_environments !== nothing
             Episteme._write_software_environments!(file, software_environments)
         end
