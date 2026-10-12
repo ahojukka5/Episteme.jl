@@ -43,6 +43,16 @@ Payload availability:
 | `:external_required` | declared via `ExternalRequirement`; not archive corruption |
 | `:missing` | dangling archive reference; revision is not complete |
 
+An unresolved object requires one unambiguous external declaration. Repeated
+identical `ExternalRequirement` records are allowed. Declarations that differ
+in content identity or any `ArtifactRef` field produce
+`:ambiguous_external_requirement` and a `:missing` slot without a selected
+content identity or artifact. Declaration order never chooses a location or
+content version. This also refuses inspect readiness, propagates into integrity
+and capsule reports, and prevents external-aware AH5 preflight from publishing
+an ambiguous reference. Unrelated declarations outside the selected closure
+do not affect historical inspection.
+
 ## Readiness
 
 `readiness(manifest, target)` uses:
