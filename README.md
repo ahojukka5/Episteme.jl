@@ -6,6 +6,11 @@ composable, reproducible, and eventually autonomous research.
 Domain packages keep their payloads and operation semantics. They speak one
 shared introspection and archive language instead of depending on each other.
 
+Direct Julia constructors and functions remain first-class. Declarative
+authoring is an additional frontend that lowers to the same domain-owned
+implementation. See the canonical
+[direct and declarative API rule](docs/declarative-contracts.md#direct-and-declarative-apis-are-first-class).
+
 This repository is the renamed/re-scoped former `OodiCore.jl` (issue
 [#51](https://github.com/ahojukka5/Episteme.jl/issues/51)). The Julia package
 name is `Episteme`; the package UUID is unchanged.

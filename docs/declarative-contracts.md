@@ -5,9 +5,36 @@ package across Episteme's consumers: local node schemas and an opaque scripting
 escape hatch.
 
 Domain packages still own their vocabularies and semantics. Monge decides what
-`monge/box` means, Delone decides what its mesh controls mean, and Oodi decides
-what its discretization and solver nodes mean. Episteme only provides common
-representation and validation contracts.
+`monge/box` means, Delone decides what its mesh controls mean, and Oodi owns
+curated composition of independently owned capabilities. Episteme provides
+common representation and validation contracts.
+
+## Direct and declarative APIs are first-class
+
+A domain package's ordinary Julia constructors and functions remain a
+first-class interface. Declarative authoring is an additional frontend when
+semantic trees, persisted intent, introspection or composition are useful.
+Ordinary callers must not need to construct semantic trees to use a domain
+operation. A package need not add a declarative frontend without a use case.
+
+When both interfaces describe the same operation, the declarative frontend
+lowers to the same domain-owned implementation used by the direct Julia API:
+
+```text
+direct Julia arguments -----------------> domain operation
+authored semantic node -> domain lowering -> same domain operation
+```
+
+The declarative layer represents intent and validates frontend contracts; it
+does not provide a parallel scientific implementation. Domain packages own
+lowering and execution semantics. Episteme's shared tree, schema and archive
+contracts do not make it the evaluator of domain operations.
+
+Where the interfaces overlap, domain tests should establish equivalent
+behavior for equivalent intent, and documentation should explain both paths
+without calling the direct API legacy. This rule is not a pre-1.0 backwards
+compatibility promise: either interface may evolve, and an obsolete API may
+be removed when its replacement retains a clean direct form.
 
 ## Local schemas are not domain constraints
 
