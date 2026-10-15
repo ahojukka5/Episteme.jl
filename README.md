@@ -55,10 +55,11 @@ A retained `:migration_required` object can remain as proper ancestry
 when the workflow head materializes the same object at a readable target
 of its embedded migration chain. See the bounded retention conditions in
 [`docs/schema-migration.md`](docs/schema-migration.md).
-Domain migrators currently receive caller payload arrays directly; source
-array isolation remains pending
-[#147](https://github.com/ahojukka5/Episteme.jl/issues/147). Read-only source
-archive access does not provide that in-memory isolation.
+Domain migrators receive deep working copies of portable payloads, preserving
+caller-owned nested arrays through successful and rejected transforms.
+Metadata-only steps are checked against the preceding payload values.
+This ownership boundary does not sandbox arbitrary Julia or external side
+effects. See [`docs/schema-migration.md`](docs/schema-migration.md).
 
 ## What this package deliberately does not do
 
@@ -76,9 +77,12 @@ These tracked extensions are not implemented:
   ([#112](https://github.com/ahojukka5/Episteme.jl/issues/112)) —
   payload-free derived records already persist;
 - end-to-end archive qualification and any later parallel bulk I/O
-  ([#29](https://github.com/ahojukka5/Episteme.jl/issues/29));
-- lightweight XDMF views over archived arrays
-  ([#28](https://github.com/ahojukka5/Episteme.jl/issues/28)).
+  ([#29](https://github.com/ahojukka5/Episteme.jl/issues/29)).
+
+Lightweight XDMF views are implemented for the explicit numeric layouts and
+topologies qualified in [`docs/archive-views.md`](docs/archive-views.md).
+Unsupported projections are rejected; a view does not rewrite the archive or
+create a second heavy-data file.
 
 ## Why this package exists
 
