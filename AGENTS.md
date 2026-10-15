@@ -66,6 +66,13 @@ experiment, or analysis object.
 
 ## 3. Rule for domain packages
 
+Keep direct Julia APIs first-class. A declarative authoring API is an
+additional frontend where useful; it lowers to the same domain-owned
+implementation and must not force ordinary callers to build semantic trees.
+Do not duplicate scientific implementations between the two surfaces.
+The canonical rule, including equivalence checks and API evolution, is
+[`docs/declarative-contracts.md#direct-and-declarative-apis-are-first-class`](docs/declarative-contracts.md#direct-and-declarative-apis-are-first-class).
+
 Domain packages must import and extend shared generic functions rather than
 shadowing them:
 
