@@ -137,7 +137,8 @@ end
         @test canonical_content_id(fit) ==
             canonical_content_id(SyntheticCalibration.calibrate(copy(observations)))
         @test canonical_content_id(fit) !=
-            canonical_content_id((; fit..., intercept = 2.0))
+            canonical_content_id((; slope = fit.slope, intercept = 2.0,
+                max_residual = fit.max_residual, npoints = fit.npoints))
         @test parentmodule(SyntheticCalibration.calibrate) === SyntheticCalibration
         @test !isdefined(Episteme, :calibrate)
         @test !startswith(String(MOCK_EXPERIMENT_KIND), "episteme/")
@@ -192,8 +193,8 @@ end
             ordered_run_events(graph, run.id),
         )
         events = ordered_run_events(graph, run.id)
-        @test only(event for event in events if event.kind === :planned).
-            payload.plan_id == plan.id.value
+        planned = only(event for event in events if event.kind === :planned)
+        @test planned.payload.plan_id == plan.id.value
         @test any(event -> event.kind === :started, events)
         @test any(event -> event.kind === :staged, events)
 
