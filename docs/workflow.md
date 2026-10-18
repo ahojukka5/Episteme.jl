@@ -150,18 +150,24 @@ branch_from(revision_id; id = WorkflowHeadId("alt"), name = :alt)
 `compare_reproduction(::Val{:numeric}, left, right)` for tolerance-qualified
 agreement. Episteme does not invent a universal floating-point tolerance.
 
-## One real domain operation
+## Dependency-free synthetic scientific lifecycle test
 
-`test/scientific_lifecycle.jl` binds `apply_operation` around Delone's
-public `delaunay_triangulation` for five deterministic points. Delone
-executes the triangulation and supplies the snapshot digest. Episteme
-records the plan, the activity, and the commit, and does not interpret
-the mesh. An uncommitted run leaves the head in place. A collinear
-cloud stays a failed run with no revision. The same function runs with
-only Delone loaded.
+The normal Episteme test suite includes `test/scientific_lifecycle.jl`,
+which exercises a **synthetic** linear-response calibration over fixed
+five-point toy data. Its implementation, `test/synthetic_experiment.jl`,
+uses only Julia Base and lives entirely under `test/`. These numbers are
+manufactured, not experimental observations or scientific validation.
 
-The Episteme suite skips that proof unless `EPISTEME_DELONE_ROOT`
-points at a Delone checkout. Episteme does not depend on Delone.
+The test binds `apply_operation` to the mock calibration, then verifies that
+the direct and orchestrated results have the same canonical content identity.
+It also checks plan readiness, stage-before-commit isolation, preserved input
+revision, committed provenance, source-to-result references, and a failing
+calibration that cannot advance the history head.
+
+Episteme never implements the mock science and does not import a domain
+package. Routine tests do not clone private repositories, require an
+integration checkout, or use a private GitHub token. Real scientific owners
+qualify their own operations and integrations downstream.
 
 ## What this is not
 
