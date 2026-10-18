@@ -256,6 +256,5 @@ struct DummyObject end
     include("archive_software_environment_staged.jl")
     include("archive_execution_context_coverage.jl")
     include("archive_persistence_extension.jl")
-    include("scientific_lifecycle_runner.jl")
-    include("scientific_lifecycle_driver.jl")
+    include("scientific_lifecycle.jl")
 end
