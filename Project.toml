@@ -17,7 +17,7 @@ EpistemeJLD2Ext = "JLD2"
 [compat]
 Dates = "1.10"
 JLD2 = "0.6"
-SHA = "0.7"
+SHA = "0.7, 1"
 UUIDs = "1.10"
 julia = "1"
 
