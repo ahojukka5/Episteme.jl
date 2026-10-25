@@ -1,5 +1,11 @@
 # AGENTS.md — Episteme.jl
 
+[OodiHandbook](https://github.com/ahojukka5/OodiHandbook/blob/v0.1.0/index.qmd)
+is the source of common rules. Follow the repository's explicitly adopted
+immutable release (AUTH-003). Use [reviewed master guidance](https://github.com/ahojukka5/OodiHandbook/blob/master/index.qmd)
+as a voluntary improvement target (AUTH-006). Local instructions provide
+technical details and do not override the Handbook.
+
 Guidance for AI agents and humans working on or with this package.
 
 ## 1. What this package is
@@ -64,7 +70,7 @@ structural properties such as a finite positive scalar, but it must not know
 the scientific meaning of a package-specific model, discretization, solver,
 experiment, or analysis object.
 
-## 3. Rule for domain packages
+## 3. Integrating domain packages
 
 Keep direct Julia APIs first-class. A declarative authoring API is an
 additional frontend where useful; it lowers to the same domain-owned
@@ -73,8 +79,10 @@ Do not duplicate scientific implementations between the two surfaces.
 The canonical rule, including equivalence checks and API evolution, is
 [`docs/declarative-contracts.md#direct-and-declarative-apis-are-first-class`](docs/declarative-contracts.md#direct-and-declarative-apis-are-first-class).
 
-Domain packages must import and extend shared generic functions rather than
-shadowing them:
+Packages choosing Episteme integration import and extend its generic
+functions rather than shadowing them. Independent packages may participate
+through public consumer-owned ports and integrator-owned adapters without an
+Episteme dependency or central registration (SWE-013):
 
 ```julia
 import Episteme: report, validate, readiness
