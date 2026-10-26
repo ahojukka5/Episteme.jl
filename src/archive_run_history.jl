@@ -620,7 +620,7 @@ function _read_run_history(file)
     return ArchiveRunHistory(runs)
 end
 
-# `write_run_archive` for this AH5 layer is implemented in EpistemeJLD2Ext;
+# `write_run_archive` for this AH5 layer is implemented in episteme_jld2_ext;
 # the fail-closed owner stub is in archive_persistence.jl.
 
 function _empty_run_history_inspection(path, identified, declared, state, externals, diagnostics)
@@ -631,7 +631,7 @@ function _empty_run_history_inspection(path, identified, declared, state, extern
     )
 end
 
-# `inspect_archive` for this AH5 layer is implemented in EpistemeJLD2Ext;
+# `inspect_archive` for this AH5 layer is implemented in episteme_jld2_ext;
 # the fail-closed owner stub is in archive_persistence.jl.
 
 """

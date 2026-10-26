@@ -14,7 +14,7 @@ include("archive_checkout.jl")
 include("archive_namespaces.jl")
 include("archive_schemas.jl")
 # Fail-closed owner stubs for every AH5 entry point that opens a file.
-# EpistemeJLD2Ext adds the real methods when JLD2 is loaded.
+# episteme_jld2_ext adds the real methods when JLD2 is loaded.
 include("archive_persistence.jl")
 include("archive_profile.jl")
 include("archive_profile_root_validation.jl")

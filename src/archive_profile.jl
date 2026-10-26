@@ -245,7 +245,7 @@ function is_hdf5_container(path::AbstractString)
 end
 
 # The core AH5 `write_archive` and `inspect_archive` are implemented in
-# EpistemeJLD2Ext; the fail-closed owner stubs are in archive_persistence.jl.
+# episteme_jld2_ext; the fail-closed owner stubs are in archive_persistence.jl.
 # Everything in this file that shapes, validates, or decodes records is
 # JLD2-free and stays here.
 

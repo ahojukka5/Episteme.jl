@@ -457,7 +457,7 @@ function _state_history_counts_exist(file)
     return true
 end
 
-# `write_state_archive` for this AH5 layer is implemented in EpistemeJLD2Ext;
+# `write_state_archive` for this AH5 layer is implemented in episteme_jld2_ext;
 # the fail-closed owner stub is in archive_persistence.jl.
 
 function _empty_state_history_inspection(path, identified, declared, externals, diagnostics)
@@ -468,7 +468,7 @@ function _empty_state_history_inspection(path, identified, declared, externals, 
     )
 end
 
-# `inspect_archive` for this AH5 layer is implemented in EpistemeJLD2Ext;
+# `inspect_archive` for this AH5 layer is implemented in episteme_jld2_ext;
 # the fail-closed owner stub is in archive_persistence.jl.
 
 function validate(view::ArchiveStateHistoryInspection)

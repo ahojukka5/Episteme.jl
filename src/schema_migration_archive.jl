@@ -2,7 +2,7 @@
 # Publish a semantic migration into a new archive graph (#140 / parent #41).
 #
 # `migrate_object` remains the payload runner. This file only assembles the
-# successor graph. File creation stays in EpistemeJLD2Ext and calls
+# successor graph. File creation stays in episteme_jld2_ext and calls
 # `write_event_archive`; there is no second AH5 writer here.
 # ---------------------------------------------------------------------------
 

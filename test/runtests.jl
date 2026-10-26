@@ -3,7 +3,7 @@ using Episteme
 
 include("archive_without_jld2.jl")
 
-# JLD2 is a weak dependency: loading it here activates EpistemeJLD2Ext, so
+# JLD2 is a weak dependency: loading it here activates episteme_jld2_ext, so
 # the whole suite runs against the archive API in its JLD2-present form.
 using JLD2
 

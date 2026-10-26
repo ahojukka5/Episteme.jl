@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# EpistemeJLD2Ext — JLD2-backed `.ah5` file I/O
+# episteme_jld2_ext — JLD2-backed `.ah5` file I/O
 #
 # Loaded when the user runs `using JLD2` after `using Episteme`. Episteme's
 # semantics, identities, schemas, history vocabulary, and record
@@ -17,7 +17,7 @@
 # functions, same signatures, same results.
 # ---------------------------------------------------------------------------
 
-module EpistemeJLD2Ext
+module episteme_jld2_ext
 
 import JLD2
 using Episteme
@@ -79,17 +79,17 @@ using Episteme:
     _write_run_history!,
     _write_state_history!
 
-include("EpistemeJLD2Ext_archive_profile.jl")
-include("EpistemeJLD2Ext_archive_integrity_persistence.jl")
-include("EpistemeJLD2Ext_archive_integrity_semantics.jl")
-include("EpistemeJLD2Ext_archive_state_history.jl")
-include("EpistemeJLD2Ext_archive_run_history.jl")
-include("EpistemeJLD2Ext_archive_event_history.jl")
-include("EpistemeJLD2Ext_archive_derived_artifacts.jl")
-include("EpistemeJLD2Ext_capsule_archive.jl")
-include("EpistemeJLD2Ext_archive_software_environments.jl")
-include("EpistemeJLD2Ext_archive_execution_contexts.jl")
-include("EpistemeJLD2Ext_archive_schema_migration.jl")
-include("EpistemeJLD2Ext_archive_views.jl")
+include("episteme_jld2_ext_archive_profile.jl")
+include("episteme_jld2_ext_archive_integrity_persistence.jl")
+include("episteme_jld2_ext_archive_integrity_semantics.jl")
+include("episteme_jld2_ext_archive_state_history.jl")
+include("episteme_jld2_ext_archive_run_history.jl")
+include("episteme_jld2_ext_archive_event_history.jl")
+include("episteme_jld2_ext_archive_derived_artifacts.jl")
+include("episteme_jld2_ext_capsule_archive.jl")
+include("episteme_jld2_ext_archive_software_environments.jl")
+include("episteme_jld2_ext_archive_execution_contexts.jl")
+include("episteme_jld2_ext_archive_schema_migration.jl")
+include("episteme_jld2_ext_archive_views.jl")
 
-end # module EpistemeJLD2Ext
+end # module episteme_jld2_ext

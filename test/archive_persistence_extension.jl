@@ -6,7 +6,7 @@
 
 @testset "JLD2 persistence extension" begin
     @testset "extension is loaded when JLD2 is available" begin
-        @test Base.get_extension(Episteme, :EpistemeJLD2Ext) !== nothing
+        @test Base.get_extension(Episteme, :episteme_jld2_ext) !== nothing
     end
 
     @testset "owner stubs fail closed with an actionable message" begin
@@ -15,7 +15,7 @@
         @test occursin("write_archive", err.msg)
         @test occursin("JLD2", err.msg)
         @test occursin("using JLD2", err.msg)
-        @test occursin("EpistemeJLD2Ext", err.msg)
+        @test occursin("episteme_jld2_ext", err.msg)
 
         # No extension method matches these argument lists, so the broad owner
         # fallback answers. A silent no-op would be worse than a hard
@@ -53,24 +53,24 @@
             Tuple{AbstractString,Type{RevisionIntegrityManifest}},
         )
             method = which(inspect_archive, sig)
-            @test parentmodule(method) === Base.get_extension(Episteme, :EpistemeJLD2Ext)
+            @test parentmodule(method) === Base.get_extension(Episteme, :episteme_jld2_ext)
         end
         @test parentmodule(which(write_archive, Tuple{AbstractString})) ===
-            Base.get_extension(Episteme, :EpistemeJLD2Ext)
+            Base.get_extension(Episteme, :episteme_jld2_ext)
         @test parentmodule(which(write_state_archive, Tuple{AbstractString,ArchiveGraph})) ===
-            Base.get_extension(Episteme, :EpistemeJLD2Ext)
+            Base.get_extension(Episteme, :episteme_jld2_ext)
         @test parentmodule(which(write_run_archive, Tuple{AbstractString,ArchiveGraph})) ===
-            Base.get_extension(Episteme, :EpistemeJLD2Ext)
+            Base.get_extension(Episteme, :episteme_jld2_ext)
         @test parentmodule(which(write_event_archive, Tuple{AbstractString,ArchiveGraph})) ===
-            Base.get_extension(Episteme, :EpistemeJLD2Ext)
+            Base.get_extension(Episteme, :episteme_jld2_ext)
         @test parentmodule(which(
             write_derived_archive,
             Tuple{AbstractString,ArchiveGraph,Vector{DerivedArtifactRecord}},
-        )) === Base.get_extension(Episteme, :EpistemeJLD2Ext)
+        )) === Base.get_extension(Episteme, :episteme_jld2_ext)
         @test parentmodule(which(
             materialize_migration,
             Tuple{AbstractString,AbstractString,Vector{MigrationRequest},SchemaMigrationRegistry},
-        )) === Base.get_extension(Episteme, :EpistemeJLD2Ext)
+        )) === Base.get_extension(Episteme, :episteme_jld2_ext)
         # The external-aware String specialization stays in the owner package.
         @test parentmodule(which(write_archive, Tuple{String})) === Episteme
     end

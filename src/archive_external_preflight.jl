@@ -56,7 +56,7 @@ function _external_preflight_graph(
     )
 end
 
-# The canonical writer is defined for AbstractString in EpistemeJLD2Ext.
+# The canonical writer is defined for AbstractString in episteme_jld2_ext.
 # String is the normal filesystem-path type. This more-specific method performs
 # only external-aware validation shaping, then invokes the canonical writer.
 # Keyword arguments do not participate in Julia dispatch, so the positional

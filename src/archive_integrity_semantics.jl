@@ -281,7 +281,7 @@ function _refuse_unstorable_integrity(manifests::Vector{RevisionIntegrityManifes
     return invoke(_refuse_unstorable_integrity, Tuple{Any}, manifests)
 end
 
-# `write_archive` for this AH5 layer is implemented in EpistemeJLD2Ext;
+# `write_archive` for this AH5 layer is implemented in episteme_jld2_ext;
 # the fail-closed owner stub is in archive_persistence.jl.
 
 # JLD2 plain=true returns the NamedTuple records written by

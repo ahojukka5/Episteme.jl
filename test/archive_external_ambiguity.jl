@@ -107,7 +107,7 @@ end
     end
 end
 
-if Base.get_extension(Episteme, :EpistemeJLD2Ext) !== nothing
+if Base.get_extension(Episteme, :episteme_jld2_ext) !== nothing
     @testset "AH5 publication refuses conflicting external declarations" begin
         graph, revision, id, schemas, declaration = _external_ambiguity_fixture()
         conflicting = ExternalRequirement(id; content_id = ContentId("different"))

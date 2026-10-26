@@ -1,6 +1,6 @@
 # Run before importing JLD2 so this exercises the consumer's unloaded state.
 @testset "AH5 persistence requires explicit activation" begin
-    @test Base.get_extension(Episteme, :EpistemeJLD2Ext) === nothing
+    @test Base.get_extension(Episteme, :episteme_jld2_ext) === nothing
     @test !any(id -> id.name == "JLD2", keys(Base.loaded_modules))
 
     mktempdir() do dir

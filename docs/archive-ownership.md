@@ -75,7 +75,7 @@ Allowed edges:
 
 ```text
 domain package     ->  Episteme     (hard or weak, package choice)
-Episteme           ->  JLD2         (weak; EpistemeJLD2Ext, v1 persistence)
+Episteme           ->  JLD2         (weak; episteme_jld2_ext, v1 persistence)
 EpistemeHDF5Ext    ->  Episteme + HDF5.jl   (later; bulk /data, MPI)
 EpistemeXDMFExt    ->  Episteme + XML       (optional view layer)
 EpistemeMPIExt     ->  Episteme + MPI       (optional; typically with HDF5Ext)
@@ -210,14 +210,14 @@ Episteme = "7c15cd61-9c6a-4671-bc94-9960963998ac"
 
 ```julia
 using Episteme          # identities, tree, schemas: stdlib only
-using Episteme, JLD2    # AH5 profile I/O; loads EpistemeJLD2Ext
+using Episteme, JLD2    # AH5 profile I/O; loads episteme_jld2_ext
 # later HPC: using Episteme, HDF5   loads EpistemeHDF5Ext
 ```
 
 Provider-free cores still must not load CAD, mesh, FEM, MPI, or a vendor
 SDK. JLD2 is a `[weakdeps]` package, so `using Episteme` loads no
 non-stdlib code and a consumer that calls no archive API pays nothing for
-the persistence track. `using JLD2` activates `EpistemeJLD2Ext`, which owns
+the persistence track. `using JLD2` activates `episteme_jld2_ext`, which owns
 every writer and reader that opens a file; without it those entry points
 fail closed with an error naming the function.
 
@@ -291,7 +291,7 @@ Oodi #395, Stinespring #163, Lieb #65, Chappe #207) should:
 Issue [#47](https://github.com/ahojukka5/Episteme.jl/issues/47) studied
 JLD2 as the Julia-native codec. The historical spike is not stored in
 this package. JLD2 is a weak dependency for the v1 `.ah5` profile.
-`using JLD2` activates the file I/O methods in `EpistemeJLD2Ext`.
+`using JLD2` activates the file I/O methods in `episteme_jld2_ext`.
 
 Issue [#48](https://github.com/ahojukka5/Episteme.jl/issues/48) is the
 long-term architecture study (accepted). Issue

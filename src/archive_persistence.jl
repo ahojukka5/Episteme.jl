@@ -4,9 +4,9 @@
 # Episteme's semantics, identities, schemas, history vocabulary, and record
 # encoders/decoders are stdlib-only. The only part that needs JLD2 is the file
 # I/O of the `.ah5` profile, so JLD2 is a `[weakdeps]` package and every writer
-# and reader that opens a file lives in `ext/EpistemeJLD2Ext*.jl`.
+# and reader that opens a file lives in `ext/episteme_jld2_ext*.jl`.
 #
-# These generic fallbacks are deliberately broad. EpistemeJLD2Ext adds the
+# These generic fallbacks are deliberately broad. episteme_jld2_ext adds the
 # more-specific methods when JLD2 is loaded; without it every persistence entry
 # point fails closed with the same actionable diagnostic. A silent no-op would
 # be worse than a hard dependency: an archive that is never written must not
@@ -17,7 +17,7 @@
 function _missing_jld2_error(name::AbstractString)
     return ErrorException(
         "$name requires JLD2.jl. Add JLD2 and run `using JLD2` after " *
-        "`using Episteme` to activate the EpistemeJLD2Ext extension.",
+        "`using Episteme` to activate the episteme_jld2_ext extension.",
     )
 end
 
@@ -47,7 +47,7 @@ Its registry must cover object, run, staged, restart and event context reference
 Use `inspect_archive(path, ExecutionContextRegistry)` to inspect and validate
 these records independently of scientific payloads.
 
-Requires JLD2: run `using JLD2` to load `EpistemeJLD2Ext`.
+Requires JLD2: run `using JLD2` to load `episteme_jld2_ext`.
 """
 function write_archive(args...; kwargs...)
     throw(_missing_jld2_error("write_archive"))
@@ -72,7 +72,7 @@ Julia-native state is embedded only when `native_policy=true` and a canonical
 projection matches. OS images, language runtimes, and containers are not
 packaged. Existing destinations are refused.
 
-Requires JLD2: run `using JLD2` to activate `EpistemeJLD2Ext`.
+Requires JLD2: run `using JLD2` to activate `episteme_jld2_ext`.
 """
 function write_capsule_archive(args...; kwargs...)
     throw(_missing_jld2_error("write_capsule_archive"))
@@ -85,7 +85,7 @@ Re-read a capsule and verify portable payload identities before returning them.
 Native payloads are deserialized only when `native_policy=true` and only after
 their stored byte hash matches. A failed check does not return those values.
 
-Requires JLD2: run `using JLD2` to activate `EpistemeJLD2Ext`.
+Requires JLD2: run `using JLD2` to activate `episteme_jld2_ext`.
 """
 function verify_capsule(args...; kwargs...)
     throw(_missing_jld2_error("verify_capsule"))
@@ -115,7 +115,7 @@ Scientific payloads and raw log bytes are never loaded. Software environment ins
 identities and authoritative provenance references. Missing historical records
 produce an explicit unknown-provenance diagnostic.
 
-Requires JLD2: run `using JLD2` to load `EpistemeJLD2Ext`.
+Requires JLD2: run `using JLD2` to load `episteme_jld2_ext`.
 """
 function inspect_archive(args...; kwargs...)
     throw(_missing_jld2_error("inspect_archive"))
@@ -128,7 +128,7 @@ Create a normal AH5 archive and append authoritative payload-free object,
 revision, and head records under the optional state-history feature. Full
 run/activity/event provenance remains a later persistence slice.
 
-Requires JLD2: run `using JLD2` to load `EpistemeJLD2Ext`.
+Requires JLD2: run `using JLD2` to load `episteme_jld2_ext`.
 """
 function write_state_archive(args...; kwargs...)
     throw(_missing_jld2_error("write_state_archive"))
@@ -140,7 +140,7 @@ end
 Create an AH5 archive with both authoritative state-history and run/activity
 provenance records. Event/write/log provenance remains a later extension.
 
-Requires JLD2: run `using JLD2` to load `EpistemeJLD2Ext`.
+Requires JLD2: run `using JLD2` to load `episteme_jld2_ext`.
 """
 function write_run_archive(args...; kwargs...)
     throw(_missing_jld2_error("write_run_archive"))
@@ -153,7 +153,7 @@ Create an AH5 archive with state, run/activity/restart, and generic event/write/
 log provenance metadata. Event payloads must be portable; raw log bytes are not
 embedded by this method.
 
-Requires JLD2: run `using JLD2` to load `EpistemeJLD2Ext`.
+Requires JLD2: run `using JLD2` to load `episteme_jld2_ext`.
 """
 function write_event_archive(args...; kwargs...)
     throw(_missing_jld2_error("write_event_archive"))
@@ -167,7 +167,7 @@ payload-free derived/debug artifact records. Parameters, units, value-shape,
 and ArtifactRef metadata must be portable. Scientific payload bytes and
 large external files are not embedded.
 
-Requires JLD2: run `using JLD2` to load `EpistemeJLD2Ext`.
+Requires JLD2: run `using JLD2` to load `episteme_jld2_ext`.
 """
 function write_derived_archive(args...; kwargs...)
     throw(_missing_jld2_error("write_derived_archive"))
@@ -192,7 +192,7 @@ id produced by [`migrate_object`](@ref). Scientific payload bytes are not
 embedded. One migration event per object records implementation ids, old
 and new schema identities, content ids, software identity, and diagnostics.
 
-Requires JLD2: run `using JLD2` to activate `EpistemeJLD2Ext`.
+Requires JLD2: run `using JLD2` to activate `episteme_jld2_ext`.
 """
 function materialize_migration(args...; kwargs...)
     throw(_missing_jld2_error("materialize_migration"))

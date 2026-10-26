@@ -291,7 +291,7 @@ function write_archive(
     return write_archive(path, RevisionIntegrityManifest[manifest]; kwargs...)
 end
 
-# `write_archive` for this AH5 layer is implemented in EpistemeJLD2Ext;
+# `write_archive` for this AH5 layer is implemented in episteme_jld2_ext;
 # the fail-closed owner stub is in archive_persistence.jl.
 
 function _empty_integrity_inspection(path, identified, declared, diagnostics)
@@ -306,7 +306,7 @@ function _empty_integrity_inspection(path, identified, declared, diagnostics)
     )
 end
 
-# `inspect_archive` for this AH5 layer is implemented in EpistemeJLD2Ext;
+# `inspect_archive` for this AH5 layer is implemented in episteme_jld2_ext;
 # the fail-closed owner stub is in archive_persistence.jl.
 
 function validate(view::ArchiveIntegrityInspection)

@@ -14,7 +14,7 @@ function _head_keys(state)
 end
 
 function _counted_archive_inspect(body::Function)
-    ext = Base.get_extension(Episteme, :EpistemeJLD2Ext)
+    ext = Base.get_extension(Episteme, :episteme_jld2_ext)
     opens = Ref(0)
     decodes = Ref(0)
     result = task_local_storage(ext._ARCHIVE_READ_OPENS, opens) do

@@ -7,7 +7,7 @@ format and not a separate Julia package.
 
 JLD2 **creates** the file. JLD2 owns `/_types`. Episteme owns `/episteme`.
 JLD2 is optional: add it to the calling environment and run `using JLD2`
-to activate `EpistemeJLD2Ext` before calling archive readers or writers.
+to activate `episteme_jld2_ext` before calling archive readers or writers.
 Without that activation, persistence entry points report the missing dependency
 and do not create files. Shared semantics and archive records remain available
 with `using Episteme` alone.
