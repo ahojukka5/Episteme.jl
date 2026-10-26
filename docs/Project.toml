@@ -1,0 +1,11 @@
+name = "EpistemeDocs"
+
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+Episteme = "7c15cd61-9c6a-4671-bc94-9960963998ac"
+
+[compat]
+Documenter = "1"
+
+[sources]
+Episteme = {path = ".."}

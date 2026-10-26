@@ -16,3 +16,7 @@ runs/
 *.err
 run.log
 inst.log
+
+# Documenter products. Chapters are copied here at build time.
+docs/build/
+docs/src/included/

@@ -333,3 +333,14 @@ function and the missing package; they never silently do nothing.
 ```julia
 pkg> test Episteme
 ```
+
+## Documentation
+
+Build the HTML manual from a checkout of this repository:
+
+```bash
+julia --project=docs -e 'using Pkg; Pkg.instantiate()'
+julia --project=docs docs/make.jl
+```
+
+The HTML lands in `docs/build`.
