@@ -3,11 +3,11 @@
 These are the common record operations. Each path names the function and the
 file it is defined in. The fences are ordinary Julia, not doctests.
 
-The illustrations in the first six sections were run with
-`julia --project=docs` from this checkout after `Pkg.instantiate()`. Output
-is not pasted here. The `execute!` / `commit!` section was not executed for
-this page. Its call shape is the one in `src/archive_execution.jl`; a
-working fixture of the same shape is `test/archive_execution.jl`.
+Six fences were run in one process with
+`julia --startup-file=no --project=docs` after `Pkg.instantiate()`.
+Two fences were removed. Output is not pasted here.
+The `execute!` / `commit!` call shape is the one in `src/archive_execution.jl`;
+a working fixture of the same shape is `test/archive_execution.jl`.
 
 ## Build a semantic node
 
@@ -123,11 +123,7 @@ inspect_archive("not-written.ah5")
 
 `execute!(graph, plan; head, store)` records a run and stages outputs. It
 does not move a workflow head. Domain behaviour is a method of
-
-```julia
-apply_operation(::Val{kind}, spec, inputs; context...)
-```
-
+`apply_operation(::Val{kind}, spec, inputs; context...)`,
 also defined in `src/archive_execution.jl`. The default method returns a
 failed `OperationOutcome` with code `:unknown_operation`. Payloads sit in a
 `WorkingStore` (`store_payload!`, `fetch_payload` in the same file). The
@@ -139,21 +135,13 @@ transactions on the same in-memory graph. `restart!` starts a new run from
 an incomplete run's `RestartRequirement`. None of these functions open an
 `.ah5` file.
 
-This call shape was not executed while writing this page:
-
-```julia
-run = execute!(graph, plan; head = :main, store = store)
-revision = commit!(graph, run.id; head = :main, store = store)
-```
-
 `docs/workflow.md` is the contract for the same sequence:
 plan, readiness, `execute!`, stage, validate, `commit!`, then an explicit
 `write_archive` when a file is required.
 
 ## Other record operations
 
-These are the next calls once a graph or a schema chain exists. They were
-not executed for this page.
+These are the next calls once a graph or a schema chain exists.
 
 - `plan_purge` and `compact_archive` in `src/archive_purge.jl` compute
   reachability and a new graph. They do not mutate the source graph.
