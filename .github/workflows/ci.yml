@@ -43,3 +43,26 @@ jobs:
 
       - name: Run package tests
         uses: julia-actions/julia-runtest@v1
+
+  docs:
+    name: "docs: manual"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+
+      - name: Restore Julia dependencies
+        uses: julia-actions/cache@v2
+        with:
+          cache-name: docs-manual
+
+      - name: Build the manual
+        run: |
+          julia --startup-file=no --project=docs -e 'using Pkg; Pkg.instantiate()'
+          julia --startup-file=no --project=docs docs/make.jl
