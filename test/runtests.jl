@@ -257,4 +257,5 @@ struct DummyObject end
     include("archive_execution_context_coverage.jl")
     include("archive_persistence_extension.jl")
     include("scientific_lifecycle.jl")
+    include("archive_workload_qualification.jl")
 end
