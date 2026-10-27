@@ -1,12 +1,12 @@
 # AGENTS.md — Episteme.jl
 
-[OodiHandbook](https://github.com/ahojukka5/OodiHandbook/blob/v0.1.0/index.qmd)
-is the source of common rules. Follow the repository's explicitly adopted
-immutable release (AUTH-003). Use [reviewed master guidance](https://github.com/ahojukka5/OodiHandbook/blob/master/index.qmd)
-as a voluntary improvement target (AUTH-006). Local instructions provide
-technical details and do not override the Handbook.
+> Process rules come from the latest approved
+> [OodiHandbook](https://github.com/ahojukka5/OodiHandbook) tag (AUTH-007).
+> Start with its `guides/local-development.qmd` and `guides/contributing.qmd`.
+> This file adds only this repository's facts (ENG-001, ENG-028).
 
-Guidance for AI agents and humans working on or with this package.
+Commit scopes, hooks and never-commit paths are in
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## 1. What this package is
 
@@ -19,13 +19,8 @@ Domain packages own scientific payloads and operation semantics. Episteme owns
 the shared semantics, schemas/contracts, identities and history vocabulary,
 the orchestration protocol, and JLD2-backed AH5 persistence.
 
-The accepted v1 product is:
-
-```text
-Episteme.jl = semantics + schemas + history/provenance
-            + orchestration protocol
-            + JLD2-backed AH5 persistence
-```
+The accepted v1 product is `Episteme.jl = semantics + schemas +
+history/provenance + orchestration protocol + JLD2-backed AH5 persistence`.
 
 The JLD2-backed `.ah5` profile (`write_archive` / `inspect_archive`) is in
 this package, behind the `episteme_jld2_ext` package extension: the archive API
@@ -40,13 +35,8 @@ package.
 
 ## 2. What it owns
 
-Episteme owns the common introspection generics:
-
-- `report(x)`
-- `validate(x)`
-- `readiness(x, target)`
-
-These are declared here so domain packages extend the same functions instead of
+Episteme owns the common introspection generics `report(x)`, `validate(x)`
+and `readiness(x, target)`. They are declared here so domain packages extend the same functions instead of
 creating locally scoped lookalikes.
 
 It also owns shared, domain-neutral supporting types and protocols:
@@ -72,46 +62,14 @@ experiment, or analysis object.
 
 ## 3. Integrating domain packages
 
-Keep direct Julia APIs first-class. A declarative authoring API is an
-additional frontend where useful; it lowers to the same domain-owned
-implementation and must not force ordinary callers to build semantic trees.
-Do not duplicate scientific implementations between the two surfaces.
-The canonical rule, including equivalence checks and API evolution, is
-[`docs/declarative-contracts.md#direct-and-declarative-apis-are-first-class`](docs/declarative-contracts.md#direct-and-declarative-apis-are-first-class).
-
-Packages choosing Episteme integration import and extend its generic
-functions rather than shadowing them. Independent packages may participate
-through public consumer-owned ports and integrator-owned adapters without an
-Episteme dependency or central registration (SWE-013):
-
-```julia
-import Episteme: report, validate, readiness
-
-report(x::MyType) = ObjectReport(...)
-validate(x::MyType) = ValidationReport(...)
-readiness(x::MyType, target::PipelineTarget) = ReadinessReport(...)
-```
-
-Domain-specific report types may subtype `AbstractEpistemeReport`,
-`AbstractValidationReport`, or `AbstractReadinessReport` as appropriate.
-
-For declarative model nodes, domain packages own their vocabulary and may use
-Episteme's local schema machinery:
-
-```julia
-schema = NodeSchema(
-    Symbol("mydomain/node"),
-    AttributeSchema(
-        :size,
-        :real;
-        allow_ref = true,
-        rules = (ValidationRule(:finite), ValidationRule(:gt; value = 0.0)),
-    ),
-)
-```
-
-Keep domain schemas next to the domain operations they describe rather than
-building a central registry of scientific concepts in Episteme.
+Direct Julia APIs stay first-class; a declarative frontend lowers to the same
+domain-owned implementation
+([`docs/declarative-contracts.md`](docs/declarative-contracts.md#direct-and-declarative-apis-are-first-class)).
+Domain packages import and extend Episteme's generics rather than shadowing
+them, or participate through consumer-owned ports without an Episteme
+dependency (SWE-013). Worked examples for reports, node schemas, script
+contracts and custom validation rules are in
+[`docs/notes/domain-integration.md`](docs/notes/domain-integration.md).
 
 ## 4. Dependencies
 
@@ -167,94 +125,26 @@ Any new shared type should:
 Validation rules in particular are data (`kind + parameters`), not closures, so
 agents and tool layers can inspect the same rules the runtime enforces.
 
-## 7. Introspection functions are read-only
+## 7. Introspection is read-only; mutation uses `!`
 
 `report`, `validate`, and `readiness` must never mutate the object they inspect.
-They answer questions; they do not change state.
+They answer questions; they do not change state. A function that mutates its
+argument ends in `!` (`guides/coding-julia.qmd`, `guides/naming.qmd`).
 
-## 8. Mutating functions must use explicit `!` naming
+## 8. Out of scope for now
 
-If a function mutates its argument, use a trailing `!` per Julia convention.
-Do not blur mutation with the read-only introspection API.
+`summary`, `diagnose`, `explain`, `suggest_fixes`, `provenance`, `artifacts`
+and `repair!` are outside the current contract, as are `branch!` / `rerun!`,
+`.ah5` writes from the in-memory `execute!` family, distributed scheduling,
+implicit script execution and sandboxing; the full list is in
+[`docs/notes/domain-integration.md`](docs/notes/domain-integration.md#out-of-scope-for-now).
+If a task needs one, keep only the cross-domain representation and protocol
+in Episteme and the scientific semantics in the owning domain package.
 
-## 9. Designed for future tool-server exposure
+## 9. Tests and manual
 
-Shared reports, semantic nodes, schemas, validation rules, archive records, and
-script contracts are deliberately structured so tool-server layers can expose
-them with minimal translation.
-
-The shared script representation is an important trust boundary:
-
-```julia
-script_node(
-    :lookup;
-    language = :julia,
-    source = "lookup(context)",
-    inputs = (NodeRef(:id),),
-    outputs = (:value,),
-    effects = (:network,),
-)
-```
-
-Episteme stores this contract but does not implicitly execute arbitrary source.
-Execution belongs to a trusted orchestration path that binds inputs/outputs and
-enforces allowed effects.
-
-## 10. Extending validation
-
-Episteme provides a small standard set of symbolic local rule kinds such as
-`:finite`, `:gt`, `:ge`, `:lt`, `:le`, `:nonempty`, and `:one_of`.
-
-A domain package may add a genuinely reusable symbolic rule by extending:
-
-```julia
-import Episteme: check_validation_rule
-check_validation_rule(::Val{:my_rule}, value, parameters) = ...
-```
-
-The rule must still be represented as `ValidationRule(:my_rule; ...)`, not an
-opaque closure embedded in a schema.
-
-Node-local cross-field rules use the same pattern:
-
-```julia
-import Episteme: check_node_validation_rule
-check_node_validation_rule(::Val{:my_node_rule}, node, parameters) = ...
-```
-
-Represent them as `NodeValidationRule(:my_node_rule; fields = (:a, :b), ...)`.
-Name participating attributes explicitly so missing or ill-typed values can
-produce stable diagnostics rather than secondary exceptions.
-
-## 11. Out of scope for now
-
-The following introspection generics remain outside the current contract unless
-a later architectural decision adds them:
-
-```julia
-summary(x)
-diagnose(x)
-explain(x)
-suggest_fixes(x)
-provenance(x)
-artifacts(x)
-repair!
-```
-
-Archive record types are in scope as structured data even when the higher-level
-runtime operation using them has not landed yet.
-
-Also out of scope in the current implementation:
-
-- `branch!` / `rerun!` runtime (`execute!` / `commit!` / `restart!` /
-  `recover_writes!` are in-memory; they do not write `.ah5` files),
-- distributed scheduling and automatic persist-on-execute,
-- optional parallel/bulk archive I/O extensions not yet implemented,
-- speculative multi-backend storage abstractions without a real second backend,
-- domain constraint solvers and expression evaluators,
-- automatic or implicit execution of arbitrary scripts,
-- security sandboxing for arbitrary user code.
-
-If a task needs one of these, keep only the cross-domain representation and
-protocol in Episteme; keep the scientific semantics in the domain package that
-owns them.
+- `pkg> test Episteme` runs `test/runtests.jl`: first
+  `test/archive_without_jld2.jl`, then the rest with JLD2 loaded.
+- `julia --project=docs docs/make.jl` builds the manual (instantiate first).
+  It fails unless every `docs/*.md` is in `CHAPTERS`; other notes go in
+  `docs/notes/`.
