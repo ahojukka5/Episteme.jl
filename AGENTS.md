@@ -1,9 +1,9 @@
 # AGENTS.md — Episteme.jl
 
-> Process rules come from the latest approved
-> [OodiHandbook](https://github.com/ahojukka5/OodiHandbook) tag (AUTH-007).
-> Start with its `guides/local-development.qmd` and `guides/contributing.qmd`.
-> This file adds only this repository's facts (ENG-001, ENG-028).
+> Shared governance is maintained in the
+> [current OodiHandbook](https://github.com/ahojukka5/OodiHandbook/blob/master/index.qmd).
+> Start with its `guides/ENG/local-development.qmd` and `guides/ENG/contributing.qmd`.
+> This file contains repository-specific information, not copied common rules.
 
 Commit scopes, hooks and never-commit paths are in
 [`CONTRIBUTING.md`](CONTRIBUTING.md).
@@ -67,7 +67,7 @@ domain-owned implementation
 ([`docs/declarative-contracts.md`](docs/declarative-contracts.md#direct-and-declarative-apis-are-first-class)).
 Domain packages import and extend Episteme's generics rather than shadowing
 them, or participate through consumer-owned ports without an Episteme
-dependency (SWE-013). Worked examples for reports, node schemas, script
+dependency. Worked examples for reports, node schemas, script
 contracts and custom validation rules are in
 [`docs/notes/domain-integration.md`](docs/notes/domain-integration.md).
 
@@ -128,8 +128,8 @@ agents and tool layers can inspect the same rules the runtime enforces.
 ## 7. Introspection is read-only; mutation uses `!`
 
 `report`, `validate`, and `readiness` must never mutate the object they inspect.
-They answer questions; they do not change state. A function that mutates its
-argument ends in `!` (`guides/coding-julia.qmd`, `guides/naming.qmd`).
+They answer questions; they do not change state. Episteme's mutating APIs
+use the Julia `!` naming convention.
 
 ## 8. Out of scope for now
 
