@@ -1,7 +1,6 @@
 # Embedded payload schemas and compatibility metadata
 
-This is the logical embedded-schema contract from issue
-[#39](https://github.com/ahojukka5/Episteme.jl/issues/39). An archive
+This is the logical embedded-schema contract. An archive
 must carry the exact machine-readable schema revisions needed to
 interpret its portable/shared records and any domain payload that opts
 into schema-based generic inspection.
@@ -9,9 +8,8 @@ into schema-based generic inspection.
 Physical `/episteme/schemas` spelling is in
 [`archive-profile.md`](archive-profile.md). Semantic migration *planning
 and in-memory apply* are in [`schema-migration.md`](schema-migration.md)
-(issue [#103](https://github.com/ahojukka5/Episteme.jl/issues/103),
-parent [#41](https://github.com/ahojukka5/Episteme.jl/issues/41)). AH5
-archive rewriting remains a later #41 slice.
+together with publishing a migrated result as a new AH5 archive; the
+source archive is never rewritten.
 
 JLD2 `/_types` describes Julia representation. It is not the scientific
 schema registry and is not consulted for schema identity.
@@ -39,7 +37,7 @@ SchemaDefinition(schema; namespace, package_version = "9.9.9").schema == schema
 | schema id/version | `SchemaRef` |
 | compatibility | `:exact_read`, `:backwards_compatible`, `:migration_required`, `:unsupported` |
 | fields | `SchemaField` — name, `LogicalType` / rank / shape, required, cardinality, units/frame/support/location, reference target, `ValidationRule`s |
-| semantic-node shape | optional `NodeSchema` (the #34/#12 portable node contract) |
+| semantic-node shape | optional `NodeSchema` (the portable node contract of [portable declarative documents](portable-documents.md) and [semantic values](semantic-tree.md)) |
 | replacement | optional `replaces` / `replaced_by` `SchemaRef`s |
 | migration pointer | optional `SchemaMigrationRef` (source, target, implementation id) |
 
@@ -66,7 +64,7 @@ rules), and migration/replacement pointers. It does not load payloads or
 import domain packages.
 
 `validate(schemas, namespaces)` and `validate(graph, schemas, namespaces)`
-apply #38 identity rules: a registered package UUID is required, aliases
+apply [package namespaces](archive-namespaces.md) identity rules: a registered package UUID is required, aliases
 are accepted, and two definitions cannot share a short name with different
 UUIDs.
 
@@ -101,7 +99,7 @@ schema, and that schema is reached by following embedded
 definition. The identity-only catalog still reports
 `:migration_required` for every such object; it is not this registry
 check. Live `SemanticNode` trees may still hold values that have no
-portable schema; those fail closed on capture (#34), not here.
+portable schema; those fail closed on capture ([portable declarative documents](portable-documents.md)), not here.
 
 `readiness(registry, PipelineTarget(:inspect))` is true when the
 registry itself is valid.
@@ -109,6 +107,6 @@ registry itself is valid.
 ## What this is not
 
 - running domain migrations that invent scientific values
-- writing a migrated `.ah5` file (later #41)
+- writing a migrated `.ah5` file (later [schema migration](schema-migration.md))
 - treating JLD2 struct reconstruction as scientific compatibility
 - requiring every live Julia value to have a portable schema

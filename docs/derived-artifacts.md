@@ -1,6 +1,6 @@
 # Derived-artifact and debug provenance
 
-Issue [#32](https://github.com/ahojukka5/Episteme.jl/issues/32) gives
+Derived-artifact provenance gives
 postprocessed, diagnostic, and debug products a shared provenance
 envelope. Domain packages still own payload types. The in-memory record
 is `DerivedArtifactRecord`; the optional AH5 layer persists those records

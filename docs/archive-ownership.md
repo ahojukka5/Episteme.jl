@@ -1,15 +1,10 @@
 # Shared scientific archive ownership
 
-Accepted topology: issue
-[#48](https://github.com/ahojukka5/Episteme.jl/issues/48) /
-[PR #50](https://github.com/ahojukka5/Episteme.jl/pull/50).
-The package rename is issue
-[#51](https://github.com/ahojukka5/Episteme.jl/issues/51).
-The logical envelope from
-[#26](https://github.com/ahojukka5/Episteme.jl/issues/26)
+Accepted topology: one package, Episteme, after the rename of
+`OodiCore.jl`. The logical envelope
 is documented in [`archive-envelope.md`](archive-envelope.md).
 
-This page supersedes the #25 two-package split (`OodiCore.jl` + standalone
+This page supersedes the earlier two-package split (`OodiCore.jl` + standalone
 `AH5.jl`). Logical-vs-physical remains a *subsystem* split inside Episteme.
 
 ## Decision
@@ -29,7 +24,7 @@ schema-migration *functions*. They must not grow package-local HDF5 archive
 frameworks.
 
 JLD2 / `.ah5` writers land in the persistence PRs. The profile writer
-(`write_archive`) and generic `inspect_archive` are issue #40.
+(`write_archive`) and generic `inspect_archive` belong to the [AH5 profile](archive-profile.md).
 
 The historical architecture study is not stored in this package. The
 current contract is this page and [`archive-profile.md`](archive-profile.md).
@@ -105,10 +100,10 @@ Safe to add here, as ordinary immutable structs and symbolic rules:
   interpretation: field/dataset name, logical scalar type,
   rank/shape/cardinality, required/optional, units/frame/support,
   reference target, and declared semantic constraints
-- portable declarative-document envelope types (issue #34)
-- software-environment and execution-context *record types* (#37, #43)
-- canonical content-hash *rules* expressed as data (#42)
-- migration source/target identifiers (#41)
+- [portable declarative-document](portable-documents.md) envelope types
+- software-environment and execution-context *record types* ([software-environment manifests](software-environments.md), [execution-context records](execution-contexts.md))
+- canonical content-hash *rules* expressed as data ([content integrity](content-integrity.md))
+- migration source/target identifiers ([schema migration](schema-migration.md))
 - `to_namedtuple` for those records
 - Plan/Run/Activity/Event/Revision records
 - JLD2-backed `.ah5` writer and generic `inspect_archive`
@@ -147,7 +142,7 @@ These three splits are easy to collapse later and must stay explicit.
 
 ### Domain migrations versus the Episteme runner
 
-Issue #41 defines a migration as a deterministic, domain-owned
+A [schema migration](schema-migration.md) is as a deterministic, domain-owned
 transformation from one schema id/version to another. Episteme owns only the
 shared machinery around that transformation:
 
@@ -197,7 +192,7 @@ the payload schema, not with the container:
 
 The AH5 profile owns only physical encoding of those facts. Changing
 chunking or compression must not change the scientific object identity
-under #42. A future schema must describe the data contract, not the HDF5
+under [content integrity](content-integrity.md). A future schema must describe the data contract, not the HDF5
 file.
 
 ## How domain packages depend
@@ -241,35 +236,35 @@ A missing codec, migration, or projection is not an archive identity failure:
 - payload *interpretation* into live domain types requires the domain package
 - an unknown namespace or schema is reported as such
 
-## Where follow-up issues live
+## Where the remaining work lives
 
 Logical contract first, then physical persistence in Episteme.
 
-| Issue | Episteme types / rules | Later AH5 profile in Episteme |
+| Area | Episteme types / rules | Later AH5 profile in Episteme |
 | --- | --- | --- |
-| #26 envelope, identities, references, schema-version rules | done | persist those records |
-| #27 transactions / completion / restart | status, staging, write phases, restart refs | JLD2 markers, file locks, recovery |
-| #28 XDMF views | XdmfDataset, XdmfGrid, attributes, sets, collections | read-only numeric qualification and metadata writer; domain owns the recipe ([contract](archive-views.md)) |
-| #29 integrity and parallel-HDF5 qualification | none | `EpistemeHDF5Ext` after domain codecs exist |
-| #30 revision history | revision identity types | graph storage |
-| #31 purge / compaction | RetentionRoot, plan_purge, compact_archive | physical rewrite / new `.ah5` |
-| #32 derived / debug artifacts | provenance record types | optional `episteme/derived_artifacts` records |
-| #33 checkout / lazy manifest | RevisionManifest, inspect, in-memory checkout | selective payload reads |
-| #34 portable declarative document | PortableSemanticDocument capture, sexpr view | encoding inside `.ah5` |
-| #35 reproduction capsules | capsule manifest types | packaging |
-| #37 software-environment manifests | record types | `/provenance/software` storage |
-| #38 namespaces | identity, reservation, aliases, listing | path layout |
-| #39 embedded schemas | SchemaDefinition, SchemaRegistry, listing | `/episteme/schemas` in the #40 profile |
-| #40 `.ah5` profile and generic inspect | ArchiveProfile, write_archive, inspect_archive | primary |
-| #41 schema migrations | source/target identifiers | runner only; domain owns each transformation |
-| #42 content hashes / verification | canonicalization rules | hash compute and verify |
-| #43 execution-context fingerprint | record types and denylist data | storage |
-| #44 event timeline / log streams | EventRecord, EventBatch, LogStreamRecord, event_timeline | JLD2/HDF5 append layout |
+| envelope, identities, references, schema-version rules | done | persist those records |
+| transactions / completion / restart | status, staging, write phases, restart refs | JLD2 markers, file locks, recovery |
+| XDMF views | XdmfDataset, XdmfGrid, attributes, sets, collections | read-only numeric qualification and metadata writer; domain owns the recipe ([contract](archive-views.md)) |
+| integrity and parallel-HDF5 qualification | none | `EpistemeHDF5Ext` after domain codecs exist |
+| revision history | revision identity types | graph storage |
+| purge / compaction | RetentionRoot, plan_purge, compact_archive | physical rewrite / new `.ah5` |
+| derived / debug artifacts | provenance record types | optional `episteme/derived_artifacts` records |
+| checkout / lazy manifest | RevisionManifest, inspect, in-memory checkout | selective payload reads |
+| portable declarative document | PortableSemanticDocument capture, sexpr view | encoding inside `.ah5` |
+| reproduction capsules | capsule manifest types | packaging |
+| software-environment manifests | record types | `/provenance/software` storage |
+| namespaces | identity, reservation, aliases, listing | path layout |
+| embedded schemas | SchemaDefinition, SchemaRegistry, listing | `/episteme/schemas` in the [AH5 profile](archive-profile.md) |
+| `.ah5` profile and generic inspect | ArchiveProfile, write_archive, inspect_archive | primary |
+| schema migrations | source/target identifiers | runner only; domain owns each transformation |
+| content hashes / verification | canonicalization rules | hash compute and verify |
+| execution-context fingerprint | record types and denylist data | storage |
+| event timeline / log streams | EventRecord, EventBatch, LogStreamRecord, event_timeline | JLD2/HDF5 append layout |
 
 ## Domain archive epics
 
-The domain epics listed under #24 (Monge #328, Sorby #583, Delone #420,
-Oodi #395, Stinespring #163, Lieb #65, Chappe #207) should:
+Domain packages that persist scientific state (Monge, Sorby, Delone, Oodi,
+Stinespring, Lieb, Chappe) should:
 
 - depend on Episteme rather than starting a package-local HDF5 layer
 - put payload schemas next to the domain operations they describe
@@ -288,14 +283,11 @@ Oodi #395, Stinespring #163, Lieb #65, Chappe #207) should:
 
 ## Related study
 
-Issue [#47](https://github.com/ahojukka5/Episteme.jl/issues/47) studied
+A spike studied
 JLD2 as the Julia-native codec. The historical spike is not stored in
 this package. JLD2 is a weak dependency for the v1 `.ah5` profile.
 `using JLD2` activates the file I/O methods in `episteme_jld2_ext`.
 
-Issue [#48](https://github.com/ahojukka5/Episteme.jl/issues/48) is the
-long-term architecture study (accepted). Issue
-[#51](https://github.com/ahojukka5/Episteme.jl/issues/51) is the rename.
-Issue [#23](https://github.com/ahojukka5/Episteme.jl/issues/23) is the
-unmerged General registration of `OodiCore`; the next registration should
-be for `Episteme`.
+The long-term architecture study was accepted, and the package was renamed
+from `OodiCore` to `Episteme`. The General registration of `OodiCore` was never merged; the next
+registration should be for `Episteme`.

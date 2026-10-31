@@ -1,12 +1,12 @@
 # Semantic schema migration chains
 
-Issue [#41](https://github.com/ahojukka5/Episteme.jl/issues/41) keeps
+Episteme keeps
 semantic schema migration separate from Julia representation upgrades and
 from AH5 physical-layout changes.
 
-[#103](https://github.com/ahojukka5/Episteme.jl/issues/103) plans and
-applies a migration in memory. [#140](https://github.com/ahojukka5/Episteme.jl/issues/140)
-publishes a valid result as a **new** AH5 archive. Neither slice rewrites
+One step plans and
+applies a migration in memory; the next
+publishes a valid result as a **new** AH5 archive. Neither step rewrites
 the source file, runs JLD2 `Upgrade`, or changes physical layout.
 
 ## Four axes stay separate

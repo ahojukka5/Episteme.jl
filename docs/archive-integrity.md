@@ -1,6 +1,6 @@
 # AH5 revision-integrity persistence
 
-Issue #77 persists the clean, successful revision-integrity manifests from #75
+This extension persists the clean, successful [revision integrity manifests](revision-integrity.md)
 as an optional extension of the AH5 v1 profile.
 
 ## Backward-compatible optional feature

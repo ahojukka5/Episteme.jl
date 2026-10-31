@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Event-history semantic refinements (#85)
+# Event-history semantic refinements
 # ---------------------------------------------------------------------------
 
 # EventRecord.object_refs keep the existing ArchiveGraph contract: they point to

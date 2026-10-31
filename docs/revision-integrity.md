@@ -1,8 +1,8 @@
 # Revision-scoped dependency integrity
 
-Issue #75 is the third focused slice of parent issue #42. It combines the
-selected-revision closure from #33, canonical logical hashes from #71, and
-external verification from #73 into one fail-closed integrity view.
+Revision integrity manifests are the third part of [content integrity](content-integrity.md). They combine the
+selected-revision closure from [lazy checkout](archive-checkout.md), canonical logical hashes from [canonical content hashing](content-integrity.md), and
+external verification from [external-artifact verification](external-integrity.md) into one fail-closed integrity view.
 
 ## Scope
 
@@ -24,8 +24,8 @@ recorded scientific state.
 ## External verification strength
 
 The manifest-level `requested_level` applies to external artifacts. Each
-external row records `verified_level` and `bytes_checked`, preserving #73's
-rule that a metadata or sampled check must never be presented as full-byte
+external row records `verified_level` and `bytes_checked`, preserving the rule of
+[external-artifact verification](external-integrity.md) that a metadata or sampled check must never be presented as full-byte
 verification.
 
 `report(manifest)` includes `external_bytes_checked`, the sum of the external
@@ -35,7 +35,7 @@ only embedded objects and schemas; those cases do not require external I/O.
 ## Schema integrity
 
 Each exact schema referenced by selected objects produces one schema row. Its
-`content_id` is the canonical logical hash from #71. Package release version
+`content_id` is the canonical logical hash from [canonical content hashing](content-integrity.md). Package release version
 and physical AH5/JLD2 representation are not part of that identity.
 
 The selected schema definition is validated before hashing, and object/schema
@@ -53,5 +53,5 @@ was preserved. A metadata or sample live check is never reported as `:full`.
 [reproduction capsule publication](capsule-archives.md) consume this evidence.
 A published capsule may embed portable state whose canonical identity matches
 these rows. It does not promise execution readiness unless that state, the
-recorded dependencies, and the manifest agree. Migration execution remains
-issue #41; signatures remain out of scope.
+recorded dependencies, and the manifest agree. Migration execution belongs to
+[schema migration](schema-migration.md); signatures remain out of scope.

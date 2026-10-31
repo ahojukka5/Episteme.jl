@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Tiered verification of authoritative external files (#73 / parent #42)
+# Tiered verification of authoritative external files
 +# ---------------------------------------------------------------------------
 
 const EXTERNAL_VERIFICATION_LEVELS = (:metadata, :sample, :full)

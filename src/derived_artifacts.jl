@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Derived-artifact and debug provenance (#105 / parent #32)
+# Derived-artifact and debug provenance
 #
 # Shared ancestry/retention envelope for postprocessed, diagnostic, and
 # debug products. Domain packages keep payload meaning. AH5 persistence

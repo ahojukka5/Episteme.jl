@@ -1,12 +1,12 @@
 # AH5 run/activity/restart provenance
 
-Issue #83 adds the second authoritative history-record layer on top of #81 state-history persistence. The extension restores the execution provenance needed by the existing replay/restart/rerun readiness logic without yet persisting events, write transactions, or log streams.
+This extension adds the second authoritative history-record layer on top of [state-history persistence](archive-state-history.md). The extension restores the execution provenance needed by the existing replay/restart/rerun readiness logic without yet persisting events, write transactions, or log streams.
 
 ## Optional AH5 v1 extension
 
 The feature flag is `:run_history_records` and the fixed root is `episteme/run_history`. The feature is optional: older AH5 archives remain readable, and a state-only archive yields a valid run-history view with no runs.
 
-A run-history archive always includes #81 authoritative state records as well. The writer therefore publishes state first and appends run provenance atomically from the caller's perspective; if the optional append fails, the newly created file is removed.
+A run-history archive always includes the [authoritative state records](archive-state-history.md) as well. The writer therefore publishes state first and appends run provenance atomically from the caller's perspective; if the optional append fails, the newly created file is removed.
 
 ## Persisted run contract
 
@@ -27,7 +27,7 @@ Nested data is flattened into primitive columns with explicit owner indices. JLD
 
 ## Cross-layer validation
 
-The run-history validator composes with #81 state history rather than creating a parallel graph model. It checks:
+The run-history validator composes with the [state history](archive-state-history.md) rather than creating a parallel graph model. It checks:
 
 - duplicate run/activity identities and activity containment;
 - parent-run links;
@@ -51,7 +51,7 @@ graph2 = reconstruct_graph(view)
 manifest = inspect(view, revision_id)
 ```
 
-`reconstruct_graph` returns the ordinary payload-free `ArchiveGraph` containing #81 state and the restored runs. Existing `inspect` and `readiness` functions are then reused unchanged.
+`reconstruct_graph` returns the ordinary payload-free `ArchiveGraph` containing the [persisted state](archive-state-history.md) and the restored runs. Existing `inspect` and `readiness` functions are then reused unchanged.
 
 For a complete committed run, this slice is sufficient to restore current `:replay`, `:restart`, and `:rerun` readiness decisions when all required state is internal and the producing run recorded the required environment/activity/checkpoint metadata.
 

@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Optional authoritative state-history persistence in AH5 (#81 / epic #24)
+# Optional authoritative state-history persistence in AH5
 # ---------------------------------------------------------------------------
 
 const AH5_STATE_HISTORY_FEATURE = :state_history_records

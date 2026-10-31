@@ -1,7 +1,6 @@
 # Package namespaces and reserved shared namespaces
 
-This is the logical namespace contract from issue
-[#38](https://github.com/ahojukka5/Episteme.jl/issues/38). It lives in
+This is the logical namespace contract. It lives in
 Episteme as identity records, a claim registry, listing, and `validate`.
 It does not open files or choose HDF5/JLD2 group paths.
 
@@ -68,7 +67,7 @@ profile provenance schemas revisions runs events heads objects content payloads
 A package may not register one of those names as its namespace `id`.
 Reserved shared names such as `:episteme` also cannot appear in another
 identity's `aliases` list or as the short name of an alias claim.
-Exact `.ah5` spelling remains #40.
+Exact `.ah5` spelling remains [AH5 profile](archive-profile.md).
 
 ## Aliases
 
@@ -138,6 +137,6 @@ is true when the registry itself is valid.
 
 ## What this is not
 
-- embedded payload-schema registry (#39)
+- embedded payload-schema registry ([embedded schemas](archive-schemas.md))
 - codec registration
 - a scientific meaning for anything inside a domain namespace

@@ -3,7 +3,7 @@
 #
 # Logical identities, references, and schema-version rules. No HDF5, no
 # package payload store, and no software-environment or execution-context
-# capture. Those remain later issues, domain packages, and AH5.jl.
+# capture. Those belong to separate contracts and to domain packages.
 # ---------------------------------------------------------------------------
 
 """
@@ -42,7 +42,7 @@ end
 
 Immutable identity of one global workflow revision. A single revision may
 materialize several [`ArchiveObject`](@ref)s. Ordinary writes never reuse
-a `RevisionId`. Parent/input revision edges belong to issue #30; they are
+a `RevisionId`. Parent/input revision edges belong to the revision history; they are
 not stored on the object envelope.
 """
 struct RevisionId <: AbstractArchiveId
@@ -54,7 +54,7 @@ end
     ContentId(value)
 
 Identity of logical content, independent of HDF5 placement, chunking, or
-compression. The canonical hash rules live in issue #42; this type only
+compression. The canonical hash rules live in `docs/content-integrity.md`; this type only
 holds the resulting identifier.
 """
 struct ContentId <: AbstractArchiveId
@@ -100,7 +100,7 @@ end
 """
     ExecutionContextId(value)
 
-Reference to a sanitized execution-context fingerprint owned by issue #43.
+Reference to a sanitized execution-context fingerprint (`docs/execution-contexts.md`).
 Episteme does not capture hardware or RNG state here.
 """
 struct ExecutionContextId <: AbstractArchiveId
@@ -176,7 +176,7 @@ Owning package namespace for archived objects and schemas.
 `display_name` is a human label such as `"Oodi.jl"` and is never identity,
 so a repository or display-name rename does not mint a new namespace.
 Reservation, alias, and ownership rules are documented in
-`docs/archive-namespaces.md` (issue #38).
+`docs/archive-namespaces.md`.
 """
 struct ArchiveNamespace
     id::Symbol
@@ -272,8 +272,8 @@ end
 Minimal provenance *references* carried by an archive object.
 
 The producing workflow revision is [`ArchiveObject.revision_id`](@ref),
-not a second field here. Full software manifests (#37), execution
-fingerprints (#43), and the revision DAG (#30) are separate contracts.
+not a second field here. Full software manifests, execution
+fingerprints, and the revision DAG are separate contracts.
 `nothing` means explicitly not recorded.
 """
 struct ProvenanceRefs
@@ -309,7 +309,7 @@ path and not by namespace.
 
 An unpinned reference (`revision_id === nothing`) is a logical-object
 link: it resolves if any version of that object exists. Exact scientific
-dependencies must pin a [`RevisionId`](@ref) or use issue #30's revision
+dependencies must pin a [`RevisionId`](@ref) or use the revision history's revision
 inputs. A pinned reference stays valid when unrelated objects are
 appended.
 """
@@ -463,7 +463,7 @@ not store the scientific payload.
 - `schema` — exact payload schema id and version
 
 # Optional
-- `content_id` — logical content identity (#42 supplies hash rules)
+- `content_id` — logical content identity (hash rules in `docs/content-integrity.md`)
 - `run_id` — producing run
 - `provenance` — software/execution references
 - `references` — named [`ArchiveReference`](@ref)s
@@ -584,8 +584,8 @@ end
 
 Known schema and provenance identities used to validate references.
 
-This is not the embedded schema registry (#39) and not a software
-manifest (#37). It only answers whether a referenced schema or provenance
+This is not the embedded schema registry and not a software
+manifest. It only answers whether a referenced schema or provenance
 id is known and how that schema may be read. The embedded definitions are
 [`SchemaRegistry`](@ref).
 """

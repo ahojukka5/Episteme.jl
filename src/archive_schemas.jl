@@ -1,9 +1,9 @@
 # ---------------------------------------------------------------------------
-# Embedded payload schemas and compatibility metadata (#39)
+# Embedded payload schemas and compatibility metadata
 #
 # Logical schema definitions that an archive must carry so a reader can
 # inspect structure without the owning domain package. Physical `/schemas`
-# storage is issue #40. Migration *execution* is issue #41.
+# storage belongs to the AH5 profile. Migration *execution* belongs to schema migration.
 # JLD2 `/_types` is Julia representation metadata, not schema identity.
 # ---------------------------------------------------------------------------
 
@@ -14,7 +14,7 @@ const SCHEMA_CARDINALITIES = (:one, :many)
 
 Machine-readable pointer from one exact [`SchemaRef`](@ref) to another.
 The implementation string identifies a domain-owned migrator; Episteme
-does not run it here (#41).
+does not run it here (see schema migration).
 """
 struct SchemaMigrationRef
     source::SchemaRef
@@ -39,7 +39,7 @@ end
                 reference_target=nothing, rules=(), documentation="")
 
 One portable payload-schema field. This is logical content, not an HDF5
-dataset descriptor: chunking, compression, and physical paths are #40.
+dataset descriptor: chunking, compression, and physical paths belong to the AH5 profile.
 
 `rank == 0` is a scalar. `cardinality = :many` means a list of that
 element. `reference_target` names a package-qualified kind when the field
@@ -201,7 +201,7 @@ end
 
 Embedded schema definitions needed by one archive. This is not
 [`ArchiveCatalog`](@ref) (identity-only lookup) and not a migration
-runner. Physical encoding is #40.
+runner. Physical encoding belongs to the AH5 profile.
 """
 struct SchemaRegistry
     entries::Vector{SchemaDefinition}

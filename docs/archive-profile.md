@@ -1,7 +1,6 @@
 # AH5 profile, root signature, and generic inspector
 
-This is the JLD2-backed `.ah5` profile from issue
-[#40](https://github.com/ahojukka5/Episteme.jl/issues/40). `.ah5` means
+This is the JLD2-backed `.ah5` profile. `.ah5` means
 Episteme's versioned scientific archive profile. It is not a new binary
 format and not a separate Julia package.
 
@@ -35,7 +34,7 @@ An unrelated HDF5 file renamed `.ah5` is not an AH5 archive.
 
 ## Physical layout
 
-Reserved package-namespace *names* from issue #38 stay logical. The
+Reserved [package-namespace](archive-namespaces.md) *names* stay logical. The
 profile spells the inspectable Episteme area as JLD2 keys (HDF5 groups):
 
 ```text
@@ -98,16 +97,16 @@ required flags that are not declared present fail closed
 (`:unsupported_profile_version`, `:unsupported_required_feature`,
 `:required_feature_missing`) before remaining roots are decoded.
 
-XDMF views (#28) must treat the extension as advisory and qualify
+[XDMF views](archive-views.md) must treat the extension as advisory and qualify
 datasets from in-file AH5 identity.
 
 ## What this is not
 
 - HDF5.jl bulk `/data` or MPI/parallel writes (`EpistemeHDF5Ext`)
-- payload codecs or AH5 archive rewriting of migrated objects (#41)
-- content-hash verification (#42)
-- software-environment or execution-context *manifest* capture (#37, #43)
-- file-path `checkout` of payload bytes (#33)
+- payload codecs or AH5 archive rewriting of migrated objects ([schema migration](schema-migration.md))
+- content-hash verification ([content integrity](content-integrity.md))
+- software-environment or execution-context *manifest* capture ([software-environment manifests](software-environments.md), [execution-context records](execution-contexts.md))
+- file-path `checkout` of payload bytes ([lazy checkout](archive-checkout.md))
 - a new container format or sidecar identity file
 
 Optional derived/debug artifact records are a separate specialized

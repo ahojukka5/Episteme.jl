@@ -11,11 +11,10 @@ authoring is an additional frontend that lowers to the same domain-owned
 implementation. See the canonical
 [direct and declarative API rule](docs/declarative-contracts.md#direct-and-declarative-apis-are-first-class).
 
-This repository is the renamed/re-scoped former `OodiCore.jl` (issue
-[#51](https://github.com/ahojukka5/Episteme.jl/issues/51)). The Julia package
-name is `Episteme`; the package UUID is unchanged.
+This repository is the renamed and re-scoped former `OodiCore.jl`. The
+Julia package name is `Episteme`; the package UUID is unchanged.
 
-The accepted v1 product ([#48](https://github.com/ahojukka5/Episteme.jl/issues/48)) is:
+The accepted v1 product is:
 
 ```text
 Episteme.jl = semantics + schemas + history/provenance
@@ -70,14 +69,13 @@ containers inside a capsule, and inspection does not fetch external
 requirements. It does not upgrade an archive in place and does not treat
 JLD2 reconstruction as schema compatibility.
 
-These tracked extensions are not implemented:
+These extensions are not implemented:
 
 - binding large derived-artifact bytes through `ArtifactRef` once a real
-  bulk fixture exists
-  ([#112](https://github.com/ahojukka5/Episteme.jl/issues/112)) —
+  bulk fixture exists —
   payload-free derived records already persist;
-- end-to-end archive qualification and any later parallel bulk I/O
-  ([#29](https://github.com/ahojukka5/Episteme.jl/issues/29)).
+- end-to-end archive integrity qualification and any later parallel bulk
+  I/O.
 
 Lightweight XDMF views are implemented for the explicit numeric layouts and
 topologies qualified in [`docs/archive-views.md`](docs/archive-views.md).

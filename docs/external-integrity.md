@@ -1,6 +1,6 @@
 # External artifact integrity verification
 
-This is the local-file verification slice of parent issue #42, tracked by #73.
+This is the local-file verification part of [content integrity](content-integrity.md).
 It builds on canonical content identity without requiring large authoritative
 external files to be rehashed on every archive inspection.
 

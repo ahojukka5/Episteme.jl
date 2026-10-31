@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Run-scope semantic refinements for AH5 run-history validation (#83)
+# Run-scope semantic refinements for AH5 run-history validation
 # ---------------------------------------------------------------------------
 
 function _run_local_staged_resolves(graph::ArchiveGraph, run_id, ref::ObjectRef)

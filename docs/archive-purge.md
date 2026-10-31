@@ -1,7 +1,6 @@
 # Explicit purge, reachability, and compaction
 
-This is the in-memory purge/compaction contract from issue
-[#31](https://github.com/ahojukka5/Episteme.jl/issues/31). Ordinary
+This is the in-memory purge/compaction contract. Ordinary
 research writes never delete committed history. Purge is an explicit
 maintenance operation: it computes reachability from caller-selected
 roots and builds a **new** graph. The source is not mutated.

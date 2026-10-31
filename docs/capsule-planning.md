@@ -1,7 +1,7 @@
 # Reproduction capsule planning
 
-Issue #79 is the first implementation slice of the reproduction-capsule epic
-#35. It is deliberately a **pure planning API**: no AH5 file is written and the
+Capsule planning is the first step towards
+[reproduction capsules](capsule-archives.md). It is deliberately a **pure planning API**: no AH5 file is written and the
 source archive graph is never mutated.
 
 ## Three separate questions
@@ -9,8 +9,8 @@ source archive graph is never mutated.
 A capsule plan keeps three contracts separate instead of collapsing them into
 one boolean:
 
-1. **Retention** — what #31 says must survive from the selected revision root.
-2. **Integrity** — what #42 can identify and verify for the selected scientific
+1. **Retention** — what [purge and compaction](archive-purge.md) says must survive from the selected revision root.
+2. **Integrity** — what [content integrity](content-integrity.md) can identify and verify for the selected scientific
    state at the requested verification strength.
 3. **Readiness** — whether the resulting planned capsule can truthfully support
    `:inspect`, `:replay`, `:restart`, or `:rerun`.
@@ -36,8 +36,8 @@ readiness(plan, PipelineTarget(:replay))
 
 ## Revision scope
 
-The selected state comes from the existing #33 `RevisionManifest`. Unrelated
-branches are not scanned for integrity or readiness. Reachability then uses #31
+The selected state comes from the existing [lazy checkout](archive-checkout.md) `RevisionManifest`. Unrelated
+branches are not scanned for integrity or readiness. Reachability then uses [purge and compaction](archive-purge.md)
 with `RetentionRoot(revision_id)` so the future compacted capsule also preserves
 required revision/run/provenance closure.
 
@@ -51,9 +51,9 @@ retained scientific object must have a strong current `sha256:<64 hex>`
 `ContentId`, and every retained object must be represented by the selected
 revision integrity report.
 
-This intentionally exposes a boundary between #31 and #42: reachability can
+This intentionally exposes a boundary between [purge and compaction](archive-purge.md) and [content integrity](content-integrity.md): reachability can
 retain additional objects through run/activity/event provenance that are not
-part of the selected snapshot's #75 integrity closure. Such a plan fails closed
+part of the selected snapshot's [revision integrity manifests](revision-integrity.md) integrity closure. Such a plan fails closed
 with `:capsule_retained_object_not_integrity_covered` rather than silently
 publishing an unverifiable capsule. A later slice can extend integrity coverage
 for those target-specific provenance dependencies.

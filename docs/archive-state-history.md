@@ -1,6 +1,6 @@
 # AH5 authoritative state history
 
-Issue #81 adds the first authoritative history-record extension to the JLD2-backed AH5 profile. The core AH5 profile and ordinary `ArchiveInspection` stay backward-compatible; authoritative state records are an optional v1 feature.
+This extension adds the first authoritative history-record extension to the JLD2-backed AH5 profile. The core AH5 profile and ordinary `ArchiveInspection` stay backward-compatible; authoritative state records are an optional v1 feature.
 
 ## Scope
 
@@ -34,10 +34,10 @@ A later provenance-history slice will persist runs/activities/events and can the
 
 ## Trust boundary
 
-The state-history extension stores identities and references, not payload bytes. A stored `ContentId` records the envelope's logical content identity; payload integrity remains the separate #42 contract and optional integrity-manifest extension.
+The state-history extension stores identities and references, not payload bytes. A stored `ContentId` records the envelope's logical content identity; payload integrity remains the separate [content integrity](content-integrity.md) contract and optional integrity-manifest extension.
 
 The generic reader validates the reconstructed state against embedded schema listings when present. Physical JLD2/HDF5 paths, chunking, or Julia type metadata are never scientific identity.
 
 ## Reproduction capsules
 
-This state-history layer is the missing persistence foundation for #35. A valid `CapsulePlan` can eventually compact its selected graph and write these exact state records into a standalone AH5 capsule. Full replay/rerun capsule readiness still waits for the subsequent run/activity/event provenance-history slice.
+This state-history layer is the missing persistence foundation for [reproduction capsules](capsule-archives.md). A valid `CapsulePlan` can eventually compact its selected graph and write these exact state records into a standalone AH5 capsule. Full replay/rerun capsule readiness still waits for the subsequent run/activity/event provenance-history slice.

@@ -1,8 +1,8 @@
 # ---------------------------------------------------------------------------
-# Package namespaces and reserved shared namespaces (#38)
+# Package namespaces and reserved shared namespaces
 #
 # Logical identity, reservation, alias, and ownership rules. No HDF5 paths
-# and no payload loading. Physical group spelling is issue #40.
+# and no payload loading. Physical group spelling belongs to the AH5 profile.
 # ---------------------------------------------------------------------------
 
 """
@@ -26,7 +26,7 @@ const RESERVED_SHARED_NAMESPACES = (EPISTEME_NAMESPACE,)
 
 """
 Logical reserved archive areas. These are not package namespaces and not
-HDF5 paths. Issue #40 chooses physical spelling for the AH5 profile.
+HDF5 paths. The AH5 profile chooses physical spelling.
 
 A package may not register one of these names as its namespace `id`.
 """
@@ -140,7 +140,7 @@ end
 
 Registered namespace ownership used to list identities and to reject
 claims on another package's namespace. Claims are data; this is not a
-codec registry and not the embedded schema catalog (#39).
+codec registry and not the embedded schema catalog.
 """
 struct NamespaceRegistry
     claims::Vector{NamespaceClaim}

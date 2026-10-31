@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Live re-verification of expected integrity identities (#101 / parent #42)
+# Live re-verification of expected integrity identities
 #
 # Persisted AH5 integrity records are evidence of a prior check. This layer
 # compares that expected identity set with a freshly built live manifest and

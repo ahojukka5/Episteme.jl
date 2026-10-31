@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Optional derived/debug artifact provenance persistence in AH5 (#32)
+# Optional derived/debug artifact provenance persistence in AH5
 #
 # Payload-free records above authoritative state + run history. Domain
 # packages keep scientific payload types. Large products are referenced

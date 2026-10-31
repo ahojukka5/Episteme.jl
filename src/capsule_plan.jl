@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Pure reproduction-capsule planning (#79 / parent #35)
+# Pure reproduction-capsule planning
 # ---------------------------------------------------------------------------
 
 const CAPSULE_TARGETS = (:inspect, :replay, :restart, :rerun)

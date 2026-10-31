@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# AH5 profile, JLD2 writer, and generic file inspector (#40)
+# AH5 profile, JLD2 writer, and generic file inspector
 #
 # `.ah5` is Episteme's versioned scientific-archive profile on an ordinary
 # HDF5-format file created by JLD2. Identity is in-file metadata, not the

@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Optional event/write/log provenance persistence in AH5 (#85 / epic #24)
+# Optional event/write/log provenance persistence in AH5
 # ---------------------------------------------------------------------------
 
 const AH5_EVENT_HISTORY_FEATURE = :event_history_records

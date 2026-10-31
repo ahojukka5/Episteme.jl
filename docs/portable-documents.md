@@ -1,10 +1,9 @@
 # Portable declarative documents
 
-This is the portable-document capability from issue
-[#34](https://github.com/ahojukka5/Episteme.jl/issues/34). It is an
+This is the portable-document capability. It is an
 explicit interchange subset, not the default persistence path and not a
-restriction on live `SemanticNode` trees (issue
-[#12](https://github.com/ahojukka5/Episteme.jl/issues/12)).
+restriction on live `SemanticNode` trees, whose values may be any Julia
+value ([`semantic-tree.md`](semantic-tree.md)).
 
 Episteme supports two persistence capabilities:
 

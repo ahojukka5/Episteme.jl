@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
-# Reproduction-capsule content, disposition, and achieved readiness (#35)
+# Reproduction-capsule content, disposition, and achieved readiness
 #
-# Planning (#79) and metadata publication (#87) stay in place. This layer
+# Planning and metadata publication stay in place. This layer
 # embeds portable or explicitly trusted native state, records what was left
 # out, and refuses to claim replay, restart, or rerun without that evidence.
 # OS, language-runtime, and container images are never packaged.

@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Domain-neutral reproduction comparison vocabulary (#107)
+# Domain-neutral reproduction comparison vocabulary
 # ---------------------------------------------------------------------------
 
 const REPRODUCTION_KINDS = (:exact_content, :numeric, :summary)

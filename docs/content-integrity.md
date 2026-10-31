@@ -88,5 +88,5 @@ treating the payload as replayable. Native bytes are checked before
 deserialization. A metadata-only capsule does not establish execution
 readiness.
 
-Semantic migration chains remain tracked by issue #41. Digital signatures and
-PKI are outside the content-integrity contract in issue #42.
+Semantic migration chains are a separate contract ([`schema-migration.md`](schema-migration.md)). Digital signatures and
+PKI are outside the content-integrity contract.

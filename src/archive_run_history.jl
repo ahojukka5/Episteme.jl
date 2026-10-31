@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Optional run/activity/restart provenance persistence in AH5 (#83 / epic #24)
+# Optional run/activity/restart provenance persistence in AH5
 # ---------------------------------------------------------------------------
 
 const AH5_RUN_HISTORY_FEATURE = :run_history_records

@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Practical provenance queries over ArchiveGraph (#107)
+# Practical provenance queries over ArchiveGraph
 # ---------------------------------------------------------------------------
 
 """

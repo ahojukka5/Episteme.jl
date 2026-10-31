@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Explicit purge / compaction (#31)
+# Explicit purge / compaction
 #
 # Ordinary writes never delete committed history. Purge computes reachability
 # from selected roots and builds a *new* graph. The source is not mutated.

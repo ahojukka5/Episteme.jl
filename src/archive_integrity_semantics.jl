@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Fail-closed semantic checks for optional AH5 integrity trust records (#77)
+# Fail-closed semantic checks for optional AH5 integrity trust records
 # ---------------------------------------------------------------------------
 
 function _require_persisted_integrity(condition::Bool, message::AbstractString)

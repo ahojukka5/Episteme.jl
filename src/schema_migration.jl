@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# In-memory semantic schema migration chains (#103 / parent #41)
+# In-memory semantic schema migration chains
 #
 # Episteme resolves and runs declared semantic migrations. Domain packages
 # own payload meaning by extending `migrate_payload`. JLD2 representation

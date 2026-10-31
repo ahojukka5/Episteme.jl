@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Publish a semantic migration into a new archive graph (#140 / parent #41).
+# Publish a semantic migration into a new archive graph.
 #
 # `migrate_object` remains the payload runner. This file only assembles the
 # successor graph. File creation stays in episteme_jld2_ext and calls

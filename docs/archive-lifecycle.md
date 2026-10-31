@@ -1,9 +1,6 @@
 # Durable run, commit, and restart contract
 
-This is the logical lifecycle contract from issue
-[#27](https://github.com/ahojukka5/Episteme.jl/issues/27), with the
-in-memory runtime from
-[#107](https://github.com/ahojukka5/Episteme.jl/issues/107). Records,
+This is the logical lifecycle contract with its in-memory runtime. Records,
 `validate`, and `readiness` remain domain-neutral. `execute!` / `commit!`
 / `recover_writes!` mutate an [`ArchiveGraph`](@ref) in memory; they do
 not open files. See [`workflow.md`](workflow.md).

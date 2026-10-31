@@ -1,8 +1,8 @@
 # ---------------------------------------------------------------------------
-# Portable declarative documents (#34)
+# Portable declarative documents
 #
 # Fail-closed interchange subset of live SemanticNode trees. Capture does not
-# eval, does not change #12, and does not persist files.
+# eval, does not restrict live semantic values, and does not persist files.
 # ---------------------------------------------------------------------------
 
 """

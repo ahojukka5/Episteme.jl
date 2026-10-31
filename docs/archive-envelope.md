@@ -1,7 +1,6 @@
 # Shared archive envelope
 
-This is the logical object/reference/schema-version contract from issue
-[#26](https://github.com/ahojukka5/Episteme.jl/issues/26). It lives entirely
+This is the logical object/reference/schema-version contract. It lives entirely
 in Episteme and does not open files. Physical `.ah5` encoding is the
 JLD2-backed AH5 profile; see [`archive-profile.md`](archive-profile.md),
 [`archive-ownership.md`](archive-ownership.md) and
@@ -23,15 +22,15 @@ DocumentId != PlanId != RunId != ActivityId != RevisionId != ObjectId != Content
 | --- | --- |
 | `ObjectId` | Archive-global logical object. Opaque (UUID-like). Not namespaced. |
 | `RevisionId` | One global workflow revision. Several objects may be materialized in it. |
-| `ContentId` | Logical content identity. Layout/chunking/compression do not belong here; hash rules are #42. |
+| `ContentId` | Logical content identity. Layout/chunking/compression do not belong here; hash rules are in [content integrity](content-integrity.md). |
 | `WorkflowHeadId` | Movable bookmark pointing at a `RevisionId`. |
 | `RunId` | One execution of a plan (or of an ad-hoc operation sequence). |
 | `DocumentId` | Authored semantic document object. Not a revision or content hash. |
 | `PlanId` | Resolved executable plan. Distinct from the source document and from a run. |
 | `ActivityId` | One operation instance inside a run. Bookkeeping only; never an idempotency key. |
 | `AgentId` | Human, software, or LLM actor when provenance needs attribution. Not authn/authz. |
-| `SoftwareEnvironmentId` | Reference to a software-environment record (#37). |
-| `ExecutionContextId` | Reference to an execution-context fingerprint (#43). |
+| `SoftwareEnvironmentId` | Reference to a software-environment record ([software-environment manifests](software-environments.md)). |
+| `ExecutionContextId` | Reference to an execution-context fingerprint ([execution-context records](execution-contexts.md)). |
 
 Shared *record* types (`Plan`, `RunRecord`, `ActivityRecord`,
 `EventRecord`, `RevisionRecord`) live on `ArchiveGraph` as data.
@@ -69,7 +68,7 @@ two kinds. `validate(graph)` reports `:object_id_namespace_conflict` or
 
 `ArchiveObject.revision_id` is the workflow revision that materialized
 that object version. One revision can produce a mesh and a field
-together. Parent and input revision edges belong to issue #30; they are
+together. Parent and input revision edges belong to the [revision history](archive-state-history.md); they are
 not a second `producer_revision` field on the envelope.
 
 `WorkflowHead` points at a `RevisionId`, not at a single object snapshot.
@@ -171,8 +170,8 @@ object materialized in that workflow revision.
 
 An unpinned reference (`revision_id === nothing`) is a logical-object
 link: `validate` accepts it if any version of that object exists. Exact
-scientific dependencies must pin a `RevisionId` or use #30's revision
-inputs. Appending an unrelated object does not invalidate a pinned
+scientific dependencies must pin a `RevisionId` or use the revision
+inputs of the [revision history](archive-state-history.md). Appending an unrelated object does not invalidate a pinned
 reference.
 
 `validate(graph)` reports `:dangling_reference` when the target object or
@@ -205,8 +204,8 @@ or execution-context ids that are not in the catalog fail the same way.
 `nothing` on a provenance field means explicitly not recorded.
 
 The catalog is not the embedded schema registry
-([`archive-schemas.md`](archive-schemas.md), #39) and not a
-migration runner (#41). Those issues own the full definitions.
+([`archive-schemas.md`](archive-schemas.md)) and not a
+migration runner ([`schema-migration.md`](schema-migration.md)). Those pages own the full definitions.
 
 ## Shared value conventions
 
@@ -224,16 +223,16 @@ compression. They are not a place to store payload arrays.
 ## What this is not
 
 - package payload schemas or payload bytes (domain packages / AH5 codecs)
-- XDMF views (#28)
-- `execute!` / `commit!` runtime and on-disk write recovery (#27 contract
+- [XDMF views](archive-views.md)
+- `execute!` / `commit!` runtime and on-disk write recovery (the [run and restart contract](archive-lifecycle.md)
   types are in [`archive-lifecycle.md`](archive-lifecycle.md))
-- schema migration implementations (#41)
-- content-hash algorithms (#42)
-- software-environment manifests (#37)
+- schema migration implementations ([schema migration](schema-migration.md))
+- content-hash algorithms ([content integrity](content-integrity.md))
+- software-environment manifests ([software-environment manifests](software-environments.md))
 - namespace reservation/alias registry (see
   [`archive-namespaces.md`](archive-namespaces.md); path layout is
   [`archive-profile.md`](archive-profile.md))
-- execution-context capture (#43)
+- execution-context capture ([execution-context records](execution-contexts.md))
 - JLD2 working-archive I/O (portable documents are in
   [`portable-documents.md`](portable-documents.md))
 

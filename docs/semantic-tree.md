@@ -54,7 +54,7 @@ may hold `1.4` or a dual-like `Real` without changing the meaning of the node.
 Display uses ordinary Julia `show`. Leaf values print with their own `show`
 methods. Episteme does not define a serialization or interchange format for
 arbitrary runtime objects, and `to_namedtuple` has no method for
-`SemanticNode` or `NodeRef`. Portable declarative documents (issue #34) are
+`SemanticNode` or `NodeRef`. Portable declarative documents are
 a strict subset of this tree; see
 [`portable-documents.md`](portable-documents.md). Physical `.ah5` encoding
 is the later JLD2-backed AH5 profile inside Episteme. See

@@ -1,7 +1,6 @@
 # Durable event timeline and optional log streams
 
-This is the logical event-timeline contract from issue
-[#44](https://github.com/ahojukka5/Episteme.jl/issues/44). It lives in
+This is the logical event-timeline contract. It lives in
 Episteme as structured records, `validate`, and generic inspection. It
 does not implement JLD2/HDF5 append layout or a logging service.
 
@@ -62,7 +61,7 @@ committed objects or revisions.
 The generic event/log path is fail-closed. Payload keys whose names look
 like secrets, and values that look like bearer tokens, vendor API keys,
 or PEM private keys, fail `validate` with `:credential_like_content`.
-Full execution-context denylists remain issue #43.
+Full execution-context denylists belong to the [execution-context records](execution-contexts.md).
 
 ## What this is not
 

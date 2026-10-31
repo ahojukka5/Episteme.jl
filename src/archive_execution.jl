@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# In-memory execution lifecycle (#107)
+# In-memory execution lifecycle
 #
 # plan → readiness → execute → stage → validate → commit
 # execute! never moves a head. commit! is the only head-mover.

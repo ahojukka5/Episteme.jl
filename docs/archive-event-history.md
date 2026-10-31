@@ -1,6 +1,6 @@
 # AH5 event, write, and log provenance
 
-Issue #85 completes the generic provenance-history persistence chain above the
+This extension completes the generic provenance-history persistence chain above the
 state-history and run-history extensions. It is an optional AH5 v1 feature and
 does not change the core `ArchiveInspection` contract.
 

@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Optional AH5 persistence for validated revision integrity manifests (#77)
+# Optional AH5 persistence for validated revision integrity manifests
 # ---------------------------------------------------------------------------
 
 const AH5_INTEGRITY_FEATURE = :integrity_manifest

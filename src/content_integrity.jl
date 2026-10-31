@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Canonical logical content hashing (#71 / parent #42)
+# Canonical logical content hashing
 +#
 +# Content identity is defined from logical values, not Julia storage types,
 +# JLD2/HDF5 paths, chunking, compression, or package release metadata.

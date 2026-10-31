@@ -1,7 +1,6 @@
 # Lazy revision inspect and checkout
 
-This is the in-memory scientific-state manifest from issue
-[#33](https://github.com/ahojukka5/Episteme.jl/issues/33). It does not
+This is the in-memory scientific-state manifest. It does not
 open files or load heavy payloads.
 
 Two related APIs share `RevisionManifest`:

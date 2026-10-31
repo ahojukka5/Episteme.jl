@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Lazy revision manifest (#33)
+# Lazy revision manifest
 #
 # In-memory inspect and checkout of committed revisions. No file I/O and
 # no payload materialization. Later AH5 checkout fills the same manifest.

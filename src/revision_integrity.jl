@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Revision-scoped dependency integrity manifests (#75 / parent #42)
+# Revision-scoped dependency integrity manifests
 # ---------------------------------------------------------------------------
 
 const INTEGRITY_DEPENDENCY_KINDS = (:object, :schema, :external)
@@ -393,7 +393,7 @@ end
     integrity_manifest(graph, revision_id, schemas; externals=(),
                        external_integrity=(), level=:metadata)
 
-Select the revision through the existing #33 visibility/closure rules and then
+Select the revision through the existing lazy-checkout visibility/closure rules and then
 build its integrity manifest.
 """
 function integrity_manifest(

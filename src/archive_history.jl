@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # Dual-history records: plan, run, activity, event, revision
 #
-# Structural types and the durable run/commit/restart contract (#27).
+# Structural types and the durable run/commit/restart contract.
 # Logical execute!/commit! runtime lives in archive_execution.jl.
 # ---------------------------------------------------------------------------
 
