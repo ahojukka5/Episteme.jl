@@ -8,6 +8,12 @@
 Commit scopes, hooks and never-commit paths are in
 [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+**Primary repository (ENG-029):** `https://code.oodi.dev/Oodi/Episteme.jl`.
+Issues, branches, pull requests and review happen there (`tea`, login
+`code`). `github.com/ahojukka5/Episteme.jl` is a code-only push mirror of
+`master` and tags; it refuses every other write, so never push, branch or
+open issues or pull requests on GitHub.
+
 ## 1. What this package is
 
 `Episteme.jl` is the semantic runtime and persistent scientific backbone for
