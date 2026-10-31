@@ -344,3 +344,6 @@ julia --project=docs docs/make.jl
 ```
 
 The HTML lands in `docs/build`.
+
+Julia release compatibility is checked by the manual/tag-triggered
+[Release CI](RELEASE_CI.md) across LTS, intervening minors and stable.
